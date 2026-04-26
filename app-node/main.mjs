@@ -76,7 +76,7 @@ const settings = {
   ttsMaxChars: Number(process.env.TTS_MAX_CHARS || '495'),
   requireWakeWord: ['1', 'true', 'yes'].includes((process.env.REQUIRE_WAKE_WORD || '0').toLowerCase()),
   wakeWords: (process.env.WAKE_WORDS || 'hermes,헤르메스,허미스').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
-  debugDir: process.env.NODE_AUDIO_DEBUG_DIR || '/tmp/hermes-discord-node-debug',
+  debugDir: process.env.NODE_AUDIO_DEBUG_DIR || '/tmp/mouthcode-node-debug',
   progressTtsCacheDir: process.env.PROGRESS_TTS_CACHE_DIR || path.join(ROOT, '.cache', 'progress-tts'),
   agent: buildAgentSettings({ ROOT, env: process.env }),
 };

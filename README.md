@@ -1,4 +1,4 @@
-# Hermes-Discord
+# MouthCode
 
 Discord voice bridge for talking to **any CLI-based agent harness** like a phone call.
 
@@ -21,7 +21,7 @@ Set `AGENT_BACKEND` in `.env`:
 
 | Backend | Default command | Notes |
 | --- | --- | --- |
-| `hermes` | `hermes chat -Q -q` | Default. Preserves existing `.hermes-discord-session` resume behavior. |
+| `hermes` | `hermes chat -Q -q` | Default. Preserves existing `.mouthcode-session` resume behavior. |
 | `claude-code` / `claude` | `claude -p` | Override with `CLAUDE_COMMAND` or `AGENT_COMMAND`. |
 | `codex` | `codex exec` | Override with `CODEX_COMMAND` or `AGENT_COMMAND`. |
 | `gemini` | `gemini -p` | Override with `GEMINI_COMMAND` or `AGENT_COMMAND`. |
@@ -42,7 +42,7 @@ AGENT_CHAT_TIMEOUT_MS=45000
 ## Install / setup wizard
 
 ```bash
-cd ~/Developer/Projects/Hermes-Discord
+cd ~/Developer/Projects/MouthCode
 ./scripts/install.sh
 ```
 
@@ -102,7 +102,7 @@ HERMES_CHAT_TIMEOUT_MS="45000"
 ## Run
 
 ```bash
-cd ~/Developer/Projects/Hermes-Discord
+cd ~/Developer/Projects/MouthCode
 ./run.sh
 ```
 

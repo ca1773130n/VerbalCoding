@@ -71,7 +71,7 @@ export function buildAgentSettings({ ROOT, env = process.env } = {}) {
     hermes: {
       label: 'Hermes Agent',
       command: env.HERMES_COMMAND || 'hermes chat -Q -q',
-      sessionFile: env.HERMES_SESSION_FILE || path.join(root, '.hermes-discord-session'),
+      sessionFile: env.HERMES_SESSION_FILE || path.join(root, '.mouthcode-session'),
       supportsHermesSession: true,
     },
     claude: {

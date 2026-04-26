@@ -81,7 +81,7 @@ class WhisperCppSTT:
         if not pcm16_16k:
             return ""
         binary = self._resolve_binary()
-        with tempfile.TemporaryDirectory(prefix="hermes-discord-stt-") as tmp:
+        with tempfile.TemporaryDirectory(prefix="mouthcode-stt-") as tmp:
             tmpdir = Path(tmp)
             wav_path = tmpdir / "input.wav"
             out_base = tmpdir / "transcript"

@@ -10,13 +10,13 @@ import {
   voiceBridgePrompt,
 } from './agent_adapters.mjs';
 
-test('buildAgentSettings defaults to Hermes backend and preserves legacy Hermes session file', () => {
+test('buildAgentSettings defaults to Hermes backend and uses MouthCode session file', () => {
   const settings = buildAgentSettings({ ROOT: '/project', env: {} });
 
   assert.equal(settings.backend, 'hermes');
   assert.equal(settings.label, 'Hermes Agent');
   assert.equal(settings.command, 'hermes chat -Q -q');
-  assert.equal(settings.sessionFile, '/project/.hermes-discord-session');
+  assert.equal(settings.sessionFile, '/project/.mouthcode-session');
 });
 
 test('Hermes adapter resumes and saves Hermes CLI session ids', async () => {

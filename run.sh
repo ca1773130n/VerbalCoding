@@ -4,8 +4,8 @@ cd "$(dirname "$0")"
 
 # Node @discordjs/voice receiver is the active implementation. The earlier Python
 # discord-ext-voice-recv path produced corrupted PCM on this Mac/Discord setup.
-mkdir -p /tmp/hermes-discord-node-debug
-export NODE_AUDIO_DEBUG_DIR="${NODE_AUDIO_DEBUG_DIR:-/tmp/hermes-discord-node-debug}"
+mkdir -p /tmp/mouthcode-node-debug
+export NODE_AUDIO_DEBUG_DIR="${NODE_AUDIO_DEBUG_DIR:-/tmp/mouthcode-node-debug}"
 export MIN_UTTERANCE_SECONDS="${MIN_UTTERANCE_SECONDS:-1.0}"
 export SUBSCRIBE_AFTER_SILENCE_MS="${SUBSCRIBE_AFTER_SILENCE_MS:-2200}"
 export UTTERANCE_IDLE_MS="${UTTERANCE_IDLE_MS:-2600}"
