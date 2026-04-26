@@ -1,4 +1,4 @@
-# MouthCode
+# VerbalCoding
 
 Discord voice bridge for talking to **any CLI-based agent harness** like a phone call.
 
@@ -21,7 +21,7 @@ Set `AGENT_BACKEND` in `.env`:
 
 | Backend | Default command | Notes |
 | --- | --- | --- |
-| `hermes` | `hermes chat -Q -q` | Default. Preserves existing `.mouthcode-session` resume behavior. |
+| `hermes` | `hermes chat -Q -q` | Default. Preserves existing `.verbalcoding-session` resume behavior. |
 | `claude-code` / `claude` | `claude -p` | Override with `CLAUDE_COMMAND` or `AGENT_COMMAND`. |
 | `codex` | `codex exec` | Override with `CODEX_COMMAND` or `AGENT_COMMAND`. |
 | `gemini` | `gemini -p` | Override with `GEMINI_COMMAND` or `AGENT_COMMAND`. |
@@ -35,14 +35,14 @@ Generic overrides:
 AGENT_BACKEND=custom
 AGENT_LABEL="My Harness"
 AGENT_COMMAND="my-harness run --non-interactive"
-AGENT_TASK_TIMEOUT_MS=300000
+AGENT_TASK_TIMEOUT_MS=0        # 0 disables Node-side timeout for long agent tasks
 AGENT_CHAT_TIMEOUT_MS=45000
 ```
 
 ## Install / setup wizard
 
 ```bash
-cd ~/Developer/Projects/MouthCode
+cd ~/Developer/Projects/VerbalCoding
 ./scripts/install.sh
 ```
 
@@ -95,14 +95,14 @@ TTS_RATE="+10%"
 TTS_MAX_CHARS="495"
 REQUIRE_WAKE_WORD="0"
 MIN_UTTERANCE_SECONDS="1.0"
-HERMES_TASK_TIMEOUT_MS="300000"
+HERMES_TASK_TIMEOUT_MS="0"        # 0 disables Node-side timeout for long tasks
 HERMES_CHAT_TIMEOUT_MS="45000"
 ```
 
 ## Run
 
 ```bash
-cd ~/Developer/Projects/MouthCode
+cd ~/Developer/Projects/VerbalCoding
 ./run.sh
 ```
 
@@ -117,6 +117,9 @@ The bot auto-joins the first configured channel name, defaulting to `일반,Gene
 - `!ask <prompt>` — send text through the same selected harness adapter as voice.
 - `!session` — show the current adapter session ID when supported.
 - `!reset-session` — clear the adapter session file when supported.
+- `!sensitivity` — show current barge-in sensitivity thresholds.
+- `!sensitivity conservative` — temporarily use stricter outdoor/noisy-environment barge-in detection.
+- `!sensitivity normal` — restore normal indoor sensitivity.
 
 ## Notes
 

@@ -15,7 +15,7 @@ class TTS:
         import edge_tts
 
         self._stop = False
-        fd, name = tempfile.mkstemp(prefix="mouthcode-", suffix=".mp3")
+        fd, name = tempfile.mkstemp(prefix="verbalcoding-", suffix=".mp3")
         Path(name).unlink(missing_ok=True)
         # Close the fd created by mkstemp; edge-tts will create/write the file.
         import os

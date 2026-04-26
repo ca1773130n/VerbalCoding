@@ -22,6 +22,14 @@ import wav from 'wav';
 import { buildAgentSettings, createAgentAdapter, isPatchLikeOutput } from './agent_adapters.mjs';
 import { splitForTTS } from './tts_chunks.mjs';
 import { playChunkedTTSWithPrefetch } from './tts_prefetch.mjs';
+import {
+  bargeInThresholdsForMode,
+  createLiveBargeInMonitor,
+  isBargeInCandidate as isValidatedBargeInCandidate,
+  isExplicitBargeInTranscript,
+  isRepeatedNoiseTranscript,
+  sensitivityModeFromTranscript,
+} from './barge_in.mjs';
 
 const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -76,7 +84,7 @@ const settings = {
   ttsMaxChars: Number(process.env.TTS_MAX_CHARS || '495'),
   requireWakeWord: ['1', 'true', 'yes'].includes((process.env.REQUIRE_WAKE_WORD || '0').toLowerCase()),
   wakeWords: (process.env.WAKE_WORDS || 'hermes,헤르메스,허미스').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
-  debugDir: process.env.NODE_AUDIO_DEBUG_DIR || '/tmp/mouthcode-node-debug',
+  debugDir: process.env.NODE_AUDIO_DEBUG_DIR || '/tmp/verbalcoding-node-debug',
   progressTtsCacheDir: process.env.PROGRESS_TTS_CACHE_DIR || path.join(ROOT, '.cache', 'progress-tts'),
   agent: buildAgentSettings({ ROOT, env: process.env }),
 };
@@ -101,9 +109,13 @@ const pendingUtterances = new Map();
 const MIN_UTTERANCE_SECONDS = Number(process.env.MIN_UTTERANCE_SECONDS || '1.0');
 const MIN_UTTERANCE_BYTES = 48000 * 2 * 2 * MIN_UTTERANCE_SECONDS;
 const BARGE_IN_MIN_SECONDS = Number(process.env.BARGE_IN_MIN_SECONDS || '0.9');
-const BARGE_IN_MIN_BYTES = 48000 * 2 * 2 * BARGE_IN_MIN_SECONDS;
 const BARGE_IN_MIN_MEAN_VOLUME_DB = Number(process.env.BARGE_IN_MIN_MEAN_VOLUME_DB || '-35');
 const BARGE_IN_MIN_MAX_VOLUME_DB = Number(process.env.BARGE_IN_MIN_MAX_VOLUME_DB || '-18');
+const BARGE_IN_CONSERVATIVE_MIN_SECONDS = Number(process.env.BARGE_IN_CONSERVATIVE_MIN_SECONDS || '1.4');
+const BARGE_IN_CONSERVATIVE_MIN_MEAN_VOLUME_DB = Number(process.env.BARGE_IN_CONSERVATIVE_MIN_MEAN_VOLUME_DB || '-30');
+const BARGE_IN_CONSERVATIVE_MIN_MAX_VOLUME_DB = Number(process.env.BARGE_IN_CONSERVATIVE_MIN_MAX_VOLUME_DB || '-14');
+const SENSITIVITY_MODE_DEFAULT = (process.env.BARGE_IN_SENSITIVITY_MODE || 'normal').toLowerCase() === 'conservative' ? 'conservative' : 'normal';
+const SENSITIVITY_OUTDOOR_SECONDS = Number(process.env.BARGE_IN_OUTDOOR_SECONDS || '900');
 const SUBSCRIBE_AFTER_SILENCE_MS = Number(process.env.SUBSCRIBE_AFTER_SILENCE_MS || '2200');
 const UTTERANCE_IDLE_MS = Number(process.env.UTTERANCE_IDLE_MS || '2600');
 const MIN_MEAN_VOLUME_DB = Number(process.env.MIN_MEAN_VOLUME_DB || '-35');
@@ -112,6 +124,37 @@ const MIN_MAX_VOLUME_DB = Number(process.env.MIN_MAX_VOLUME_DB || '-18');
 function log(...args) { console.log(new Date().toISOString(), ...args); }
 function warn(...args) { console.warn(new Date().toISOString(), ...args); }
 const agentAdapter = createAgentAdapter(settings.agent, { execFileAsync, log, warn });
+let sensitivityMode = SENSITIVITY_MODE_DEFAULT;
+let sensitivityModeExpiresAt = 0;
+function currentBargeInThresholds() {
+  if (sensitivityModeExpiresAt && Date.now() > sensitivityModeExpiresAt) {
+    sensitivityMode = SENSITIVITY_MODE_DEFAULT;
+    sensitivityModeExpiresAt = 0;
+    log('barge-in sensitivity mode expired; restored', sensitivityMode);
+  }
+  return bargeInThresholdsForMode(sensitivityMode, {
+    minSeconds: BARGE_IN_MIN_SECONDS,
+    minMeanDb: BARGE_IN_MIN_MEAN_VOLUME_DB,
+    minMaxDb: BARGE_IN_MIN_MAX_VOLUME_DB,
+    conservativeMinSeconds: BARGE_IN_CONSERVATIVE_MIN_SECONDS,
+    conservativeMinMeanDb: BARGE_IN_CONSERVATIVE_MIN_MEAN_VOLUME_DB,
+    conservativeMinMaxDb: BARGE_IN_CONSERVATIVE_MIN_MAX_VOLUME_DB,
+  });
+}
+function setSensitivityMode(mode, reason = 'manual') {
+  sensitivityMode = mode === 'conservative' ? 'conservative' : 'normal';
+  sensitivityModeExpiresAt = sensitivityMode === 'conservative' && SENSITIVITY_OUTDOOR_SECONDS > 0
+    ? Date.now() + SENSITIVITY_OUTDOOR_SECONDS * 1000
+    : 0;
+  const thresholds = currentBargeInThresholds();
+  log('barge-in sensitivity mode set', sensitivityMode, 'reason', reason, 'expiresAt', sensitivityModeExpiresAt || 'never', 'thresholds', thresholds);
+  return thresholds;
+}
+function sensitivityStatusText() {
+  const thresholds = currentBargeInThresholds();
+  const suffix = sensitivityModeExpiresAt ? `, ${Math.max(0, Math.ceil((sensitivityModeExpiresAt - Date.now()) / 1000))}초 후 기본으로 돌아감` : '';
+  return `끼어들기 감도: ${thresholds.mode}, 최소 ${thresholds.minSeconds}초, 평균 ${thresholds.minMeanDb} dB, 피크 ${thresholds.minMaxDb} dB${suffix}`;
+}
 function isAllowed(userId) { return settings.allowedUsers.size === 0 || settings.allowedUsers.has(String(userId)); }
 function stamp() { return new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '-'); }
 
@@ -248,6 +291,7 @@ function cleanTranscript(raw) {
     if (/^[\(\[（【].*[\)\]）】]$/.test(line.replace(/\s+/g, ''))) continue;
     if (['끄덕', '끄덕끄덕', '박수', '웃음', '음악', '자막', '침묵', '무음'].includes(compact)) continue;
     if (bad.some(b => compact.includes(b))) continue;
+    if (isRepeatedNoiseTranscript(compact)) continue;
     kept.push(line);
   }
   return kept.join(' ').trim();
@@ -260,6 +304,12 @@ function isAbortError(e) {
 function isTaskRequest(text) {
   const compact = text.replace(/\s+/g, '').toLowerCase();
   return /(파일|폴더|프로젝트|코드|구현|수정|고쳐|만들|생성|실행|확인|검색|설치|테스트|디버그|재시작|로그|커밋|깃|git|github|브랜치|배포|서버|프로세스|터미널|스크립트|압축|다운로드|분석해|찾아)/i.test(compact);
+}
+
+function isSensitivityOnlyRequest(text) {
+  const compact = String(text || '').replace(/\s+/g, '').toLowerCase();
+  if (!sensitivityModeFromTranscript(compact)) return false;
+  return !isTaskRequest(compact) && !/(그리고|그다음|다음에|추가로|해줘.*(말|설명|대답))/u.test(compact);
 }
 
 async function synthTTS(text, signal) {
@@ -409,8 +459,24 @@ function queueSegment(userId, file, pcmBytes) {
 }
 
 function isBargeInCandidate(pcmBytes, levels) {
-  if (pcmBytes < BARGE_IN_MIN_BYTES) return false;
-  return levels.meanDb >= BARGE_IN_MIN_MEAN_VOLUME_DB || levels.maxDb >= BARGE_IN_MIN_MAX_VOLUME_DB;
+  const thresholds = currentBargeInThresholds();
+  return isValidatedBargeInCandidate(pcmBytes, levels, thresholds);
+}
+
+async function validateProcessingBargeIn(userId, wavPath, pcmBytes, segments) {
+  log('validating processing barge-in transcript', userId, wavPath, 'pcmBytes', pcmBytes, 'segments', segments);
+  const text = await transcribe(wavPath);
+  if (!text) {
+    log('ignore processing barge-in: empty transcript', userId, wavPath);
+    return false;
+  }
+  if (!isExplicitBargeInTranscript(text)) {
+    log('ignore processing barge-in: not explicit stop phrase', userId, JSON.stringify(text));
+    return false;
+  }
+  log('confirmed processing barge-in by explicit transcript', userId, JSON.stringify(text));
+  interruptCurrentResponse(userId, 'confirmed-processing-barge-in');
+  return true;
 }
 
 async function flushUtterance(userId) {
@@ -428,10 +494,16 @@ async function flushUtterance(userId) {
   await concatWavs(files, merged);
   const levels = await analyzeAudio(merged);
   log('utterance levels', userId, 'segments', files.length, 'pcmBytes', pcmBytes, 'meanDb', levels.meanDb, 'maxDb', levels.maxDb);
-  if ((speaking || processing) && isBargeInCandidate(pcmBytes, levels)) {
+  const candidate = isBargeInCandidate(pcmBytes, levels);
+  if (speaking && candidate) {
     interruptCurrentResponse(userId, 'confirmed-barge-in');
+    return;
+  } else if (processing && !speaking && candidate) {
+    await validateProcessingBargeIn(userId, merged, pcmBytes, files.length);
+    return;
   } else if (speaking || processing) {
-    log('ignore weak barge-in candidate', userId, 'pcmBytes', pcmBytes, 'meanDb', levels.meanDb, 'maxDb', levels.maxDb, 'thresholdBytes', BARGE_IN_MIN_BYTES, 'thresholds', BARGE_IN_MIN_MEAN_VOLUME_DB, BARGE_IN_MIN_MAX_VOLUME_DB);
+    const thresholds = currentBargeInThresholds();
+    log('ignore weak barge-in candidate', userId, 'pcmBytes', pcmBytes, 'meanDb', levels.meanDb, 'maxDb', levels.maxDb, 'thresholdBytes', thresholds.minBytes, 'thresholds', thresholds.minMeanDb, thresholds.minMaxDb, 'mode', thresholds.mode);
   }
   // Drop only when BOTH overall energy and peak are low. Real Discord speech from this
   // mic can have low mean volume while still carrying intelligible peaks; using OR here
@@ -461,6 +533,15 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1) {
     if (!acceptsWake(text)) { await sendText('wake word 없음: 응답은 안 함'); return; }
 
     const prompt = stripWake(text);
+    const sensitivityRequest = sensitivityModeFromTranscript(prompt);
+    if (sensitivityRequest) {
+      const thresholds = setSensitivityMode(sensitivityRequest.mode, sensitivityRequest.reason);
+      await sendText(`🎚️ ${sensitivityStatusText()}`);
+      if (isSensitivityOnlyRequest(prompt)) {
+        await speakText(`${thresholds.mode === 'conservative' ? '외부 보수 모드' : '기본 감도'}로 바꿨어.`, signal);
+        return;
+      }
+    }
     const plan = { task: true, label: agentAdapter.label };
     log('Agent plan', plan.label, 'backend', agentAdapter.backend, 'task', plan.task);
     const agentPromise = agentAdapter.ask(prompt, signal, plan);
@@ -534,7 +615,21 @@ function subscribeUser(receiver, userId) {
   const writer = new wav.FileWriter(file, { sampleRate: 48000, channels: 2, bitDepth: 16 });
   activeStreams.set(userId, { opusStream, decoder, writer, file });
   let pcmBytes = 0;
-  decoder.on('data', chunk => { pcmBytes += chunk.length; });
+  const liveThresholds = currentBargeInThresholds();
+  const liveBargeIn = speaking ? createLiveBargeInMonitor({
+    minBytes: liveThresholds.minBytes,
+    minMeanDb: liveThresholds.minMeanDb,
+    minMaxDb: liveThresholds.minMaxDb,
+    log,
+    onConfirm: ({ pcmBytes: confirmedBytes, levels }) => {
+      log('confirmed live barge-in before segment end', userId, 'pcmBytes', confirmedBytes, 'meanDb', levels.meanDb, 'maxDb', levels.maxDb);
+      interruptCurrentResponse(userId, 'confirmed-live-barge-in');
+    },
+  }) : null;
+  decoder.on('data', chunk => {
+    pcmBytes += chunk.length;
+    liveBargeIn?.push(chunk);
+  });
   opusStream.on('error', e => warn('opus stream error', userId, e?.stack || e));
   decoder.on('error', e => warn('opus decoder error', userId, e?.stack || e));
   writer.on('error', e => warn('wav writer error', userId, e?.stack || e));
@@ -588,6 +683,15 @@ client.on('messageCreate', async msg => {
   if (!isAllowed(msg.author.id)) return;
   const content = msg.content.trim();
   if (content === '!ping') return void msg.reply('pong');
+  if (content === '!sensitivity') return void msg.reply(sensitivityStatusText());
+  if (content === '!sensitivity conservative') {
+    setSensitivityMode('conservative', 'discord-command');
+    return void msg.reply(sensitivityStatusText());
+  }
+  if (content === '!sensitivity normal') {
+    setSensitivityMode('normal', 'discord-command');
+    return void msg.reply(sensitivityStatusText());
+  }
   if (content === '!session') return void msg.reply(`${agentAdapter.label} 세션: ${agentAdapter.readSessionId?.() || '아직 없음'}`);
   if (content === '!reset-session') {
     try { fs.rmSync(settings.agent.sessionFile, { force: true }); } catch {}

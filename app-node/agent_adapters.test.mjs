@@ -6,17 +6,19 @@ import {
   createAgentAdapter,
   interruptedAgentMessage,
   isPatchLikeOutput,
+  resolveExecTimeout,
   sanitizeAgentOutput,
   voiceBridgePrompt,
 } from './agent_adapters.mjs';
 
-test('buildAgentSettings defaults to Hermes backend and uses MouthCode session file', () => {
+test('buildAgentSettings defaults to Hermes backend and uses VerbalCoding session file', () => {
   const settings = buildAgentSettings({ ROOT: '/project', env: {} });
 
   assert.equal(settings.backend, 'hermes');
   assert.equal(settings.label, 'Hermes Agent');
   assert.equal(settings.command, 'hermes chat -Q -q');
-  assert.equal(settings.sessionFile, '/project/.mouthcode-session');
+  assert.equal(settings.sessionFile, '/project/.verbalcoding-session');
+  assert.equal(settings.taskTimeoutMs, 0);
 });
 
 test('Hermes adapter resumes and saves Hermes CLI session ids', async () => {
@@ -119,6 +121,13 @@ test('voiceBridgePrompt keeps voice-specific operating instructions with user te
   assert.match(prompt, /Discord 음성 대화/);
   assert.match(prompt, /파일 수정, 실행, 로그 확인/);
   assert.match(prompt, /파일 수정해줘/);
+});
+
+test('resolveExecTimeout disables timeout for zero or invalid task timeout values', () => {
+  assert.equal(resolveExecTimeout(0), undefined);
+  assert.equal(resolveExecTimeout(-1), undefined);
+  assert.equal(resolveExecTimeout(Infinity), undefined);
+  assert.equal(resolveExecTimeout(45000), 45000);
 });
 
 test('signal failure with patch-like output returns a concise interruption message instead of diff', async () => {

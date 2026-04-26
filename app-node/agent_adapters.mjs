@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 export function shellSplit(s) {
@@ -64,6 +65,11 @@ export function extractHermesSessionId(text) {
   return /^session_id:\s*(\S+)/m.exec(text || '')?.[1] || null;
 }
 
+export function resolveExecTimeout(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
 export function buildAgentSettings({ ROOT, env = process.env } = {}) {
   const root = ROOT || process.cwd();
   const backend = String(env.AGENT_BACKEND || env.AGENT_PROVIDER || 'hermes').trim().toLowerCase();
@@ -71,7 +77,7 @@ export function buildAgentSettings({ ROOT, env = process.env } = {}) {
     hermes: {
       label: 'Hermes Agent',
       command: env.HERMES_COMMAND || 'hermes chat -Q -q',
-      sessionFile: env.HERMES_SESSION_FILE || path.join(root, '.mouthcode-session'),
+      sessionFile: env.HERMES_SESSION_FILE || path.join(root, '.verbalcoding-session'),
       supportsHermesSession: true,
     },
     claude: {
@@ -127,7 +133,7 @@ export function buildAgentSettings({ ROOT, env = process.env } = {}) {
     command,
     sessionFile: selected.sessionFile,
     supportsHermesSession: selected.supportsHermesSession,
-    taskTimeoutMs: Number(env.AGENT_TASK_TIMEOUT_MS || env.HERMES_TASK_TIMEOUT_MS || '300000'),
+    taskTimeoutMs: Number(env.AGENT_TASK_TIMEOUT_MS || env.HERMES_TASK_TIMEOUT_MS || '0'),
     chatTimeoutMs: Number(env.AGENT_CHAT_TIMEOUT_MS || env.HERMES_CHAT_TIMEOUT_MS || '45000'),
   };
 }
@@ -147,6 +153,29 @@ export function createAgentAdapter(settings, deps = {}) {
   const log = deps.log || (() => {});
   const warn = deps.warn || (() => {});
   const env = deps.env || process.env;
+
+  function makeCodexOutputPath() {
+    const base = deps.tmpdir || os.tmpdir();
+    return path.join(base, `verbalcoding-codex-last-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.txt`);
+  }
+
+  function addCodexOutputCapture(args) {
+    if (settings.backend !== 'codex') return { args, outputPath: null };
+    if (args.includes('-o') || args.includes('--output-last-message')) return { args, outputPath: null };
+    const outputPath = makeCodexOutputPath();
+    return { args: args.slice(0, -1).concat(['--output-last-message', outputPath, args.at(-1)]), outputPath };
+  }
+
+  function readAndCleanupCodexOutput(outputPath) {
+    if (!outputPath) return '';
+    try {
+      return fileApi.readFileSync(outputPath, 'utf8');
+    } catch {
+      return '';
+    } finally {
+      try { fs.rmSync(outputPath, { force: true }); } catch {}
+    }
+  }
 
   function readSessionId() {
     if (!settings.supportsHermesSession || !settings.sessionFile) return null;
@@ -186,14 +215,16 @@ export function createAgentAdapter(settings, deps = {}) {
     const { cmd, args, sessionId } = buildArgs(text);
     const start = Date.now();
     const label = plan.label || settings.label;
-    log('Agent CLI start', label, cmd, args.slice(0, -1).join(' '), sessionId ? `resume=${sessionId}` : 'new-session');
+    const { args: finalArgs, outputPath } = addCodexOutputCapture(args);
+    log('Agent CLI start', label, cmd, finalArgs.slice(0, -1).join(' '), sessionId ? `resume=${sessionId}` : 'new-session');
     try {
-      const { stdout, stderr } = await execFileAsync(cmd, args, {
-        timeout: plan.task ? settings.taskTimeoutMs : settings.chatTimeoutMs,
+      const { stdout, stderr } = await execFileAsync(cmd, finalArgs, {
+        timeout: resolveExecTimeout(plan.task ? settings.taskTimeoutMs : settings.chatTimeoutMs),
         maxBuffer: 4 * 1024 * 1024,
         env: { ...env, PYTHONUNBUFFERED: '1' },
         signal,
       });
+      const codexLastMessage = readAndCleanupCodexOutput(outputPath);
       const combined = `${stdout || ''}\n${stderr || ''}`;
       const newSessionId = extractHermesSessionId(combined);
       if (newSessionId) {
@@ -201,13 +232,13 @@ export function createAgentAdapter(settings, deps = {}) {
         log('Agent session saved', settings.backend, newSessionId);
       }
       log('Agent CLI done', label, 'ms', Date.now() - start);
-      return sanitizeAgentOutput(stdout) || sanitizeAgentOutput(stderr) || '응답이 비어 있어.';
+      return sanitizeAgentOutput(codexLastMessage) || sanitizeAgentOutput(stdout) || sanitizeAgentOutput(stderr) || '응답이 비어 있어.';
     } catch (e) {
       if (e?.name === 'AbortError' || e?.code === 'ABORT_ERR') throw e;
       const stderr = (e.stderr || '').toString().trim();
       const stdout = (e.stdout || '').toString().trim();
-      const msg = (e.message || '').toString().trim();
       const combined = `${stdout || ''}\n${stderr || ''}`;
+      const codexLastMessage = readAndCleanupCodexOutput(outputPath);
       const newSessionId = extractHermesSessionId(combined);
       if (newSessionId) {
         writeSessionId(newSessionId);
@@ -215,7 +246,8 @@ export function createAgentAdapter(settings, deps = {}) {
       }
       const cleanedPartial = sanitizeAgentOutput(stdout) || sanitizeAgentOutput(stderr);
       const patchLikePartial = isPatchLikeOutput(cleanedPartial);
-      warn('Agent CLI failed', 'backend', settings.backend, 'label', label, 'ms', Date.now() - start, 'code', e.code, 'signal', e.signal, 'stdout', stdout.slice(-500), 'stderr', stderr.slice(-500), 'message', msg.slice(-500));
+      const message = String(e.message || '');
+      warn('Agent CLI failed', 'backend', settings.backend, 'label', label, 'ms', Date.now() - start, 'code', e.code, 'signal', e.signal, 'stdout', stdout.slice(-500), 'stderr', stderr.slice(-500), 'message', message.slice(-500));
       if ((e.signal === 'SIGINT' || e.signal === 'SIGTERM') && cleanedPartial && !patchLikePartial) {
         log('Agent CLI returned partial output after signal; using sanitized partial answer', 'chars', cleanedPartial.length);
         return cleanedPartial;
@@ -223,7 +255,7 @@ export function createAgentAdapter(settings, deps = {}) {
       if (e.signal === 'SIGINT' || e.signal === 'SIGTERM') {
         return interruptedAgentMessage(label, patchLikePartial);
       }
-      return `${label} 실행에 실패했어: ${sanitizeAgentOutput(stderr || stdout || msg || e.code || 'unknown error').slice(0, 700)}`;
+      return `${label} 실행에 실패했어: ${sanitizeAgentOutput(stderr || stdout || message || e.code || 'unknown error').slice(0, 700)}`;
     }
   }
 

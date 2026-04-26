@@ -7,8 +7,8 @@ __pycache__/
 node_modules/
 .cache/
 .agent-sessions/
-.mouthcode-session
-.hermes-discord-session
+.verbalcoding-session
+.verbalcoding-session
 models/*.bin
 /tmp/
 *.log

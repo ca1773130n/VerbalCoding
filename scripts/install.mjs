@@ -17,7 +17,7 @@ async function ask(question, fallback = '') {
 async function main() {
   globalThis.__rl = readline.createInterface({ input, output });
   try {
-    console.log('MouthCode installer');
+    console.log('VerbalCoding installer');
     console.log(`Supported harnesses: ${SUPPORTED_HARNESSES.join(', ')}`);
     const harness = await ask('Harness/backend', 'hermes');
     let agentCommand = '';
