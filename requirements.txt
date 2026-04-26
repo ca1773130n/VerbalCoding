@@ -1,0 +1,13 @@
+discord.py[voice]>=2.7,<3
+PyNaCl>=1.5
+# Voice receive support for discord.py. Install from GitHub because PyPI package names vary by fork.
+git+https://github.com/imayhaveborkedit/discord-ext-voice-recv.git
+faster-whisper>=1.0
+webrtcvad>=2.0.10
+numpy>=1.24
+python-dotenv>=1.0
+edge-tts>=6.1
+aiohttp>=3.9
+pytest>=8
+# webrtcvad imports pkg_resources, which was removed from newest setuptools.
+setuptools<81

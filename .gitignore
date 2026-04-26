@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+.env
+node_modules/
+.cache/
+.hermes-discord-session
+models/*.bin
+/tmp/
+*.log
