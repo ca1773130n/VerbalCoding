@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node app-node/main.mjs"
+    "start": "node app-node/main.mjs",
+    "setup": "node scripts/install.mjs",
+    "test": "node --test app-node/*.test.mjs"
   },
   "dependencies": {
     "@discordjs/opus": "^0.10.0",

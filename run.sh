@@ -13,6 +13,14 @@ export MIN_MEAN_VOLUME_DB="${MIN_MEAN_VOLUME_DB:--35}"
 export MIN_MAX_VOLUME_DB="${MIN_MAX_VOLUME_DB:--18}"
 export TTS_RATE="${TTS_RATE:-+10%}"
 export TTS_MAX_CHARS="${TTS_MAX_CHARS:-495}"
+export HERMES_TASK_TIMEOUT_MS="${HERMES_TASK_TIMEOUT_MS:-300000}"
+export HERMES_CHAT_TIMEOUT_MS="${HERMES_CHAT_TIMEOUT_MS:-45000}"
+if [ -f .env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source ./.env
+  set +a
+fi
 export PYTHONUNBUFFERED=1
 
 if [ ! -d node_modules ]; then

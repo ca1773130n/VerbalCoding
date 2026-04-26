@@ -19,12 +19,29 @@ import {
 } from '@discordjs/voice';
 import prism from 'prism-media';
 import wav from 'wav';
+import { buildAgentSettings, createAgentAdapter, isPatchLikeOutput } from './agent_adapters.mjs';
 import { splitForTTS } from './tts_chunks.mjs';
 import { playChunkedTTSWithPrefetch } from './tts_prefetch.mjs';
 
 const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
+
+function loadDotEnv(file = path.join(ROOT, '.env')) {
+  if (!fs.existsSync(file)) return;
+  const text = fs.readFileSync(file, 'utf8');
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#') || !line.includes('=')) continue;
+    const idx = line.indexOf('=');
+    const key = line.slice(0, idx).trim().replace(/^export\s+/, '');
+    let value = line.slice(idx + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      try { value = JSON.parse(value); } catch { value = value.slice(1, -1); }
+    }
+    if (key) process.env[key] = value;
+  }
+}
 
 function loadZshrcExports() {
   const zshrc = path.join(os.homedir(), '.zshrc');
@@ -45,13 +62,13 @@ function loadZshrcExports() {
 }
 
 loadZshrcExports();
+loadDotEnv();
 
 const settings = {
   token: process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN,
   allowedUsers: new Set((process.env.DISCORD_ALLOWED_USERS || '').split(/[;,]/).map(s => s.trim()).filter(Boolean)),
   autoJoinVoiceChannels: (process.env.AUTO_JOIN_VOICE_CHANNELS || '일반,General,general').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
   transcriptChannelId: (process.env.TRANSCRIPT_CHANNEL_ID || '1497890694730219540').trim(),
-  hermesCommand: process.env.HERMES_COMMAND || 'hermes chat -Q -q',
   whisperBin: process.env.WHISPER_CPP_BIN || 'whisper-cli',
   whisperModel: process.env.WHISPER_CPP_MODEL || path.join(ROOT, 'models', 'ggml-small-q5_1.bin'),
   ttsVoice: process.env.TTS_VOICE || 'ko-KR-SunHiNeural',
@@ -61,7 +78,7 @@ const settings = {
   wakeWords: (process.env.WAKE_WORDS || 'hermes,헤르메스,허미스').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
   debugDir: process.env.NODE_AUDIO_DEBUG_DIR || '/tmp/hermes-discord-node-debug',
   progressTtsCacheDir: process.env.PROGRESS_TTS_CACHE_DIR || path.join(ROOT, '.cache', 'progress-tts'),
-  sessionFile: process.env.HERMES_SESSION_FILE || path.join(ROOT, '.hermes-discord-session'),
+  agent: buildAgentSettings({ ROOT, env: process.env }),
 };
 if (!settings.token) throw new Error('DISCORD_BOT_TOKEN or DISCORD_TOKEN is required');
 fs.mkdirSync(settings.debugDir, { recursive: true });
@@ -94,66 +111,9 @@ const MIN_MAX_VOLUME_DB = Number(process.env.MIN_MAX_VOLUME_DB || '-18');
 
 function log(...args) { console.log(new Date().toISOString(), ...args); }
 function warn(...args) { console.warn(new Date().toISOString(), ...args); }
+const agentAdapter = createAgentAdapter(settings.agent, { execFileAsync, log, warn });
 function isAllowed(userId) { return settings.allowedUsers.size === 0 || settings.allowedUsers.has(String(userId)); }
-function shellSplit(s) {
-  const out = [];
-  let cur = '', quote = null, esc = false;
-  for (const ch of s) {
-    if (esc) { cur += ch; esc = false; continue; }
-    if (ch === '\\') { esc = true; continue; }
-    if (quote) { if (ch === quote) quote = null; else cur += ch; continue; }
-    if (ch === '"' || ch === "'") { quote = ch; continue; }
-    if (/\s/.test(ch)) { if (cur) { out.push(cur); cur = ''; } continue; }
-    cur += ch;
-  }
-  if (cur) out.push(cur);
-  return out;
-}
 function stamp() { return new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '-'); }
-
-function readHermesSessionId() {
-  try {
-    const id = fs.readFileSync(settings.sessionFile, 'utf8').trim();
-    return id || null;
-  } catch {
-    return null;
-  }
-}
-
-function writeHermesSessionId(id) {
-  if (!id) return;
-  try {
-    fs.writeFileSync(settings.sessionFile, `${id}\n`, { mode: 0o600 });
-  } catch (e) {
-    warn('write Hermes session id failed', e?.stack || e);
-  }
-}
-
-function extractHermesSessionId(text) {
-  return /^session_id:\s*(\S+)/m.exec(text || '')?.[1] || null;
-}
-
-function sanitizeHermesOutput(text) {
-  return String(text || '')
-    .split(/\r?\n/)
-    .filter(line => !/^session_id:\s*\S+\s*$/.test(line.trim()))
-    .filter(line => !/^↻\s*Resumed session\s+\S+/.test(line.trim()))
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
-function voiceBridgePrompt(text) {
-  return [
-    'Discord 음성 대화로 들어온 사용자 발화다.',
-    '단순 대화/상태 질문이면 도구를 쓰지 말고 1~3문장으로 바로 한국어 답변해라.',
-    '파일 수정, 실행, 로그 확인, 검색 같은 실제 작업 지시일 때만 필요한 도구를 사용해라.',
-    '코드 변경을 수행했다면 음성 답변에는 diff나 코드 전문을 읽지 말고, 작업 결과와 다음 확인 사항만 짧게 말해라.',
-    'CLI 메타정보나 session_id는 답변에 포함하지 마라.',
-    '',
-    text,
-  ].join('\n');
-}
 
 function stripMarkdownNoise(text) {
   return String(text || '')
@@ -168,6 +128,9 @@ function stripMarkdownNoise(text) {
 
 function spokenResultOnly(userPrompt, answer) {
   const cleaned = stripMarkdownNoise(answer);
+  if (isPatchLikeOutput(cleaned)) {
+    return '코드 변경 diff가 길게 나와서 음성으로는 읽지 않을게. 변경 파일과 테스트 결과만 텍스트 채널에 정리할게.';
+  }
   if (!isTaskRequest(userPrompt)) return cleaned;
 
   const lines = cleaned
@@ -297,55 +260,6 @@ function isAbortError(e) {
 function isTaskRequest(text) {
   const compact = text.replace(/\s+/g, '').toLowerCase();
   return /(파일|폴더|프로젝트|코드|구현|수정|고쳐|만들|생성|실행|확인|검색|설치|테스트|디버그|재시작|로그|커밋|깃|git|github|브랜치|배포|서버|프로세스|터미널|스크립트|압축|다운로드|분석해|찾아)/i.test(compact);
-}
-
-function hermesPlan(text) {
-  return {
-    task: true,
-    command: settings.hermesCommand,
-    label: 'Hermes Agent',
-  };
-}
-
-async function askHermes(text, signal, plan = hermesPlan(text)) {
-  const argv = shellSplit(plan.command);
-  const cmd = argv[0];
-  const query = voiceBridgePrompt(text);
-  let args = argv.slice(1).concat([query]);
-  const sessionId = readHermesSessionId();
-  if (sessionId) {
-    const qIndex = args.lastIndexOf('-q');
-    const insertAt = qIndex >= 0 ? qIndex : args.length - 1;
-    args = args.slice(0, insertAt).concat(['--resume', sessionId], args.slice(insertAt));
-  }
-  const start = Date.now();
-  log('Hermes CLI start', plan.label, cmd, args.slice(0, -1).join(' '), sessionId ? `resume=${sessionId}` : 'new-session');
-  try {
-    const { stdout, stderr } = await execFileAsync(cmd, args, {
-      timeout: plan.task ? 180000 : 45000,
-      maxBuffer: 4 * 1024 * 1024,
-      env: { ...process.env, PYTHONUNBUFFERED: '1' },
-      signal,
-    });
-    const combined = `${stdout || ''}\n${stderr || ''}`;
-    const newSessionId = extractHermesSessionId(combined);
-    if (newSessionId) {
-      writeHermesSessionId(newSessionId);
-      log('Hermes session saved', newSessionId);
-    }
-    log('Hermes CLI done', plan.label, 'ms', Date.now() - start);
-    return sanitizeHermesOutput(stdout) || sanitizeHermesOutput(stderr) || '응답이 비어 있어.';
-  } catch (e) {
-    if (isAbortError(e)) throw e;
-    const stderr = (e.stderr || '').toString().trim();
-    const stdout = (e.stdout || '').toString().trim();
-    const msg = (e.message || '').toString().trim();
-    warn('Hermes CLI failed', 'mode', plan.label, 'ms', Date.now() - start, 'code', e.code, 'signal', e.signal, 'stdout', stdout.slice(-500), 'stderr', stderr.slice(-500), 'message', msg.slice(-500));
-    if (e.signal === 'SIGINT' || e.signal === 'SIGTERM') {
-      return 'Hermes 작업이 중간에 중단됐어. 긴 코드 변경 출력은 음성으로 읽지 않을게. 필요한 경우 텍스트 채널에서 다시 지시해줘.';
-    }
-    return `Hermes CLI 실행에 실패했어: ${sanitizeHermesOutput(stderr || stdout || msg || e.code || 'unknown error').slice(0, 700)}`;
-  }
 }
 
 async function synthTTS(text, signal) {
@@ -547,9 +461,9 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1) {
     if (!acceptsWake(text)) { await sendText('wake word 없음: 응답은 안 함'); return; }
 
     const prompt = stripWake(text);
-    const plan = hermesPlan(prompt);
-    log('Hermes plan', plan.label, 'task', plan.task);
-    const hermesPromise = askHermes(prompt, signal, plan);
+    const plan = { task: true, label: agentAdapter.label };
+    log('Agent plan', plan.label, 'backend', agentAdapter.backend, 'task', plan.task);
+    const agentPromise = agentAdapter.ask(prompt, signal, plan);
     let done = false;
     // Stage announcements say the actual pipeline step. They are delayed so very
     // fast answers do not get blocked by status TTS.
@@ -567,12 +481,12 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1) {
     })().catch(e => {
       if (!isAbortError(e)) warn('progress loop failed', e?.stack || e);
     });
-    const answer = await hermesPromise.finally(() => { done = true; });
+    const answer = await agentPromise.finally(() => { done = true; });
     void progressLoop;
     if (interruptedTurns.has(turnId) || signal.aborted) return;
 
-    log('Hermes answer', answer.slice(0, 200));
-    await sendText(`✅ Hermes 응답:\n${answer}`);
+    log('Agent answer', agentAdapter.label, answer.slice(0, 200));
+    await sendText(`✅ ${agentAdapter.label} 응답:\n${answer}`);
     const spokenAnswer = spokenResultOnly(prompt, answer);
     log('spoken answer', spokenAnswer.slice(0, 200));
     if (!signal.aborted && !interruptedTurns.has(turnId)) {
@@ -674,10 +588,10 @@ client.on('messageCreate', async msg => {
   if (!isAllowed(msg.author.id)) return;
   const content = msg.content.trim();
   if (content === '!ping') return void msg.reply('pong');
-  if (content === '!session') return void msg.reply(`Hermes 세션: ${readHermesSessionId() || '아직 없음'}`);
+  if (content === '!session') return void msg.reply(`${agentAdapter.label} 세션: ${agentAdapter.readSessionId?.() || '아직 없음'}`);
   if (content === '!reset-session') {
-    try { fs.rmSync(settings.sessionFile, { force: true }); } catch {}
-    return void msg.reply('Hermes 음성/텍스트 공유 세션 초기화했어.');
+    try { fs.rmSync(settings.agent.sessionFile, { force: true }); } catch {}
+    return void msg.reply(`${agentAdapter.label} 음성/텍스트 공유 세션 초기화했어.`);
   }
   if (content === '!join') {
     const ch = msg.member?.voice?.channel;
@@ -699,9 +613,9 @@ client.on('messageCreate', async msg => {
   if (content.startsWith('!ask ')) {
     const text = content.slice(5).trim();
     if (!text) return void msg.reply('물어볼 내용을 붙여줘.');
-    await msg.channel.send('텍스트 입력을 음성 세션과 같은 Hermes 세션으로 보낼게.');
-    const plan = hermesPlan(text);
-    const answer = await askHermes(text, undefined, plan);
+    await msg.channel.send(`텍스트 입력을 음성 세션과 같은 ${agentAdapter.label} 세션으로 보낼게.`);
+    const plan = { task: true, label: agentAdapter.label };
+    const answer = await agentAdapter.ask(text, undefined, plan);
     await msg.channel.send(answer.slice(0, 1900));
     if (connection) {
       await speakText(answer);

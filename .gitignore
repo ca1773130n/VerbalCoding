@@ -6,6 +6,7 @@ __pycache__/
 .env
 node_modules/
 .cache/
+.agent-sessions/
 .hermes-discord-session
 models/*.bin
 /tmp/
