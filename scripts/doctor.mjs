@@ -1,0 +1,88 @@
+#!/usr/bin/env node
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { parseKeyValueEnv } from '../app-node/install_config.mjs';
+
+const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+
+function readEnvFile(file) {
+  try {
+    return parseKeyValueEnv(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function mergeEnv() {
+  // Project .env intentionally wins over ~/.zshrc so local setup is reproducible.
+  return {
+    ...process.env,
+    ...readEnvFile(path.join(process.env.HOME || '', '.zshrc')),
+    ...readEnvFile(path.join(ROOT, '.env')),
+  };
+}
+
+function commandExists(command) {
+  const result = spawnSync('bash', ['-lc', `command -v ${JSON.stringify(command)}`], {
+    cwd: ROOT,
+    encoding: 'utf8',
+  });
+  return result.status === 0 ? result.stdout.trim() : '';
+}
+
+function check(label, ok, detail = '') {
+  const mark = ok ? '✓' : '✗';
+  console.log(`${mark} ${label}${detail ? ` — ${detail}` : ''}`);
+  return Boolean(ok);
+}
+
+function note(label, detail = '') {
+  console.log(`• ${label}${detail ? ` — ${detail}` : ''}`);
+}
+
+const env = mergeEnv();
+const backend = (env.AGENT_BACKEND || 'hermes').toLowerCase();
+let ok = true;
+
+console.log('VerbalCoding doctor');
+console.log(`Project: ${ROOT}`);
+console.log(`Backend: ${backend}`);
+console.log('');
+
+ok = check('Node.js', commandExists('node'), commandExists('node') || 'missing') && ok;
+ok = check('npm', commandExists('npm'), commandExists('npm') || 'missing') && ok;
+ok = check('ffmpeg', commandExists('ffmpeg'), commandExists('ffmpeg') || 'missing') && ok;
+ok = check('whisper-cli', commandExists(env.WHISPER_CPP_BIN || 'whisper-cli'), commandExists(env.WHISPER_CPP_BIN || 'whisper-cli') || 'missing') && ok;
+
+const modelPath = path.resolve(ROOT, env.WHISPER_CPP_MODEL || 'models/ggml-small-q5_1.bin');
+ok = check('whisper.cpp model', fs.existsSync(modelPath), path.relative(ROOT, modelPath)) && ok;
+ok = check('Discord bot token configured', Boolean(env.DISCORD_BOT_TOKEN || env.DISCORD_TOKEN), (env.DISCORD_BOT_TOKEN || env.DISCORD_TOKEN) ? '[REDACTED]' : 'missing DISCORD_BOT_TOKEN') && ok;
+note('Allowed users configured', env.DISCORD_ALLOWED_USERS ? '[REDACTED]' : 'not set; bot may accept all users depending on config');
+note('Auto-join channels', env.AUTO_JOIN_VOICE_CHANNELS || 'default: 일반,General,general');
+
+const backendCommand = {
+  hermes: env.HERMES_COMMAND || 'hermes',
+  'claude-code': env.CLAUDE_COMMAND || 'claude',
+  claude: env.CLAUDE_COMMAND || 'claude',
+  codex: env.CODEX_COMMAND || 'codex',
+  gemini: env.GEMINI_COMMAND || 'gemini',
+  opencode: env.OPENCODE_COMMAND || 'opencode',
+  openclaw: env.OPENCLAW_COMMAND || 'openclaw',
+  custom: env.AGENT_COMMAND || '',
+}[backend] || '';
+
+if (backend === 'custom') {
+  ok = check('Custom AGENT_COMMAND configured', Boolean(env.AGENT_COMMAND), env.AGENT_COMMAND ? '[REDACTED]' : 'missing AGENT_COMMAND') && ok;
+} else {
+  const first = String(backendCommand).trim().split(/\s+/)[0];
+  ok = check(`${backend} CLI`, first && commandExists(first), first ? (commandExists(first) || `missing ${first}`) : 'missing command') && ok;
+}
+
+console.log('');
+if (ok) {
+  console.log('Doctor passed. Run ./run.sh to start VerbalCoding.');
+} else {
+  console.log('Doctor found missing prerequisites. Fix the ✗ items, then rerun npm run doctor.');
+  process.exitCode = 1;
+}

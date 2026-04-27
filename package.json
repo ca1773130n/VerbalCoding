@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node app-node/main.mjs",
     "setup": "node scripts/install.mjs",
+    "doctor": "node scripts/doctor.mjs",
     "test": "node --test app-node/*.test.mjs"
   },
   "dependencies": {
