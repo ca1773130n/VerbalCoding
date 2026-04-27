@@ -33,6 +33,7 @@ async function main() {
     const ttsVoice = await ask('TTS voice', process.env.TTS_VOICE || 'ko-KR-SunHiNeural');
     const ttsRate = await ask('TTS rate', process.env.TTS_RATE || '+10%');
     const requireWake = (await ask('Require wake word? 1/0', process.env.REQUIRE_WAKE_WORD || '0')) === '1';
+    const verboseProgress = (await ask('Verbose progress by default? 1/0', process.env.AGENT_VERBOSE_PROGRESS || process.env.VERBALCODING_VERBOSE_PROGRESS || '0')) === '1';
 
     const values = normalizeInstallAnswers({
       harness,
@@ -45,6 +46,7 @@ async function main() {
       ttsVoice,
       ttsRate,
       requireWakeWord: requireWake,
+      verboseProgress,
     });
     const envPath = path.join(ROOT, '.env');
     if (fs.existsSync(envPath)) {

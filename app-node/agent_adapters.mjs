@@ -17,16 +17,24 @@ export function shellSplit(s) {
   return out;
 }
 
-export function voiceBridgePrompt(text) {
-  return [
+export function voiceBridgePrompt(text, options = {}) {
+  const lines = [
     'Discord 음성 대화로 들어온 사용자 발화다.',
     '단순 대화/상태 질문이면 도구를 쓰지 말고 1~3문장으로 바로 한국어 답변해라.',
     '파일 수정, 실행, 로그 확인, 검색 같은 실제 작업 지시일 때만 필요한 도구를 사용해라.',
     '코드 변경을 수행했다면 음성 답변에는 diff나 코드 전문을 읽지 말고, 작업 결과와 다음 확인 사항만 짧게 말해라.',
     'CLI 메타정보나 session_id는 답변에 포함하지 마라.',
-    '',
-    text,
-  ].join('\n');
+  ];
+  if (options.verboseProgress) {
+    lines.push(
+      'VERBOSE 진행 공유 모드가 켜져 있다.',
+      '긴 작업에서 중요한 중간 동작을 할 때마다 한 줄로 `VERBALCODING_PROGRESS: <짧은 한국어 단계>` 형식을 출력해라.',
+      '예: `VERBALCODING_PROGRESS: 파일 읽기 app-node/main.mjs`, `VERBALCODING_PROGRESS: 웹 검색 VerbalCoding setup`, `VERBALCODING_PROGRESS: 터미널 실행 npm test`, `VERBALCODING_PROGRESS: 툴 사용 read_file`.',
+      '토큰, API 키, 비밀번호, 연결 문자열, 개인 식별자는 절대 진행 로그에 쓰지 마라.',
+      '진행 로그는 파일 읽기, 웹 검색, 터미널 실행, 테스트 실행, 툴 사용 같은 항목만 짧게 써라.',
+    );
+  }
+  return lines.concat(['', text]).join('\n');
 }
 
 export function sanitizeAgentOutput(text) {
@@ -34,9 +42,44 @@ export function sanitizeAgentOutput(text) {
     .split(/\r?\n/)
     .filter(line => !/^session_id:\s*\S+\s*$/.test(line.trim()))
     .filter(line => !/^↻\s*Resumed session\s+\S+/.test(line.trim()))
+    .filter(line => !/^VERBALCODING_PROGRESS\s*:/i.test(line.trim()))
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+function compactProgressText(text) {
+  return String(text || '')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/[`"']/g, '')
+    .replace(/\b(?:token|api[_-]?key|password|secret|authorization)\b\s*[:=]?\s*\S+/gi, '$1 [REDACTED]')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 140);
+}
+
+export function extractVerboseProgressEvents(text) {
+  const events = [];
+  const seen = new Set();
+  function add(event) {
+    const cleaned = compactProgressText(event);
+    if (!cleaned || seen.has(cleaned)) return;
+    seen.add(cleaned);
+    events.push(cleaned);
+  }
+  for (const raw of String(text || '').split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const explicit = /^VERBALCODING_PROGRESS\s*:\s*(.+)$/i.exec(line);
+    if (explicit) { add(explicit[1]); continue; }
+    const lower = line.toLowerCase();
+    if (/web_search|browser_search|web search|search web|functions\.web_search/.test(lower)) add('웹 검색 실행');
+    else if (/read_file|functions\.read_file|reading file|file read|파일 읽/.test(lower)) add('파일 읽기');
+    else if (/write_file|patch|functions\.patch|editing file|파일 수정|파일 쓰/.test(lower)) add('파일 수정');
+    else if (/terminal|execute_code|shell|command=|npm test|pytest|터미널|명령 실행/.test(lower)) add('터미널 명령 실행');
+    else if (/tool_use|calling tool|functions\./.test(lower)) add('툴 사용');
+  }
+  return events;
 }
 
 export function isPatchLikeOutput(text) {
@@ -135,6 +178,7 @@ export function buildAgentSettings({ ROOT, env = process.env } = {}) {
     supportsHermesSession: selected.supportsHermesSession,
     taskTimeoutMs: Number(env.AGENT_TASK_TIMEOUT_MS || env.HERMES_TASK_TIMEOUT_MS || '0'),
     chatTimeoutMs: Number(env.AGENT_CHAT_TIMEOUT_MS || env.HERMES_CHAT_TIMEOUT_MS || '45000'),
+    verboseProgress: ['1', 'true', 'yes', 'on'].includes(String(env.AGENT_VERBOSE_PROGRESS || env.VERBALCODING_VERBOSE_PROGRESS || '0').toLowerCase()),
   };
 }
 
@@ -153,6 +197,101 @@ export function createAgentAdapter(settings, deps = {}) {
   const log = deps.log || (() => {});
   const warn = deps.warn || (() => {});
   const env = deps.env || process.env;
+  const spawnProcess = deps.spawn;
+  const onProgress = deps.onProgress || (() => {});
+  const emittedProgress = new Set();
+
+  function emitVerboseProgress(text) {
+    if (!text) return;
+    for (const event of extractVerboseProgressEvents(text)) {
+      if (emittedProgress.has(event)) continue;
+      emittedProgress.add(event);
+      try { onProgress(event); } catch (e) { warn('verbose progress callback failed', e?.stack || e); }
+    }
+  }
+
+  function execWithOptionalProgress(cmd, args, options, verbose) {
+    if (!verbose || !spawnProcess) return execFileAsync(cmd, args, options);
+    return new Promise((resolve, reject) => {
+      const child = spawnProcess(cmd, args, {
+        env: options.env,
+        cwd: options.cwd,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      let stdout = '';
+      let stderr = '';
+      let settled = false;
+      let timeoutId = null;
+      function finishError(error) {
+        if (settled) return;
+        settled = true;
+        if (timeoutId) clearTimeout(timeoutId);
+        error.stdout = stdout;
+        error.stderr = stderr;
+        reject(error);
+      }
+      if (options.signal) {
+        if (options.signal.aborted) {
+          const err = new Error('The operation was aborted');
+          err.name = 'AbortError';
+          finishError(err);
+          return;
+        }
+        options.signal.addEventListener('abort', () => {
+          try { child.kill('SIGTERM'); } catch {}
+          const err = new Error('The operation was aborted');
+          err.name = 'AbortError';
+          err.code = 'ABORT_ERR';
+          finishError(err);
+        }, { once: true });
+      }
+      if (options.timeout) {
+        timeoutId = setTimeout(() => {
+          try { child.kill('SIGTERM'); } catch {}
+          const err = new Error(`Command timed out after ${options.timeout}ms`);
+          err.signal = 'SIGTERM';
+          finishError(err);
+        }, options.timeout);
+      }
+      child.stdout?.on('data', chunk => {
+        const s = chunk.toString();
+        stdout += s;
+        emitVerboseProgress(s);
+        if (stdout.length + stderr.length > options.maxBuffer) {
+          const err = new Error('maxBuffer exceeded');
+          err.code = 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER';
+          try { child.kill('SIGTERM'); } catch {}
+          finishError(err);
+        }
+      });
+      child.stderr?.on('data', chunk => {
+        const s = chunk.toString();
+        stderr += s;
+        emitVerboseProgress(s);
+        if (stdout.length + stderr.length > options.maxBuffer) {
+          const err = new Error('maxBuffer exceeded');
+          err.code = 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER';
+          try { child.kill('SIGTERM'); } catch {}
+          finishError(err);
+        }
+      });
+      child.on('error', finishError);
+      child.on('close', (code, signal) => {
+        if (settled) return;
+        settled = true;
+        if (timeoutId) clearTimeout(timeoutId);
+        if (code === 0) resolve({ stdout, stderr });
+        else {
+          const err = new Error(`Command failed: ${cmd}`);
+          err.code = code;
+          err.signal = signal;
+          err.stdout = stdout;
+          err.stderr = stderr;
+          reject(err);
+        }
+      });
+    });
+  }
 
   function makeCodexOutputPath() {
     const base = deps.tmpdir || os.tmpdir();
@@ -197,10 +336,10 @@ export function createAgentAdapter(settings, deps = {}) {
     }
   }
 
-  function buildArgs(text) {
+  function buildArgs(text, options = {}) {
     const argv = shellSplit(settings.command);
     const cmd = argv[0];
-    const query = voiceBridgePrompt(text);
+    const query = voiceBridgePrompt(text, { verboseProgress: options.verboseProgress });
     let args = argv.slice(1).concat([query]);
     const sessionId = readSessionId();
     if (sessionId) {
@@ -212,18 +351,21 @@ export function createAgentAdapter(settings, deps = {}) {
   }
 
   async function ask(text, signal, plan = { task: true, label: settings.label }) {
-    const { cmd, args, sessionId } = buildArgs(text);
+    const verboseProgress = Boolean(plan.verboseProgress ?? settings.verboseProgress);
+    emittedProgress.clear();
+    const { cmd, args, sessionId } = buildArgs(text, { verboseProgress });
     const start = Date.now();
     const label = plan.label || settings.label;
     const { args: finalArgs, outputPath } = addCodexOutputCapture(args);
-    log('Agent CLI start', label, cmd, finalArgs.slice(0, -1).join(' '), sessionId ? `resume=${sessionId}` : 'new-session');
+    log('Agent CLI start', label, cmd, finalArgs.slice(0, -1).join(' '), sessionId ? `resume=${sessionId}` : 'new-session', 'verbose', verboseProgress);
+    if (verboseProgress) onProgress(`${label} 호출 시작`);
     try {
-      const { stdout, stderr } = await execFileAsync(cmd, finalArgs, {
+      const { stdout, stderr } = await execWithOptionalProgress(cmd, finalArgs, {
         timeout: resolveExecTimeout(plan.task ? settings.taskTimeoutMs : settings.chatTimeoutMs),
         maxBuffer: 4 * 1024 * 1024,
         env: { ...env, PYTHONUNBUFFERED: '1' },
         signal,
-      });
+      }, verboseProgress);
       const codexLastMessage = readAndCleanupCodexOutput(outputPath);
       const combined = `${stdout || ''}\n${stderr || ''}`;
       const newSessionId = extractHermesSessionId(combined);
@@ -232,6 +374,7 @@ export function createAgentAdapter(settings, deps = {}) {
         log('Agent session saved', settings.backend, newSessionId);
       }
       log('Agent CLI done', label, 'ms', Date.now() - start);
+      if (verboseProgress) onProgress(`${label} 응답 수신`);
       return sanitizeAgentOutput(codexLastMessage) || sanitizeAgentOutput(stdout) || sanitizeAgentOutput(stderr) || '응답이 비어 있어.';
     } catch (e) {
       if (e?.name === 'AbortError' || e?.code === 'ABORT_ERR') throw e;

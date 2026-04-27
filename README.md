@@ -54,6 +54,7 @@ AGENT_LABEL="My Harness"
 AGENT_COMMAND="my-harness run --non-interactive"
 AGENT_TASK_TIMEOUT_MS=0        # 0 disables Node-side timeout for long agent tasks
 AGENT_CHAT_TIMEOUT_MS=45000
+AGENT_VERBOSE_PROGRESS=0      # default off; toggle with !verbose on/off
 ```
 
 ## Quick start
@@ -141,6 +142,7 @@ REQUIRE_WAKE_WORD="0"
 MIN_UTTERANCE_SECONDS="1.0"
 HERMES_TASK_TIMEOUT_MS="0"
 HERMES_CHAT_TIMEOUT_MS="45000"
+AGENT_VERBOSE_PROGRESS="0"
 ```
 
 ## Run
@@ -168,11 +170,27 @@ Runtime logs default to the path selected by your shell command. During local te
 - `!ask <prompt>` — send text through the same selected harness adapter as voice.
 - `!session` — show the current adapter session ID when supported.
 - `!reset-session` — clear the adapter session file when supported.
+- `!verbose` — show whether detailed progress updates are enabled.
+- `!verbose on` / `!verbose off` — toggle text-only detailed progress updates. Default is off.
 - `!sensitivity` — show current barge-in sensitivity thresholds.
 - `!sensitivity conservative` — temporarily use stricter outdoor/noisy-environment barge-in detection.
 - `!sensitivity normal` — restore normal indoor sensitivity.
 
-Voice equivalents such as “외부 모드”, “보수 모드”, “실내”, “기본 감도”, and clear stop phrases like “잠깐”, “멈춰”, “그만” are handled by the bridge.
+Voice equivalents such as “외부 모드”, “보수 모드”, “실내”, “기본 감도”, and clear stop phrases like “잠깐”, “멈춰”, “그만” are handled by the bridge. You can also say “상세 진행 켜” / “상세 진행 꺼” to toggle verbose progress by voice.
+
+## Verbose progress mode
+
+Verbose progress is **off by default**. When enabled with `!verbose on`, `AGENT_VERBOSE_PROGRESS=1`, or a voice command like “상세 진행 켜”, VerbalCoding sends text-only progress notes such as:
+
+```text
+🔎 진행: Hermes Agent 호출 시작
+🔎 진행: 파일 읽기 app-node/main.mjs
+🔎 진행: 웹 검색 실행
+🔎 진행: 터미널 명령 실행
+🔎 진행: Hermes Agent 응답 수신
+```
+
+This mode asks the selected CLI harness to emit `VERBALCODING_PROGRESS: ...` lines and also summarizes common tool markers from streaming stdout/stderr when available. Secret-looking fields are redacted and progress lines are removed from the final spoken answer.
 
 ## Testing
 

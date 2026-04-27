@@ -22,6 +22,7 @@ VerbalCoding is a Discord voice bridge for controlling CLI-based coding agents b
 - Diff/code/log guardrails so large technical output is not read aloud.
 - Normal and conservative sensitivity modes for indoor vs. noisy/outdoor use.
 - Setup wizard, `.env.example`, and `npm run doctor` prerequisite checker.
+- Optional verbose progress mode for text-only middle-step updates during long agent work.
 
 ### Pre-release checklist
 

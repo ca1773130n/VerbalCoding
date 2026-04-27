@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   buildAgentSettings,
   createAgentAdapter,
+  extractVerboseProgressEvents,
   interruptedAgentMessage,
   isPatchLikeOutput,
   resolveExecTimeout,
@@ -121,6 +122,30 @@ test('voiceBridgePrompt keeps voice-specific operating instructions with user te
   assert.match(prompt, /Discord 음성 대화/);
   assert.match(prompt, /파일 수정, 실행, 로그 확인/);
   assert.match(prompt, /파일 수정해줘/);
+});
+
+test('voiceBridgePrompt adds optional verbose progress instructions only when enabled', () => {
+  const normal = voiceBridgePrompt('파일 수정해줘');
+  const verbose = voiceBridgePrompt('파일 수정해줘', { verboseProgress: true });
+
+  assert.doesNotMatch(normal, /VERBALCODING_PROGRESS/);
+  assert.match(verbose, /VERBALCODING_PROGRESS/);
+  assert.match(verbose, /파일 읽기|웹 검색|터미널 실행|툴 사용/);
+});
+
+test('extractVerboseProgressEvents summarizes tool activity without leaking raw logs', () => {
+  const events = extractVerboseProgressEvents([
+    'VERBALCODING_PROGRESS: 파일 읽기 app-node/main.mjs',
+    'Calling tool functions.web_search with query secret token abcdef',
+    'tool_use: terminal command="npm test"',
+    'unrelated verbose log line that should not be included',
+  ].join('\n'));
+
+  assert.deepEqual(events, [
+    '파일 읽기 app-node/main.mjs',
+    '웹 검색 실행',
+    '터미널 명령 실행',
+  ]);
 });
 
 test('resolveExecTimeout disables timeout for zero or invalid task timeout values', () => {

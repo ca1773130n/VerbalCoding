@@ -123,7 +123,17 @@ const MIN_MAX_VOLUME_DB = Number(process.env.MIN_MAX_VOLUME_DB || '-18');
 
 function log(...args) { console.log(new Date().toISOString(), ...args); }
 function warn(...args) { console.warn(new Date().toISOString(), ...args); }
-const agentAdapter = createAgentAdapter(settings.agent, { execFileAsync, log, warn });
+let verboseProgress = Boolean(settings.agent.verboseProgress);
+const agentAdapter = createAgentAdapter(settings.agent, {
+  execFileAsync,
+  spawn,
+  log,
+  warn,
+  onProgress: event => {
+    if (!verboseProgress) return;
+    sendText(`🔎 진행: ${event}`).catch(e => warn('send verbose progress failed', e?.stack || e));
+  },
+});
 let sensitivityMode = SENSITIVITY_MODE_DEFAULT;
 let sensitivityModeExpiresAt = 0;
 function currentBargeInThresholds() {
@@ -152,9 +162,20 @@ function setSensitivityMode(mode, reason = 'manual') {
 }
 function sensitivityStatusText() {
   const thresholds = currentBargeInThresholds();
-  const suffix = sensitivityModeExpiresAt ? `, ${Math.max(0, Math.ceil((sensitivityModeExpiresAt - Date.now()) / 1000))}초 후 기본으로 돌아감` : '';
-  return `끼어들기 감도: ${thresholds.mode}, 최소 ${thresholds.minSeconds}초, 평균 ${thresholds.minMeanDb} dB, 피크 ${thresholds.minMaxDb} dB${suffix}`;
+  const ttl = sensitivityModeExpiresAt ? Math.max(0, Math.round((sensitivityModeExpiresAt - Date.now()) / 1000)) : 0;
+  return `감도 모드: ${thresholds.mode}, 최소 ${(thresholds.minBytes / (48000 * 2 * 2)).toFixed(1)}초, mean>=${thresholds.minMeanDb}dB 또는 max>=${thresholds.minMaxDb}dB${ttl ? `, ${ttl}초 뒤 기본으로 복귀` : ''}`;
 }
+
+function verboseStatusText() {
+  return `verbose 진행 모드: ${verboseProgress ? '켜짐' : '꺼짐'}${verboseProgress ? ' — 에이전트의 파일 읽기/툴 사용/웹 검색/터미널 실행 같은 중간 항목을 텍스트로 알려줄게.' : ' — 기본은 조용하게 최종 결과 중심으로만 알려줄게.'}`;
+}
+
+function setVerboseProgress(enabled, reason = 'manual') {
+  verboseProgress = Boolean(enabled);
+  log('verbose progress mode set', verboseProgress, 'reason', reason);
+  return verboseProgress;
+}
+
 function isAllowed(userId) { return settings.allowedUsers.size === 0 || settings.allowedUsers.has(String(userId)); }
 function stamp() { return new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '-'); }
 
@@ -310,6 +331,18 @@ function isSensitivityOnlyRequest(text) {
   const compact = String(text || '').replace(/\s+/g, '').toLowerCase();
   if (!sensitivityModeFromTranscript(compact)) return false;
   return !isTaskRequest(compact) && !/(그리고|그다음|다음에|추가로|해줘.*(말|설명|대답))/u.test(compact);
+}
+
+function verboseModeFromTranscript(text) {
+  const compact = String(text || '').replace(/\s+/g, '').toLowerCase();
+  if (/(verbose|버보스|상세진행|자세히알려|중간과정).*(켜|on|시작|보여|알려)|^(verbose|버보스)모드(켜|on)?$/.test(compact)) return true;
+  if (/(verbose|버보스|상세진행|자세히|중간과정).*(꺼|off|중지|그만)|^(verbose|버보스)모드꺼$/.test(compact)) return false;
+  return null;
+}
+
+function isVerboseOnlyRequest(text) {
+  const compact = String(text || '').replace(/\s+/g, '').toLowerCase();
+  return verboseModeFromTranscript(compact) !== null && !isTaskRequest(compact) && !/(그리고|그다음|다음에|추가로)/u.test(compact);
 }
 
 async function synthTTS(text, signal) {
@@ -542,7 +575,16 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1) {
         return;
       }
     }
-    const plan = { task: true, label: agentAdapter.label };
+    const verboseRequest = verboseModeFromTranscript(prompt);
+    if (verboseRequest !== null) {
+      setVerboseProgress(verboseRequest, 'voice-command');
+      await sendText(`🔎 ${verboseStatusText()}`);
+      if (isVerboseOnlyRequest(prompt)) {
+        await speakText(verboseRequest ? '상세 진행 모드 켰어.' : '상세 진행 모드 껐어.', signal);
+        return;
+      }
+    }
+    const plan = { task: true, label: agentAdapter.label, verboseProgress };
     log('Agent plan', plan.label, 'backend', agentAdapter.backend, 'task', plan.task);
     const agentPromise = agentAdapter.ask(prompt, signal, plan);
     let done = false;
@@ -683,6 +725,15 @@ client.on('messageCreate', async msg => {
   if (!isAllowed(msg.author.id)) return;
   const content = msg.content.trim();
   if (content === '!ping') return void msg.reply('pong');
+  if (content === '!verbose') return void msg.reply(verboseStatusText());
+  if (['!verbose on', '!verbose true', '!verbose 1', '!verbose 켜', '!verbose 켜줘'].includes(content.toLowerCase())) {
+    setVerboseProgress(true, 'discord-command');
+    return void msg.reply(verboseStatusText());
+  }
+  if (['!verbose off', '!verbose false', '!verbose 0', '!verbose 꺼', '!verbose 꺼줘'].includes(content.toLowerCase())) {
+    setVerboseProgress(false, 'discord-command');
+    return void msg.reply(verboseStatusText());
+  }
   if (content === '!sensitivity') return void msg.reply(sensitivityStatusText());
   if (content === '!sensitivity conservative') {
     setSensitivityMode('conservative', 'discord-command');
@@ -718,7 +769,7 @@ client.on('messageCreate', async msg => {
     const text = content.slice(5).trim();
     if (!text) return void msg.reply('물어볼 내용을 붙여줘.');
     await msg.channel.send(`텍스트 입력을 음성 세션과 같은 ${agentAdapter.label} 세션으로 보낼게.`);
-    const plan = { task: true, label: agentAdapter.label };
+    const plan = { task: true, label: agentAdapter.label, verboseProgress };
     const answer = await agentAdapter.ask(text, undefined, plan);
     await msg.channel.send(answer.slice(0, 1900));
     if (connection) {
