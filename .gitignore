@@ -6,8 +6,8 @@ __pycache__/
 .env
 node_modules/
 .cache/
+.logs/
 .agent-sessions/
-.verbalcoding-session
 .verbalcoding-session
 models/*.bin
 /tmp/

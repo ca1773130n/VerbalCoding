@@ -55,6 +55,7 @@ AGENT_COMMAND="my-harness run --non-interactive"
 AGENT_TASK_TIMEOUT_MS=0        # 0 disables Node-side timeout for long agent tasks
 AGENT_CHAT_TIMEOUT_MS=45000
 AGENT_VERBOSE_PROGRESS=0      # default off; toggle with !verbose on/off
+LATENCY_LOG_PATH=./.logs/latency.jsonl
 ```
 
 ## Quick start
@@ -143,6 +144,7 @@ MIN_UTTERANCE_SECONDS="1.0"
 HERMES_TASK_TIMEOUT_MS="0"
 HERMES_CHAT_TIMEOUT_MS="45000"
 AGENT_VERBOSE_PROGRESS="0"
+LATENCY_LOG_PATH="./.logs/latency.jsonl"
 ```
 
 ## Run
@@ -172,6 +174,7 @@ Runtime logs default to the path selected by your shell command. During local te
 - `!reset-session` — clear the adapter session file when supported.
 - `!verbose` — show whether detailed progress updates are enabled.
 - `!verbose on` / `!verbose off` — toggle text-only detailed progress updates. Default is off.
+- `!latency` / `!metrics` — show recent average/p95 latency by pipeline stage.
 - `!sensitivity` — show current barge-in sensitivity thresholds.
 - `!sensitivity conservative` — temporarily use stricter outdoor/noisy-environment barge-in detection.
 - `!sensitivity normal` — restore normal indoor sensitivity.
@@ -191,6 +194,25 @@ Verbose progress is **off by default**. When enabled with `!verbose on`, `AGENT_
 ```
 
 This mode asks the selected CLI harness to emit `VERBALCODING_PROGRESS: ...` lines and also summarizes common tool markers from streaming stdout/stderr when available. Secret-looking fields are redacted and progress lines are removed from the final spoken answer.
+
+## Latency metrics
+
+VerbalCoding always writes per-turn latency records as JSONL. Default path:
+
+```text
+./.logs/latency.jsonl
+```
+
+Each record includes status, total time, voice capture time, utterance idle wait, STT time, agent time, TTS synthesis/playback time, chunk counts, transcript length, answer length, and audio levels where available. Use this to identify whether optimization should focus on segmentation, STT, agent execution, or TTS.
+
+In Discord:
+
+```text
+!latency
+!metrics
+```
+
+prints a compact recent summary using the latest 200 records: count, avg, p95, max, and non-OK statuses.
 
 ## Testing
 

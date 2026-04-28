@@ -61,6 +61,7 @@ ok = check('Discord bot token configured', Boolean(env.DISCORD_BOT_TOKEN || env.
 note('Allowed users configured', env.DISCORD_ALLOWED_USERS ? '[REDACTED]' : 'not set; bot may accept all users depending on config');
 note('Auto-join channels', env.AUTO_JOIN_VOICE_CHANNELS || 'default: 일반,General,general');
 note('Verbose progress default', ['1', 'true', 'yes', 'on'].includes(String(env.AGENT_VERBOSE_PROGRESS || env.VERBALCODING_VERBOSE_PROGRESS || '0').toLowerCase()) ? 'on' : 'off');
+note('Latency log path', env.LATENCY_LOG_PATH || './.logs/latency.jsonl');
 
 const backendCommand = {
   hermes: env.HERMES_COMMAND || 'hermes',

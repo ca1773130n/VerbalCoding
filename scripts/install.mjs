@@ -34,6 +34,7 @@ async function main() {
     const ttsRate = await ask('TTS rate', process.env.TTS_RATE || '+10%');
     const requireWake = (await ask('Require wake word? 1/0', process.env.REQUIRE_WAKE_WORD || '0')) === '1';
     const verboseProgress = (await ask('Verbose progress by default? 1/0', process.env.AGENT_VERBOSE_PROGRESS || process.env.VERBALCODING_VERBOSE_PROGRESS || '0')) === '1';
+    const latencyLogPath = await ask('Latency JSONL log path', process.env.LATENCY_LOG_PATH || './.logs/latency.jsonl');
 
     const values = normalizeInstallAnswers({
       harness,
@@ -47,6 +48,7 @@ async function main() {
       ttsRate,
       requireWakeWord: requireWake,
       verboseProgress,
+      latencyLogPath,
     });
     const envPath = path.join(ROOT, '.env');
     if (fs.existsSync(envPath)) {

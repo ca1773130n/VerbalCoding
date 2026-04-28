@@ -20,6 +20,13 @@ import {
 import prism from 'prism-media';
 import wav from 'wav';
 import { buildAgentSettings, createAgentAdapter, isPatchLikeOutput } from './agent_adapters.mjs';
+import {
+  appendJsonl,
+  createLatencyTurn,
+  formatLatencySummary,
+  readJsonlRecords,
+  summarizeLatencyRecords,
+} from './latency_metrics.mjs';
 import { splitForTTS } from './tts_chunks.mjs';
 import { playChunkedTTSWithPrefetch } from './tts_prefetch.mjs';
 import {
@@ -85,6 +92,7 @@ const settings = {
   requireWakeWord: ['1', 'true', 'yes'].includes((process.env.REQUIRE_WAKE_WORD || '0').toLowerCase()),
   wakeWords: (process.env.WAKE_WORDS || 'hermes,헤르메스,허미스').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
   debugDir: process.env.NODE_AUDIO_DEBUG_DIR || '/tmp/verbalcoding-node-debug',
+  latencyLogPath: process.env.LATENCY_LOG_PATH || path.join(ROOT, '.logs', 'latency.jsonl'),
   progressTtsCacheDir: process.env.PROGRESS_TTS_CACHE_DIR || path.join(ROOT, '.cache', 'progress-tts'),
   agent: buildAgentSettings({ ROOT, env: process.env }),
 };
@@ -123,6 +131,18 @@ const MIN_MAX_VOLUME_DB = Number(process.env.MIN_MAX_VOLUME_DB || '-18');
 
 function log(...args) { console.log(new Date().toISOString(), ...args); }
 function warn(...args) { console.warn(new Date().toISOString(), ...args); }
+function writeLatencyRecord(record) {
+  try {
+    appendJsonl(settings.latencyLogPath, record);
+    log('latency metric', 'status', record.status, 'total_ms', record.durations?.total_ms, 'stt_ms', record.durations?.stt_ms, 'agent_ms', record.durations?.agent_ms, 'tts_total_ms', record.durations?.tts_total_ms);
+  } catch (e) {
+    warn('write latency metric failed', e?.stack || e);
+  }
+}
+function newLatencyTurn(userId, startedAtMs) {
+  const id = `${Date.now()}-${userId}-${Math.random().toString(16).slice(2, 8)}`;
+  return createLatencyTurn({ id, userId, startedAtMs, writeRecord: writeLatencyRecord });
+}
 let verboseProgress = Boolean(settings.agent.verboseProgress);
 const agentAdapter = createAgentAdapter(settings.agent, {
   execFileAsync,
@@ -393,17 +413,31 @@ async function playAudio(file, { deleteAfter = true } = {}) {
   }
 }
 
-async function speakText(text, signal) {
+async function speakText(text, signal, metricsTurn = null) {
   const chunks = splitForTTS(text, settings.ttsMaxChars);
   if (!chunks.length) return;
   log('TTS chunks', chunks.length, 'maxChars', settings.ttsMaxChars);
+  let synthMs = 0;
+  let playMs = 0;
+  const ttsStart = Date.now();
   await playChunkedTTSWithPrefetch(chunks, {
     signal,
     log,
-    synth: chunk => synthTTS(chunk, signal),
-    play: file => playAudio(file),
+    synth: async chunk => {
+      const start = Date.now();
+      try { return await synthTTS(chunk, signal); }
+      finally { synthMs += Date.now() - start; }
+    },
+    play: async file => {
+      const start = Date.now();
+      try { return await playAudio(file); }
+      finally { playMs += Date.now() - start; }
+    },
     cleanup: file => fs.promises.rm(file, { force: true }),
   });
+  metricsTurn?.stage('tts_synth', synthMs, { ttsChunks: chunks.length, spokenChars: String(text || '').length });
+  metricsTurn?.stage('tts_play', playMs);
+  metricsTurn?.stage('tts_total', Date.now() - ttsStart);
 }
 
 async function speakProgress(text, signal) {
@@ -478,14 +512,16 @@ async function concatWavs(files, output) {
   }
 }
 
-function queueSegment(userId, file, pcmBytes) {
+function queueSegment(userId, file, pcmBytes, startedAtMs = Date.now(), endedAtMs = Date.now()) {
   let pending = pendingUtterances.get(userId);
   if (!pending) {
-    pending = { files: [], pcmBytes: 0, timer: null };
+    pending = { files: [], pcmBytes: 0, timer: null, firstPacketAt: startedAtMs, lastSegmentEndAt: endedAtMs };
     pendingUtterances.set(userId, pending);
   }
   pending.files.push(file);
   pending.pcmBytes += pcmBytes;
+  pending.firstPacketAt = Math.min(pending.firstPacketAt || startedAtMs, startedAtMs);
+  pending.lastSegmentEndAt = Math.max(pending.lastSegmentEndAt || endedAtMs, endedAtMs);
   if (pending.timer) clearTimeout(pending.timer);
   pending.timer = setTimeout(() => flushUtterance(userId).catch(e => warn('flushUtterance failed', userId, e?.stack || e)), UTTERANCE_IDLE_MS);
   log('queued segment', userId, 'segments', pending.files.length, 'totalPcmBytes', pending.pcmBytes, 'idleMs', UTTERANCE_IDLE_MS);
@@ -519,8 +555,14 @@ async function flushUtterance(userId) {
   if (pending.timer) clearTimeout(pending.timer);
   const files = pending.files;
   const pcmBytes = pending.pcmBytes;
+  const metricsTurn = newLatencyTurn(userId, pending.firstPacketAt || Date.now());
+  metricsTurn.mark('voice_first_packet', pending.firstPacketAt || Date.now());
+  metricsTurn.mark('voice_segment_end', pending.lastSegmentEndAt || Date.now());
+  metricsTurn.mark('utterance_flush');
+  metricsTurn.addMeta({ segments: files.length, pcmBytes });
   if (pcmBytes < MIN_UTTERANCE_BYTES) {
     log('skip short utterance', userId, 'segments', files.length, 'pcmBytes', pcmBytes, 'minBytes', MIN_UTTERANCE_BYTES);
+    metricsTurn.finish({ status: 'skip_short' });
     return;
   }
   const merged = path.join(settings.debugDir, `utterance-merged-${stamp()}-${userId}.wav`);
@@ -529,10 +571,12 @@ async function flushUtterance(userId) {
   log('utterance levels', userId, 'segments', files.length, 'pcmBytes', pcmBytes, 'meanDb', levels.meanDb, 'maxDb', levels.maxDb);
   const candidate = isBargeInCandidate(pcmBytes, levels);
   if (speaking && candidate) {
+    metricsTurn.finish({ status: 'barge_in_playback' });
     interruptCurrentResponse(userId, 'confirmed-barge-in');
     return;
   } else if (processing && !speaking && candidate) {
     await validateProcessingBargeIn(userId, merged, pcmBytes, files.length);
+    metricsTurn.finish({ status: 'barge_in_processing_candidate' });
     return;
   } else if (speaking || processing) {
     const thresholds = currentBargeInThresholds();
@@ -543,14 +587,17 @@ async function flushUtterance(userId) {
   // caused valid Korean utterances to be discarded as "low-energy".
   if (levels.meanDb < MIN_MEAN_VOLUME_DB && levels.maxDb < MIN_MAX_VOLUME_DB) {
     log('skip low-energy utterance', userId, 'meanDb', levels.meanDb, 'maxDb', levels.maxDb, 'thresholds', MIN_MEAN_VOLUME_DB, MIN_MAX_VOLUME_DB, 'mode', 'both-below');
+    metricsTurn.addMeta({ meanDb: levels.meanDb, maxDb: levels.maxDb });
+    metricsTurn.finish({ status: 'skip_low_energy' });
     return;
   }
-  await handleRecording(userId, merged, pcmBytes, files.length);
+  metricsTurn.addMeta({ meanDb: levels.meanDb, maxDb: levels.maxDb });
+  await handleRecording(userId, merged, pcmBytes, files.length, metricsTurn);
 }
 
-async function handleRecording(userId, wavPath, pcmBytes, segments = 1) {
-  if (processing) { log('drop while processing', userId); return; }
-  if (!isAllowed(userId)) { warn('ignore unauthorized', userId); return; }
+async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsTurn = null) {
+  if (processing) { log('drop while processing', userId); metricsTurn?.finish({ status: 'drop_processing' }); return; }
+  if (!isAllowed(userId)) { warn('ignore unauthorized', userId); metricsTurn?.finish({ status: 'unauthorized' }); return; }
   processing = true;
   const turnId = ++activeTurnId;
   const controller = new AbortController();
@@ -558,12 +605,14 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1) {
   const signal = controller.signal;
   try {
     log('transcribing', userId, wavPath, 'pcmBytes', pcmBytes, 'segments', segments, 'turn', turnId);
+    const sttStart = Date.now();
     const text = await transcribe(wavPath);
-    if (interruptedTurns.has(turnId) || signal.aborted) return;
-    if (!text) { log('empty transcript', userId, wavPath); return; }
+    metricsTurn?.stage('stt', Date.now() - sttStart, { transcriptChars: String(text || '').length });
+    if (interruptedTurns.has(turnId) || signal.aborted) { metricsTurn?.finish({ status: 'aborted_after_stt' }); return; }
+    if (!text) { log('empty transcript', userId, wavPath); metricsTurn?.finish({ status: 'empty_transcript' }); return; }
     log(`user ${userId} said: ${text}`);
     await sendText(`📝 STT 결과 <@${userId}>: ${text}`);
-    if (!acceptsWake(text)) { await sendText('wake word 없음: 응답은 안 함'); return; }
+    if (!acceptsWake(text)) { await sendText('wake word 없음: 응답은 안 함'); metricsTurn?.finish({ status: 'wake_rejected' }); return; }
 
     const prompt = stripWake(text);
     const sensitivityRequest = sensitivityModeFromTranscript(prompt);
@@ -571,7 +620,8 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1) {
       const thresholds = setSensitivityMode(sensitivityRequest.mode, sensitivityRequest.reason);
       await sendText(`🎚️ ${sensitivityStatusText()}`);
       if (isSensitivityOnlyRequest(prompt)) {
-        await speakText(`${thresholds.mode === 'conservative' ? '외부 보수 모드' : '기본 감도'}로 바꿨어.`, signal);
+        await speakText(`${thresholds.mode === 'conservative' ? '외부 보수 모드' : '기본 감도'}로 바꿨어.`, signal, metricsTurn);
+        metricsTurn?.finish({ status: 'sensitivity_only' });
         return;
       }
     }
@@ -580,12 +630,14 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1) {
       setVerboseProgress(verboseRequest, 'voice-command');
       await sendText(`🔎 ${verboseStatusText()}`);
       if (isVerboseOnlyRequest(prompt)) {
-        await speakText(verboseRequest ? '상세 진행 모드 켰어.' : '상세 진행 모드 껐어.', signal);
+        await speakText(verboseRequest ? '상세 진행 모드 켰어.' : '상세 진행 모드 껐어.', signal, metricsTurn);
+        metricsTurn?.finish({ status: 'verbose_only' });
         return;
       }
     }
     const plan = { task: true, label: agentAdapter.label, verboseProgress };
     log('Agent plan', plan.label, 'backend', agentAdapter.backend, 'task', plan.task);
+    const agentStart = Date.now();
     const agentPromise = agentAdapter.ask(prompt, signal, plan);
     let done = false;
     // Stage announcements say the actual pipeline step. They are delayed so very
@@ -605,8 +657,9 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1) {
       if (!isAbortError(e)) warn('progress loop failed', e?.stack || e);
     });
     const answer = await agentPromise.finally(() => { done = true; });
+    metricsTurn?.stage('agent', Date.now() - agentStart, { answerChars: String(answer || '').length, backend: agentAdapter.backend });
     void progressLoop;
-    if (interruptedTurns.has(turnId) || signal.aborted) return;
+    if (interruptedTurns.has(turnId) || signal.aborted) { metricsTurn?.finish({ status: 'aborted_after_agent' }); return; }
 
     log('Agent answer', agentAdapter.label, answer.slice(0, 200));
     await sendText(`✅ ${agentAdapter.label} 응답:\n${answer}`);
@@ -615,14 +668,17 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1) {
     if (!signal.aborted && !interruptedTurns.has(turnId)) {
       speakProgress('응답 받았어. 음성으로 바꾸는 중.', signal).catch(() => {});
     }
-    await speakText(spokenAnswer, signal);
+    await speakText(spokenAnswer, signal, metricsTurn);
+    metricsTurn?.finish({ status: 'ok' });
   } catch (e) {
     if (isAbortError(e) || interruptedTurns.has(turnId)) {
       log('turn aborted', userId, 'turn', turnId);
+      metricsTurn?.finish({ status: 'aborted' });
       return;
     }
     warn('handleRecording failed', e?.stack || e);
     const shortMsg = String(e?.message || e).slice(0, 800);
+    metricsTurn?.finish({ status: 'error', error: shortMsg });
     await sendText(`⚠️ 음성 처리 실패: ${shortMsg}`);
   } finally {
     if (currentAbortController === controller) currentAbortController = null;
@@ -655,7 +711,7 @@ function subscribeUser(receiver, userId) {
   const opusStream = receiver.subscribe(userId, { end: { behavior: EndBehaviorType.AfterSilence, duration: SUBSCRIBE_AFTER_SILENCE_MS } });
   const decoder = new prism.opus.Decoder({ rate: 48000, channels: 2, frameSize: 960 });
   const writer = new wav.FileWriter(file, { sampleRate: 48000, channels: 2, bitDepth: 16 });
-  activeStreams.set(userId, { opusStream, decoder, writer, file });
+  activeStreams.set(userId, { opusStream, decoder, writer, file, startedAtMs: Date.now() });
   let pcmBytes = 0;
   const liveThresholds = currentBargeInThresholds();
   const liveBargeIn = speaking ? createLiveBargeInMonitor({
@@ -677,9 +733,11 @@ function subscribeUser(receiver, userId) {
   writer.on('error', e => warn('wav writer error', userId, e?.stack || e));
   opusStream.on('end', () => log('opus end', userId, 'pcmBytes', pcmBytes));
   writer.on('finish', () => {
+    const streamState = activeStreams.get(userId);
     activeStreams.delete(userId);
+    const endedAtMs = Date.now();
     log('saved segment', userId, 'pcmBytes', pcmBytes, file);
-    queueSegment(userId, file, pcmBytes);
+    queueSegment(userId, file, pcmBytes, streamState?.startedAtMs || endedAtMs, endedAtMs);
   });
   opusStream.pipe(decoder).pipe(writer);
 }
@@ -735,6 +793,10 @@ client.on('messageCreate', async msg => {
     return void msg.reply(verboseStatusText());
   }
   if (content === '!sensitivity') return void msg.reply(sensitivityStatusText());
+  if (content === '!latency' || content === '!metrics') {
+    const summary = summarizeLatencyRecords(readJsonlRecords(settings.latencyLogPath, { limit: 200 }));
+    return void msg.reply(`최근 latency 요약 (${settings.latencyLogPath}):\n${formatLatencySummary(summary)}`.slice(0, 1900));
+  }
   if (content === '!sensitivity conservative') {
     setSensitivityMode('conservative', 'discord-command');
     return void msg.reply(sensitivityStatusText());
