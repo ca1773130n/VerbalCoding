@@ -24,6 +24,7 @@ VerbalCoding is a Discord voice bridge for controlling CLI-based coding agents b
 - Setup wizard, `.env.example`, and `npm run doctor` prerequisite checker.
 - Optional verbose progress mode for text-only middle-step updates during long agent work.
 - Always-on JSONL latency metrics plus `!latency` / `!metrics` summary for pipeline optimization.
+- Lower default utterance idle wait (`UTTERANCE_IDLE_MS=2000`) so STT starts about 0.6s sooner after speech ends.
 
 ### Pre-release checklist
 

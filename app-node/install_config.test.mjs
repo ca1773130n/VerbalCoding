@@ -28,6 +28,7 @@ test('normalizeInstallAnswers maps supported harnesses to backend env', () => {
   assert.equal(answers.TTS_VOICE, 'ko-KR-SunHiNeural');
   assert.equal(answers.TTS_RATE, '+10%');
   assert.equal(answers.REQUIRE_WAKE_WORD, '0');
+  assert.equal(answers.UTTERANCE_IDLE_MS, '2000');
 });
 
 test('buildEnvFile writes configurable CLI harness and Discord settings without comments leaking into values', () => {

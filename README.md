@@ -55,6 +55,7 @@ AGENT_COMMAND="my-harness run --non-interactive"
 AGENT_TASK_TIMEOUT_MS=0        # 0 disables Node-side timeout for long agent tasks
 AGENT_CHAT_TIMEOUT_MS=45000
 AGENT_VERBOSE_PROGRESS=0      # default off; toggle with !verbose on/off
+UTTERANCE_IDLE_MS=2000        # wait after last voice segment before STT
 LATENCY_LOG_PATH=./.logs/latency.jsonl
 ```
 
@@ -141,6 +142,7 @@ TTS_RATE="+10%"
 TTS_MAX_CHARS="495"
 REQUIRE_WAKE_WORD="0"
 MIN_UTTERANCE_SECONDS="1.0"
+UTTERANCE_IDLE_MS="2000"
 HERMES_TASK_TIMEOUT_MS="0"
 HERMES_CHAT_TIMEOUT_MS="45000"
 AGENT_VERBOSE_PROGRESS="0"
@@ -203,7 +205,7 @@ VerbalCoding always writes per-turn latency records as JSONL. Default path:
 ./.logs/latency.jsonl
 ```
 
-Each record includes status, total time, voice capture time, utterance idle wait, STT time, agent time, TTS synthesis/playback time, chunk counts, transcript length, answer length, and audio levels where available. Use this to identify whether optimization should focus on segmentation, STT, agent execution, or TTS.
+Each record includes status, total time, voice capture time, utterance idle wait, STT time, agent time, TTS synthesis/playback time, chunk counts, transcript length, answer length, and audio levels where available. Use this to identify whether optimization should focus on segmentation, STT, agent execution, or TTS. The default utterance idle wait is now `UTTERANCE_IDLE_MS=2000`, down from the earlier 2600 ms, so STT starts about 0.6 seconds sooner after the last voice segment while still leaving a pause window for Korean sentence endings.
 
 In Discord:
 
