@@ -53,6 +53,52 @@ test('Hermes adapter resumes and saves Hermes CLI session ids', async () => {
   assert.equal(files.get('/tmp/hermes-session'), 'new-session\n');
 });
 
+test('Hermes verbose progress drops quiet flag and parses rich CLI final response', async () => {
+  const calls = [];
+  const progress = [];
+  const files = new Map([['/tmp/hermes-session', 'old-session\n']]);
+  const adapter = createAgentAdapter({
+    backend: 'hermes',
+    label: 'Hermes Agent',
+    command: 'hermes chat -Q -q',
+    sessionFile: '/tmp/hermes-session',
+    taskTimeoutMs: 300000,
+    chatTimeoutMs: 45000,
+  }, {
+    readFileSync: path => files.get(path),
+    writeFileSync: (path, value) => files.set(path, value),
+    spawn: (_cmd, args) => {
+      calls.push({ args });
+      const listeners = {};
+      const child = {
+        stdout: { on: (event, cb) => { listeners[`stdout:${event}`] = cb; } },
+        stderr: { on: (event, cb) => { listeners[`stderr:${event}`] = cb; } },
+        on: (event, cb) => { listeners[event] = cb; },
+        kill: () => {},
+      };
+      queueMicrotask(() => {
+        listeners['stdout:data']?.(Buffer.from('  ┊ 💻 $         terminal  0.8s\n'));
+        listeners['stdout:data']?.(Buffer.from('╭─ ⚕ Hermes ─╮\n    완료했어.\n╰────────────╯\n\nSession: new-session\n'));
+        listeners.close?.(0, null);
+      });
+      return child;
+    },
+    execFileAsync: async () => { throw new Error('spawn should be used for verbose progress'); },
+    onProgress: event => progress.push(event),
+    log: () => {},
+    warn: () => {},
+  });
+
+  const answer = await adapter.ask('테스트해줘', undefined, { verboseProgress: true });
+
+  assert.equal(calls[0].args.includes('-Q'), false);
+  assert.deepEqual(calls[0].args.slice(0, 4), ['chat', '--resume', 'old-session', '-q']);
+  assert.equal(answer, '완료했어.');
+  assert.equal(files.get('/tmp/hermes-session'), 'new-session\n');
+  assert.ok(progress.includes('Hermes Agent 호출 시작'));
+  assert.ok(progress.includes('터미널 도구 사용 terminal'));
+});
+
 test('Claude, Codex, and Gemini adapters use backend-specific default commands without Hermes resume', async () => {
   const cases = [
     { backend: 'claude', command: ['claude', '-p'], label: 'Claude Code' },
@@ -114,6 +160,10 @@ test('sanitizeAgentOutput strips CLI metadata from spoken/text answer', () => {
     sanitizeAgentOutput('↻ Resumed session abc\nsession_id: xyz\n진짜 답변\n'),
     '진짜 답변',
   );
+  assert.equal(
+    sanitizeAgentOutput('╭─ ⚕ Hermes ─╮\n    박스 답변\n╰────────────╯\nSession: abc\n'),
+    '박스 답변',
+  );
 });
 
 test('voiceBridgePrompt keeps voice-specific operating instructions with user text', () => {
@@ -138,6 +188,8 @@ test('extractVerboseProgressEvents summarizes tool activity without leaking raw 
     'VERBALCODING_PROGRESS: 파일 읽기 app-node/main.mjs',
     'Calling tool functions.web_search with query secret token abcdef',
     'tool_use: terminal command="npm test"',
+    'Calling tool functions.skill_view with name discord-voice-hermes-bridge',
+    '  ┊ 🔎           web_search  1.2s',
     'unrelated verbose log line that should not be included',
   ].join('\n'));
 
@@ -145,6 +197,7 @@ test('extractVerboseProgressEvents summarizes tool activity without leaking raw 
     '파일 읽기 app-node/main.mjs',
     '웹 검색 실행',
     '터미널 명령 실행',
+    '스킬 사용',
   ]);
 });
 

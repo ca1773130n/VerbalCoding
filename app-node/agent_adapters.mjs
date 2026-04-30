@@ -29,23 +29,44 @@ export function voiceBridgePrompt(text, options = {}) {
     lines.push(
       'VERBOSE 진행 공유 모드가 켜져 있다.',
       '긴 작업에서 중요한 중간 동작을 할 때마다 한 줄로 `VERBALCODING_PROGRESS: <짧은 한국어 단계>` 형식을 출력해라.',
-      '예: `VERBALCODING_PROGRESS: 파일 읽기 app-node/main.mjs`, `VERBALCODING_PROGRESS: 웹 검색 VerbalCoding setup`, `VERBALCODING_PROGRESS: 터미널 실행 npm test`, `VERBALCODING_PROGRESS: 툴 사용 read_file`.',
+      '예: `VERBALCODING_PROGRESS: 파일 읽기 app-node/main.mjs`, `VERBALCODING_PROGRESS: 웹 검색 VerbalCoding setup`, `VERBALCODING_PROGRESS: 터미널 실행 npm test`, `VERBALCODING_PROGRESS: 툴 사용 read_file`, `VERBALCODING_PROGRESS: 스킬 사용 discord-voice-hermes-bridge`.',
       '토큰, API 키, 비밀번호, 연결 문자열, 개인 식별자는 절대 진행 로그에 쓰지 마라.',
-      '진행 로그는 파일 읽기, 웹 검색, 터미널 실행, 테스트 실행, 툴 사용 같은 항목만 짧게 써라.',
+      '진행 로그는 파일 읽기, 웹 검색, 터미널 실행, 테스트 실행, 툴 사용, 스킬 사용 같은 항목만 짧게 써라.',
     );
   }
   return lines.concat(['', text]).join('\n');
 }
 
 export function sanitizeAgentOutput(text) {
-  return String(text || '')
+  const raw = stripAnsi(String(text || ''));
+  const boxed = extractHermesBoxedResponse(raw);
+  return String(boxed || raw)
     .split(/\r?\n/)
     .filter(line => !/^session_id:\s*\S+\s*$/.test(line.trim()))
+    .filter(line => !/^Session:\s*\S+\s*$/.test(line.trim()))
     .filter(line => !/^↻\s*Resumed session\s+\S+/.test(line.trim()))
     .filter(line => !/^VERBALCODING_PROGRESS\s*:/i.test(line.trim()))
+    .filter(line => !/^Resume this session with:/i.test(line.trim()))
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+function stripAnsi(text) {
+  return String(text || '').replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '');
+}
+
+function extractHermesBoxedResponse(text) {
+  const lines = String(text || '').split(/\r?\n/);
+  const start = lines.findIndex(line => /╭─\s*⚕\s*Hermes\s*─/.test(line));
+  if (start < 0) return '';
+  const body = [];
+  for (let i = start + 1; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (/^╰/.test(line)) break;
+    body.push(line.replace(/^\s*│\s?/, '').replace(/\s*│\s*$/, '').trimEnd());
+  }
+  return body.join('\n').trim();
 }
 
 function compactProgressText(text) {
@@ -72,14 +93,27 @@ export function extractVerboseProgressEvents(text) {
     if (!line) continue;
     const explicit = /^VERBALCODING_PROGRESS\s*:\s*(.+)$/i.exec(line);
     if (explicit) { add(explicit[1]); continue; }
+    const hermesPreview = /┊\s*(?:[^\s]+\s+)?(?:\$\s*)?([a-zA-Z_][\w-]*)\b/.exec(line);
+    if (hermesPreview) { add(toolProgressLabel(hermesPreview[1])); continue; }
     const lower = line.toLowerCase();
     if (/web_search|browser_search|web search|search web|functions\.web_search/.test(lower)) add('웹 검색 실행');
+    else if (/skill_view|skills_list|skill_manage|functions\.skill_|스킬 사용|스킬 확인/.test(lower)) add('스킬 사용');
     else if (/read_file|functions\.read_file|reading file|file read|파일 읽/.test(lower)) add('파일 읽기');
     else if (/write_file|patch|functions\.patch|editing file|파일 수정|파일 쓰/.test(lower)) add('파일 수정');
     else if (/terminal|execute_code|shell|command=|npm test|pytest|터미널|명령 실행/.test(lower)) add('터미널 명령 실행');
     else if (/tool_use|calling tool|functions\./.test(lower)) add('툴 사용');
   }
   return events;
+}
+
+function toolProgressLabel(name) {
+  const tool = String(name || '').trim();
+  if (/^(web_search|web_extract|browser_)/.test(tool)) return '웹 검색 실행';
+  if (/^(read_file|search_files)$/.test(tool)) return `파일 도구 사용 ${tool}`;
+  if (/^(write_file|patch)$/.test(tool)) return `파일 수정 도구 사용 ${tool}`;
+  if (/^(terminal|execute_code|process)$/.test(tool)) return `터미널 도구 사용 ${tool}`;
+  if (/^(skill_view|skills_list|skill_manage)$/.test(tool)) return `스킬 도구 사용 ${tool}`;
+  return `툴 사용 ${tool}`;
 }
 
 export function isPatchLikeOutput(text) {
@@ -105,7 +139,9 @@ export function interruptedAgentMessage(label, hadPatchLikeOutput = false) {
 }
 
 export function extractHermesSessionId(text) {
-  return /^session_id:\s*(\S+)/m.exec(text || '')?.[1] || null;
+  return /^session_id:\s*(\S+)/m.exec(text || '')?.[1]
+    || /^Session:\s*(\S+)/m.exec(text || '')?.[1]
+    || null;
 }
 
 export function resolveExecTimeout(value) {
@@ -340,7 +376,14 @@ export function createAgentAdapter(settings, deps = {}) {
     const argv = shellSplit(settings.command);
     const cmd = argv[0];
     const query = voiceBridgePrompt(text, { verboseProgress: options.verboseProgress });
-    let args = argv.slice(1).concat([query]);
+    let args = argv.slice(1);
+    if (settings.backend === 'hermes' && options.verboseProgress) {
+      // Hermes quiet mode intentionally suppresses tool previews.  In verbose
+      // voice mode we drop only the quiet flag so stdout can stream safe `┊ ...`
+      // progress lines; final-answer cleanup below extracts the Hermes box.
+      args = args.filter(arg => arg !== '-Q' && arg !== '--quiet');
+    }
+    args = args.concat([query]);
     const sessionId = readSessionId();
     if (sessionId) {
       const qIndex = args.lastIndexOf('-q');

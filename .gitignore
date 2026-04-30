@@ -9,6 +9,9 @@ node_modules/
 .logs/
 .agent-sessions/
 .verbalcoding-session
+.venv-openvoice/
+vendor/OpenVoice/
+voice-samples/
 models/*.bin
 /tmp/
 *.log

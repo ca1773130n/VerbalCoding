@@ -7,6 +7,7 @@ import {
   isBargeInCandidate,
   isRepeatedNoiseTranscript,
   isExplicitBargeInTranscript,
+  shouldUseLivePlaybackBargeIn,
   pcm16StereoLevels,
   sensitivityModeFromTranscript,
 } from './barge_in.mjs';
@@ -104,4 +105,11 @@ test('isExplicitBargeInTranscript only treats clear stop phrases as processing i
   assert.equal(isExplicitBargeInTranscript('그만 말해'), true);
   assert.equal(isExplicitBargeInTranscript('시청해 주셔서 감사합니다'), false);
   assert.equal(isExplicitBargeInTranscript('너덜너덜너덜'), false);
+});
+
+
+test('shouldUseLivePlaybackBargeIn avoids aborting an active agent during progress TTS', () => {
+  assert.equal(shouldUseLivePlaybackBargeIn({ speaking: true, processing: false }), true);
+  assert.equal(shouldUseLivePlaybackBargeIn({ speaking: true, processing: true }), false);
+  assert.equal(shouldUseLivePlaybackBargeIn({ speaking: false, processing: true }), false);
 });

@@ -93,6 +93,10 @@ export function isExplicitBargeInTranscript(text) {
   return /(잠깐|멈춰|그만|중지|스톱|스탑|stop|말하지마|말그만|조용)/iu.test(compact);
 }
 
+export function shouldUseLivePlaybackBargeIn({ speaking, processing }) {
+  return Boolean(speaking && !processing);
+}
+
 export function createLiveBargeInMonitor({
   minBytes,
   minMeanDb,

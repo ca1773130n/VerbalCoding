@@ -28,6 +28,19 @@ npm run doctor
 ./run.sh
 ```
 
+## Optional OpenVoice setup
+
+OpenVoice voice cloning is optional. Keep `TTS_BACKEND=edge` for a fresh install. To enable it later:
+
+```bash
+./scripts/setup_openvoice.sh
+# Download OpenVoice V2 checkpoints into vendor/OpenVoice/checkpoints_v2/
+# Add a permitted local sample at voice-samples/user-reference.wav
+python3 scripts/openvoice_smoke.py
+```
+
+Then set `TTS_BACKEND=openvoice`, run `npm run doctor`, and test `!voice-test <text>` in Discord.
+
 ## Expected runtime signals
 
 Successful startup logs include:

@@ -137,9 +137,17 @@ STT_ENGINE="whisper_cpp"
 WHISPER_CPP_BIN="whisper-cli"
 WHISPER_CPP_MODEL="./models/ggml-small-q5_1.bin"
 
+TTS_BACKEND="edge"   # edge | openvoice
 TTS_VOICE="ko-KR-SunHiNeural"
 TTS_RATE="+10%"
 TTS_MAX_CHARS="495"
+OPENVOICE_DIR="./vendor/OpenVoice"
+OPENVOICE_VENV="./.venv-openvoice"
+OPENVOICE_REF_AUDIO="./voice-samples/user-reference.wav"
+OPENVOICE_LANGUAGE="KR"
+OPENVOICE_STYLE="default"
+OPENVOICE_TIMEOUT_MS="90000"
+OPENVOICE_PROGRESS="0"
 REQUIRE_WAKE_WORD="0"
 MIN_UTTERANCE_SECONDS="1.0"
 UTTERANCE_IDLE_MS="2000"
@@ -171,11 +179,12 @@ Runtime logs default to the path selected by your shell command. During local te
 - `!join` — join the sender's current voice channel.
 - `!leave` — disconnect.
 - `!say <text>` — speak text directly through TTS.
+- `!voice-test <text>` — speak text with the active TTS backend, useful for comparing Edge and OpenVoice.
 - `!ask <prompt>` — send text through the same selected harness adapter as voice.
 - `!session` — show the current adapter session ID when supported.
 - `!reset-session` — clear the adapter session file when supported.
 - `!verbose` — show whether detailed progress updates are enabled.
-- `!verbose on` / `!verbose off` — toggle text-only detailed progress updates. Default is off.
+- `!verbose on` / `!verbose off` — toggle detailed progress updates in text and short spoken prompts. Default is off.
 - `!latency` / `!metrics` — show recent average/p95 latency by pipeline stage.
 - `!sensitivity` — show current barge-in sensitivity thresholds.
 - `!sensitivity conservative` — temporarily use stricter outdoor/noisy-environment barge-in detection.
@@ -185,7 +194,7 @@ Voice equivalents such as “외부 모드”, “보수 모드”, “실내”
 
 ## Verbose progress mode
 
-Verbose progress is **off by default**. When enabled with `!verbose on`, `AGENT_VERBOSE_PROGRESS=1`, or a voice command like “상세 진행 켜”, VerbalCoding sends text-only progress notes such as:
+Verbose progress is **off by default** unless `AGENT_VERBOSE_PROGRESS=1` is set. When enabled with `!verbose on`, `AGENT_VERBOSE_PROGRESS=1`, or a voice command like “상세 진행 켜”, VerbalCoding sends progress notes and speaks the action names, such as:
 
 ```text
 🔎 진행: Hermes Agent 호출 시작
@@ -196,6 +205,35 @@ Verbose progress is **off by default**. When enabled with `!verbose on`, `AGENT_
 ```
 
 This mode asks the selected CLI harness to emit `VERBALCODING_PROGRESS: ...` lines and also summarizes common tool markers from streaming stdout/stderr when available. Secret-looking fields are redacted and progress lines are removed from the final spoken answer.
+
+## Optional OpenVoice voice cloning TTS
+
+Edge TTS remains the default and fallback. To try local voice cloning with OpenVoice V2:
+
+```bash
+./scripts/setup_openvoice.sh
+# Download checkpoints_v2_0417.zip from OpenVoice docs and extract under vendor/OpenVoice/checkpoints_v2/
+mkdir -p voice-samples
+# Put a reference sample you own or have permission to clone at:
+# voice-samples/user-reference.wav
+python3 scripts/openvoice_smoke.py
+```
+
+Then set:
+
+```bash
+TTS_BACKEND="openvoice"
+OPENVOICE_REF_AUDIO="./voice-samples/user-reference.wav"
+OPENVOICE_PROGRESS="0"  # keep short progress prompts on fast Edge fallback
+```
+
+Restart the bridge and test in Discord:
+
+```text
+!voice-test 안녕하세요. 버벌코딩 목소리 복제 테스트입니다.
+```
+
+Only clone voices you own or have permission to use. If OpenVoice fails or times out, VerbalCoding falls back to Edge TTS.
 
 ## Latency metrics
 

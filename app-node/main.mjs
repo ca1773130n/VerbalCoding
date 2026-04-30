@@ -1,4 +1,3 @@
-
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -29,6 +28,8 @@ import {
 } from './latency_metrics.mjs';
 import { splitForTTS } from './tts_chunks.mjs';
 import { playChunkedTTSWithPrefetch } from './tts_prefetch.mjs';
+import { buildTtsSettings } from './tts_settings.mjs';
+import { createTtsBackend } from './tts_backends.mjs';
 import {
   bargeInThresholdsForMode,
   createLiveBargeInMonitor,
@@ -36,6 +37,7 @@ import {
   isExplicitBargeInTranscript,
   isRepeatedNoiseTranscript,
   sensitivityModeFromTranscript,
+  shouldUseLivePlaybackBargeIn,
 } from './barge_in.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -86,24 +88,22 @@ const settings = {
   transcriptChannelId: (process.env.TRANSCRIPT_CHANNEL_ID || '1497890694730219540').trim(),
   whisperBin: process.env.WHISPER_CPP_BIN || 'whisper-cli',
   whisperModel: process.env.WHISPER_CPP_MODEL || path.join(ROOT, 'models', 'ggml-small-q5_1.bin'),
-  ttsVoice: process.env.TTS_VOICE || 'ko-KR-SunHiNeural',
-  ttsRate: process.env.TTS_RATE || '+10%',
-  ttsMaxChars: Number(process.env.TTS_MAX_CHARS || '495'),
+  tts: buildTtsSettings(process.env, ROOT),
   requireWakeWord: ['1', 'true', 'yes'].includes((process.env.REQUIRE_WAKE_WORD || '0').toLowerCase()),
   wakeWords: (process.env.WAKE_WORDS || 'hermes,헤르메스,허미스').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
   debugDir: process.env.NODE_AUDIO_DEBUG_DIR || '/tmp/verbalcoding-node-debug',
   latencyLogPath: process.env.LATENCY_LOG_PATH || path.join(ROOT, '.logs', 'latency.jsonl'),
-  progressTtsCacheDir: process.env.PROGRESS_TTS_CACHE_DIR || path.join(ROOT, '.cache', 'progress-tts'),
   agent: buildAgentSettings({ ROOT, env: process.env }),
 };
 if (!settings.token) throw new Error('DISCORD_BOT_TOKEN or DISCORD_TOKEN is required');
 fs.mkdirSync(settings.debugDir, { recursive: true });
-fs.mkdirSync(settings.progressTtsCacheDir, { recursive: true });
+fs.mkdirSync(settings.tts.progressCacheDir, { recursive: true });
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
   partials: [Partials.Channel],
 });
+const ttsBackend = createTtsBackend(settings.tts, { execFileAsync, log, warn });
 
 let connection = null;
 let player = createAudioPlayer();
@@ -129,8 +129,23 @@ const UTTERANCE_IDLE_MS = Number(process.env.UTTERANCE_IDLE_MS || '2000');
 const MIN_MEAN_VOLUME_DB = Number(process.env.MIN_MEAN_VOLUME_DB || '-35');
 const MIN_MAX_VOLUME_DB = Number(process.env.MIN_MAX_VOLUME_DB || '-18');
 
-function log(...args) { console.log(new Date().toISOString(), ...args); }
-function warn(...args) { console.warn(new Date().toISOString(), ...args); }
+function writeBridgeLogLine(line) {
+  if (!process.env.BRIDGE_LOG_PATH) return;
+  try { fs.appendFileSync(process.env.BRIDGE_LOG_PATH, `${line}\n`); } catch {}
+}
+function log(...args) {
+  const line = [new Date().toISOString(), ...args].map(String).join(' ');
+  console.log(line);
+  writeBridgeLogLine(line);
+}
+function warn(...args) {
+  const line = [new Date().toISOString(), ...args].map(String).join(' ');
+  console.warn(line);
+  writeBridgeLogLine(line);
+}
+function isBenignTransientNetworkError(error) {
+  return ['EPIPE', 'ECONNRESET', 'ETIMEDOUT'].includes(error?.code) || /write EPIPE|socket hang up/i.test(String(error?.message || error));
+}
 function writeLatencyRecord(record) {
   try {
     appendJsonl(settings.latencyLogPath, record);
@@ -144,6 +159,8 @@ function newLatencyTurn(userId, startedAtMs) {
   return createLatencyTurn({ id, userId, startedAtMs, writeRecord: writeLatencyRecord });
 }
 let verboseProgress = Boolean(settings.agent.verboseProgress);
+let activeProgressSignal = null;
+let verboseProgressSpeechQueue = Promise.resolve();
 const agentAdapter = createAgentAdapter(settings.agent, {
   execFileAsync,
   spawn,
@@ -152,6 +169,7 @@ const agentAdapter = createAgentAdapter(settings.agent, {
   onProgress: event => {
     if (!verboseProgress) return;
     sendText(`🔎 진행: ${event}`).catch(e => warn('send verbose progress failed', e?.stack || e));
+    queueVerboseProgressSpeech(event, activeProgressSignal);
   },
 });
 let sensitivityMode = SENSITIVITY_MODE_DEFAULT;
@@ -187,7 +205,7 @@ function sensitivityStatusText() {
 }
 
 function verboseStatusText() {
-  return `verbose 진행 모드: ${verboseProgress ? '켜짐' : '꺼짐'}${verboseProgress ? ' — 에이전트의 파일 읽기/툴 사용/웹 검색/터미널 실행 같은 중간 항목을 텍스트로 알려줄게.' : ' — 기본은 조용하게 최종 결과 중심으로만 알려줄게.'}`;
+  return `verbose 진행 모드: ${verboseProgress ? '켜짐' : '꺼짐'}${verboseProgress ? ' — 에이전트의 파일 읽기/스킬 사용/툴 사용/웹 검색/터미널 실행 같은 중간 항목을 텍스트와 음성으로 알려줄게.' : ' — 기본은 조용하게 최종 결과 중심으로만 알려줄게.'}`;
 }
 
 function setVerboseProgress(enabled, reason = 'manual') {
@@ -355,8 +373,10 @@ function isSensitivityOnlyRequest(text) {
 
 function verboseModeFromTranscript(text) {
   const compact = String(text || '').replace(/\s+/g, '').toLowerCase();
-  if (/(verbose|버보스|상세진행|자세히알려|중간과정).*(켜|on|시작|보여|알려)|^(verbose|버보스)모드(켜|on)?$/.test(compact)) return true;
-  if (/(verbose|버보스|상세진행|자세히|중간과정).*(꺼|off|중지|그만)|^(verbose|버보스)모드꺼$/.test(compact)) return false;
+  // Korean STT often hears "상세" as "상쇄" or "상쇠" in noisy voice calls.
+  const verboseWords = 'verbose|버보스|상세|상쇄|상쇠|상세진행|자세히알려|중간과정';
+  if (new RegExp(`(${verboseWords}).*(켜|on|시작|보여|알려|읽어|말해)|^(verbose|버보스|상세|상쇄|상쇠)모드(켜|on)?$`).test(compact)) return true;
+  if (new RegExp(`(${verboseWords}).*(꺼|off|중지|그만)|^(verbose|버보스|상세|상쇄|상쇠)모드꺼$`).test(compact)) return false;
   return null;
 }
 
@@ -368,16 +388,13 @@ function isVerboseOnlyRequest(text) {
 async function synthTTS(text, signal) {
   let lastError = null;
   for (let attempt = 1; attempt <= 3; attempt += 1) {
-    const out = path.join(os.tmpdir(), `hermes-node-tts-${Date.now()}-${attempt}.mp3`);
     try {
-      log('final tts synth start', 'attempt', attempt, 'chars', String(text || '').length);
-      await execFileAsync('edge-tts', ['-v', settings.ttsVoice, '--rate', settings.ttsRate, '-t', text, '--write-media', out], { timeout: 60000, maxBuffer: 2 * 1024 * 1024, signal });
-      if (!fs.existsSync(out) || fs.statSync(out).size <= 0) throw new Error('edge-tts produced empty file');
-      log('final tts synth done', 'attempt', attempt, out, fs.statSync(out).size);
+      log('final tts synth start', 'backend', ttsBackend.name, 'attempt', attempt, 'chars', String(text || '').length);
+      const out = await ttsBackend.synthesize(text, { signal, kind: 'final' });
+      log('final tts synth done', 'backend', ttsBackend.name, 'attempt', attempt, out, fs.statSync(out).size);
       return out;
     } catch (e) {
       lastError = e;
-      fs.rm(out, { force: true }, () => {});
       if (isAbortError(e) || signal?.aborted) throw e;
       warn('final tts synth failed', 'attempt', attempt, e?.stderr?.toString?.().slice(-500) || e?.message || e);
       await sleep(1000 * attempt);
@@ -387,14 +404,13 @@ async function synthTTS(text, signal) {
 }
 
 async function synthProgressTTS(text, signal) {
-  const cachePath = path.join(settings.progressTtsCacheDir, `${cacheKeyForText(`${settings.ttsVoice}\n${settings.ttsRate}\n${text}`)}.mp3`);
+  const cachePath = path.join(settings.tts.progressCacheDir, `${cacheKeyForText(`${ttsBackend.cacheKeyParts().join('\n')}\n${text}`)}.mp3`);
   if (fs.existsSync(cachePath) && fs.statSync(cachePath).size > 0) {
     log('progress tts cache hit', text, cachePath);
     return cachePath;
   }
   log('progress tts cache miss', text);
-  const tmp = path.join(settings.progressTtsCacheDir, `${cacheKeyForText(`${Date.now()}\n${text}`)}.tmp.mp3`);
-  await execFileAsync('edge-tts', ['-v', settings.ttsVoice, '--rate', settings.ttsRate, '-t', text, '--write-media', tmp], { timeout: 60000, maxBuffer: 1024 * 1024, signal });
+  const tmp = await ttsBackend.synthesize(text, { signal, kind: 'progress' });
   fs.renameSync(tmp, cachePath);
   return cachePath;
 }
@@ -414,9 +430,9 @@ async function playAudio(file, { deleteAfter = true } = {}) {
 }
 
 async function speakText(text, signal, metricsTurn = null) {
-  const chunks = splitForTTS(text, settings.ttsMaxChars);
+  const chunks = splitForTTS(text, settings.tts.maxChars);
   if (!chunks.length) return;
-  log('TTS chunks', chunks.length, 'maxChars', settings.ttsMaxChars);
+  log('TTS chunks', chunks.length, 'maxChars', settings.tts.maxChars, 'backend', ttsBackend.name);
   let synthMs = 0;
   let playMs = 0;
   const ttsStart = Date.now();
@@ -449,6 +465,18 @@ async function speakProgress(text, signal) {
   } catch (e) {
     if (!isAbortError(e)) warn('progress tts failed', e?.stack || e);
   }
+}
+
+function queueVerboseProgressSpeech(event, signal) {
+  if (!verboseProgress || !signal || signal.aborted) return;
+  const text = String(event || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+  if (!text) return;
+  verboseProgressSpeechQueue = verboseProgressSpeechQueue
+    .catch(() => {})
+    .then(async () => {
+      if (!verboseProgress || signal.aborted || !processing) return;
+      await speakProgress(text, signal);
+    });
 }
 
 function interruptCurrentResponse(userId, reason = 'barge-in') {
@@ -570,13 +598,13 @@ async function flushUtterance(userId) {
   const levels = await analyzeAudio(merged);
   log('utterance levels', userId, 'segments', files.length, 'pcmBytes', pcmBytes, 'meanDb', levels.meanDb, 'maxDb', levels.maxDb);
   const candidate = isBargeInCandidate(pcmBytes, levels);
-  if (speaking && candidate) {
-    metricsTurn.finish({ status: 'barge_in_playback' });
-    interruptCurrentResponse(userId, 'confirmed-barge-in');
-    return;
-  } else if (processing && !speaking && candidate) {
+  if (processing && candidate) {
     await validateProcessingBargeIn(userId, merged, pcmBytes, files.length);
     metricsTurn.finish({ status: 'barge_in_processing_candidate' });
+    return;
+  } else if (speaking && candidate) {
+    metricsTurn.finish({ status: 'barge_in_playback' });
+    interruptCurrentResponse(userId, 'confirmed-barge-in');
     return;
   } else if (speaking || processing) {
     const thresholds = currentBargeInThresholds();
@@ -638,6 +666,7 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     const plan = { task: true, label: agentAdapter.label, verboseProgress };
     log('Agent plan', plan.label, 'backend', agentAdapter.backend, 'task', plan.task);
     const agentStart = Date.now();
+    activeProgressSignal = signal;
     const agentPromise = agentAdapter.ask(prompt, signal, plan);
     let done = false;
     // Stage announcements say the actual pipeline step. They are delayed so very
@@ -681,6 +710,7 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     metricsTurn?.finish({ status: 'error', error: shortMsg });
     await sendText(`⚠️ 음성 처리 실패: ${shortMsg}`);
   } finally {
+    if (activeProgressSignal === signal) activeProgressSignal = null;
     if (currentAbortController === controller) currentAbortController = null;
     interruptedTurns.delete(turnId);
     if (activeTurnId === turnId) activeTurnId = 0;
@@ -714,14 +744,14 @@ function subscribeUser(receiver, userId) {
   activeStreams.set(userId, { opusStream, decoder, writer, file, startedAtMs: Date.now() });
   let pcmBytes = 0;
   const liveThresholds = currentBargeInThresholds();
-  const liveBargeIn = speaking ? createLiveBargeInMonitor({
+  const liveBargeIn = shouldUseLivePlaybackBargeIn({ speaking, processing }) ? createLiveBargeInMonitor({
     minBytes: liveThresholds.minBytes,
     minMeanDb: liveThresholds.minMeanDb,
     minMaxDb: liveThresholds.minMaxDb,
     log,
     onConfirm: ({ pcmBytes: confirmedBytes, levels }) => {
-      log('confirmed live barge-in before segment end', userId, 'pcmBytes', confirmedBytes, 'meanDb', levels.meanDb, 'maxDb', levels.maxDb);
-      interruptCurrentResponse(userId, 'confirmed-live-barge-in');
+      log('confirmed live playback barge-in before segment end', userId, 'pcmBytes', confirmedBytes, 'meanDb', levels.meanDb, 'maxDb', levels.maxDb);
+      interruptCurrentResponse(userId, 'confirmed-live-playback-barge-in');
     },
   }) : null;
   decoder.on('data', chunk => {
@@ -755,6 +785,22 @@ async function connectTo(channel) {
   });
   connection.subscribe(player);
   connection.on('error', e => warn('voice connection error', e?.stack || e));
+  connection.on('stateChange', async (oldState, newState) => {
+    log('voice connection state', oldState.status, '->', newState.status);
+    if (newState.status === VoiceConnectionStatus.Disconnected) {
+      try {
+        await Promise.race([
+          entersState(connection, VoiceConnectionStatus.Signalling, 5000),
+          entersState(connection, VoiceConnectionStatus.Connecting, 5000),
+        ]);
+      } catch (e) {
+        warn('voice connection disconnected; reconnecting to channel', channel.guild.name, channel.name, e?.message || e);
+        try { connection?.destroy(); } catch {}
+        connection = null;
+        setTimeout(() => connectTo(channel).catch(err => warn('voice reconnect failed', err?.stack || err)), 1500);
+      }
+    }
+  });
   await entersState(connection, VoiceConnectionStatus.Ready, 30000);
   connection.receiver.speaking.on('start', userId => subscribeUser(connection.receiver, userId));
   log(`Listening in voice channel ${channel.guild.name} / ${channel.name}`);
@@ -827,6 +873,20 @@ client.on('messageCreate', async msg => {
     await playAudio(mp3);
     return;
   }
+  if (content.startsWith('!voice-test ')) {
+    const text = content.slice('!voice-test '.length).trim();
+    if (!text) return void msg.reply('테스트할 문장을 붙여줘.');
+    const started = Date.now();
+    try {
+      await msg.reply(`TTS 백엔드 ${ttsBackend.name}로 음성 테스트할게.`);
+      await speakText(text);
+      await msg.channel.send(`음성 테스트 완료: ${ttsBackend.name}, ${Date.now() - started}ms`);
+    } catch (e) {
+      warn('voice-test failed', e?.stack || e);
+      await msg.channel.send(`음성 테스트 실패: ${String(e?.message || e).slice(0, 700)}`);
+    }
+    return;
+  }
   if (content.startsWith('!ask ')) {
     const text = content.slice(5).trim();
     if (!text) return void msg.reply('물어볼 내용을 붙여줘.');
@@ -841,6 +901,23 @@ client.on('messageCreate', async msg => {
   }
 });
 
+process.on('unhandledRejection', error => {
+  if (isBenignTransientNetworkError(error)) {
+    warn('suppressed transient unhandled rejection', error?.code || '', error?.message || error);
+    return;
+  }
+  warn('unhandled rejection', error?.stack || error);
+});
+process.on('uncaughtException', error => {
+  if (isBenignTransientNetworkError(error)) {
+    warn('suppressed transient uncaught exception', error?.code || '', error?.message || error);
+    return;
+  }
+  warn('uncaught exception; exiting', error?.stack || error);
+  process.exit(1);
+});
+client.on('error', e => warn('discord client error', e?.stack || e));
+client.on('shardError', e => warn('discord shard error', e?.stack || e));
 process.on('SIGTERM', () => { try { connection?.destroy(); } catch {}; client.destroy(); process.exit(0); });
 process.on('SIGINT', () => { try { connection?.destroy(); } catch {}; client.destroy(); process.exit(0); });
 

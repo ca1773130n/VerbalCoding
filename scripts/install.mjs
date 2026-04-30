@@ -30,8 +30,12 @@ async function main() {
     const allowedUsers = await ask('Allowed Discord user IDs, comma-separated', process.env.DISCORD_ALLOWED_USERS || '');
     const autoJoinVoiceChannels = await ask('Auto-join voice channel names', process.env.AUTO_JOIN_VOICE_CHANNELS || '일반,General,general');
     const transcriptChannelId = await ask('Transcript text channel/thread ID', process.env.TRANSCRIPT_CHANNEL_ID || '');
+    const ttsBackend = await ask('TTS backend: edge/openvoice', process.env.TTS_BACKEND || 'edge');
     const ttsVoice = await ask('TTS voice', process.env.TTS_VOICE || 'ko-KR-SunHiNeural');
     const ttsRate = await ask('TTS rate', process.env.TTS_RATE || '+10%');
+    const openvoiceDir = await ask('OpenVoice repo dir', process.env.OPENVOICE_DIR || './vendor/OpenVoice');
+    const openvoiceVenv = await ask('OpenVoice venv dir', process.env.OPENVOICE_VENV || './.venv-openvoice');
+    const openvoiceRefAudio = await ask('OpenVoice reference audio path', process.env.OPENVOICE_REF_AUDIO || './voice-samples/user-reference.wav');
     const requireWake = (await ask('Require wake word? 1/0', process.env.REQUIRE_WAKE_WORD || '0')) === '1';
     const verboseProgress = (await ask('Verbose progress by default? 1/0', process.env.AGENT_VERBOSE_PROGRESS || process.env.VERBALCODING_VERBOSE_PROGRESS || '0')) === '1';
     const utteranceIdleMs = await ask('Utterance idle wait before STT, ms', process.env.UTTERANCE_IDLE_MS || '2000');
@@ -45,8 +49,12 @@ async function main() {
       allowedUsers,
       autoJoinVoiceChannels,
       transcriptChannelId,
+      ttsBackend,
       ttsVoice,
       ttsRate,
+      openvoiceDir,
+      openvoiceVenv,
+      openvoiceRefAudio,
       requireWakeWord: requireWake,
       verboseProgress,
       utteranceIdleMs,
