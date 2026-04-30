@@ -116,3 +116,18 @@ test('OpenVoice backend falls back to python3 when configured venv python is mis
 
   assert.equal(calls[0].cmd, 'python3');
 });
+
+test('TTS backends omit signal option when no AbortSignal is provided', async () => {
+  const calls = [];
+  const backend = createTtsBackend(baseSettings(), {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 123 }),
+    execFileAsync: async (cmd, args, options) => calls.push({ cmd, args, options }),
+  });
+
+  await backend.synthesize('신호 없는 음성 테스트', { signal: null, kind: 'final' });
+
+  assert.equal(calls[0].cmd, 'edge-tts');
+  assert.equal(Object.hasOwn(calls[0].options, 'signal'), false);
+});

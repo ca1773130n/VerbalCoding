@@ -13,6 +13,10 @@ function validateOutput(file, fsApi) {
   return file;
 }
 
+function execOptions(base, signal) {
+  return signal ? { ...base, signal } : base;
+}
+
 function openVoicePython(openvoice, existsSync = fs.existsSync) {
   const venvPython = path.join(openvoice.venv, 'bin', 'python');
   if (existsSync(venvPython)) return venvPython;
@@ -36,11 +40,10 @@ export function createEdgeTtsBackend(settings, deps = {}) {
     },
     async synthesize(text, { signal } = {}) {
       const out = uniquePath(tmpdir, 'verbalcoding-edge', 'mp3');
-      await execFileAsync('edge-tts', ['-v', edge.voice, '--rate', edge.rate, '-t', text, '--write-media', out], {
+      await execFileAsync('edge-tts', ['-v', edge.voice, '--rate', edge.rate, '-t', text, '--write-media', out], execOptions({
         timeout: 60000,
         maxBuffer: 2 * 1024 * 1024,
-        signal,
-      });
+      }, signal));
       return validateOutput(out, fsApi);
     },
   };
@@ -79,11 +82,10 @@ export function createOpenVoiceBackend(settings, deps = {}) {
         '--output', out,
       ];
       try {
-        await execFileAsync(openVoicePython(openvoice, fsApi.existsSync), args, {
+        await execFileAsync(openVoicePython(openvoice, fsApi.existsSync), args, execOptions({
           timeout: openvoice.timeoutMs,
           maxBuffer: 2 * 1024 * 1024,
-          signal,
-        });
+        }, signal));
         return validateOutput(out, fsApi);
       } catch (error) {
         fs.rm(out, { force: true }, () => {});
