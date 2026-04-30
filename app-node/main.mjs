@@ -30,6 +30,12 @@ import { splitForTTS } from './tts_chunks.mjs';
 import { playChunkedTTSWithPrefetch } from './tts_prefetch.mjs';
 import { buildTtsSettings } from './tts_settings.mjs';
 import { createTtsBackend } from './tts_backends.mjs';
+import { createBridgeLogger } from './bridge_logger.mjs';
+import {
+  createVoiceCloneCaptureState,
+  saveVoiceCloneReference,
+  voiceCloneCommandFromText,
+} from './voice_clone_capture.mjs';
 import {
   bargeInThresholdsForMode,
   createLiveBargeInMonitor,
@@ -104,6 +110,7 @@ const client = new Client({
   partials: [Partials.Channel],
 });
 const ttsBackend = createTtsBackend(settings.tts, { execFileAsync, log, warn });
+const voiceCloneCapture = createVoiceCloneCaptureState({ defaultTargetPath: settings.tts.openvoice.refAudio });
 
 let connection = null;
 let player = createAudioPlayer();
@@ -129,20 +136,14 @@ const UTTERANCE_IDLE_MS = Number(process.env.UTTERANCE_IDLE_MS || '2000');
 const MIN_MEAN_VOLUME_DB = Number(process.env.MIN_MEAN_VOLUME_DB || '-35');
 const MIN_MAX_VOLUME_DB = Number(process.env.MIN_MAX_VOLUME_DB || '-18');
 
-function writeBridgeLogLine(line) {
-  if (!process.env.BRIDGE_LOG_PATH) return;
-  try { fs.appendFileSync(process.env.BRIDGE_LOG_PATH, `${line}\n`); } catch {}
-}
-function log(...args) {
-  const line = [new Date().toISOString(), ...args].map(String).join(' ');
-  console.log(line);
-  writeBridgeLogLine(line);
-}
-function warn(...args) {
-  const line = [new Date().toISOString(), ...args].map(String).join(' ');
-  console.warn(line);
-  writeBridgeLogLine(line);
-}
+const bridgeLogger = createBridgeLogger({
+  appendLine: line => {
+    if (!process.env.BRIDGE_LOG_PATH) return;
+    fs.appendFileSync(process.env.BRIDGE_LOG_PATH, `${line}\n`);
+  },
+});
+function log(...args) { bridgeLogger.log(...args); }
+function warn(...args) { bridgeLogger.warn(...args); }
 function isBenignTransientNetworkError(error) {
   return ['EPIPE', 'ECONNRESET', 'ETIMEDOUT'].includes(error?.code) || /write EPIPE|socket hang up/i.test(String(error?.message || error));
 }
@@ -404,7 +405,8 @@ async function synthTTS(text, signal) {
 }
 
 async function synthProgressTTS(text, signal) {
-  const cachePath = path.join(settings.tts.progressCacheDir, `${cacheKeyForText(`${ttsBackend.cacheKeyParts().join('\n')}\n${text}`)}.mp3`);
+  const ext = ttsBackend.outputExtension || 'mp3';
+  const cachePath = path.join(settings.tts.progressCacheDir, `${cacheKeyForText(`${ttsBackend.cacheKeyParts().join('\n')}\n${text}`)}.${ext}`);
   if (fs.existsSync(cachePath) && fs.statSync(cachePath).size > 0) {
     log('progress tts cache hit', text, cachePath);
     return cachePath;
@@ -477,6 +479,50 @@ function queueVerboseProgressSpeech(event, signal) {
       if (!verboseProgress || signal.aborted || !processing) return;
       await speakProgress(text, signal);
     });
+}
+
+async function saveCapturedVoiceCloneSample(userId, wavPath, pcmBytes, segments, signal = null) {
+  const capture = voiceCloneCapture.consume(userId);
+  if (!capture) return false;
+  try {
+    const saved = await saveVoiceCloneReference({
+      sourceWav: wavPath,
+      targetPath: capture.targetPath,
+      execFileAsync,
+    });
+    log('voice clone reference saved', 'user', userId, 'pcmBytes', pcmBytes, 'segments', segments, 'path', saved);
+    await sendText(`🎙️ 보이스 클로닝 참조 샘플 저장 완료: ${path.relative(ROOT, saved)}`);
+    await speakText('목소리 샘플 저장했어. 이제 OpenVoice 백엔드로 테스트할 수 있어.', signal);
+  } catch (e) {
+    warn('voice clone reference save failed', e?.stack || e);
+    await sendText(`⚠️ 목소리 샘플 저장 실패: ${String(e?.message || e).slice(0, 700)}`);
+    await speakText('목소리 샘플 저장에 실패했어. 로그를 확인해볼게.', signal);
+  }
+  return true;
+}
+
+async function handleVoiceCloneCommand(userId, prompt, signal = null) {
+  const command = voiceCloneCommandFromText(prompt);
+  if (!command) return false;
+  if (command.action === 'cancel') {
+    const cancelled = voiceCloneCapture.cancel(userId);
+    await sendText(cancelled ? '🎙️ 보이스 클로닝 샘플 캡처를 취소했어.' : '🎙️ 대기 중인 보이스 클로닝 샘플 캡처가 없어.');
+    await speakText(cancelled ? '목소리 샘플 녹음 대기를 취소했어.' : '대기 중인 목소리 샘플 녹음은 없어.', signal);
+    return true;
+  }
+  if (command.action === 'status') {
+    const current = voiceCloneCapture.current();
+    const status = current?.userId === String(userId)
+      ? `🎙️ 다음 유효한 음성을 ${path.relative(ROOT, current.targetPath)}에 저장할게.`
+      : '🎙️ 지금 대기 중인 보이스 클로닝 샘플 캡처는 없어.';
+    await sendText(status);
+    await speakText(current?.userId === String(userId) ? '다음에 말하는 목소리를 샘플로 저장할게.' : '대기 중인 목소리 샘플 녹음은 없어.', signal);
+    return true;
+  }
+  const armed = voiceCloneCapture.arm({ userId, source: 'voice-command' });
+  await sendText(`🎙️ 보이스 클로닝 샘플 캡처 대기 중. 다음 10초에서 30초 정도 말하면 ${path.relative(ROOT, armed.targetPath)}에 저장할게.`);
+  await speakText('좋아. 다음에 10초에서 30초 정도 말하면 그 음성을 목소리 샘플로 저장할게.', signal);
+  return true;
 }
 
 function interruptCurrentResponse(userId, reason = 'barge-in') {
@@ -597,6 +643,11 @@ async function flushUtterance(userId) {
   await concatWavs(files, merged);
   const levels = await analyzeAudio(merged);
   log('utterance levels', userId, 'segments', files.length, 'pcmBytes', pcmBytes, 'meanDb', levels.meanDb, 'maxDb', levels.maxDb);
+  if (await saveCapturedVoiceCloneSample(userId, merged, pcmBytes, files.length)) {
+    metricsTurn.addMeta({ meanDb: levels.meanDb, maxDb: levels.maxDb });
+    metricsTurn.finish({ status: 'voice_clone_sample_saved' });
+    return;
+  }
   const candidate = isBargeInCandidate(pcmBytes, levels);
   if (processing && candidate) {
     await validateProcessingBargeIn(userId, merged, pcmBytes, files.length);
@@ -643,6 +694,10 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     if (!acceptsWake(text)) { await sendText('wake word 없음: 응답은 안 함'); metricsTurn?.finish({ status: 'wake_rejected' }); return; }
 
     const prompt = stripWake(text);
+    if (await handleVoiceCloneCommand(userId, prompt, signal)) {
+      metricsTurn?.finish({ status: 'voice_clone_command' });
+      return;
+    }
     const sensitivityRequest = sensitivityModeFromTranscript(prompt);
     if (sensitivityRequest) {
       const thresholds = setSensitivityMode(sensitivityRequest.mode, sensitivityRequest.reason);
@@ -886,6 +941,21 @@ client.on('messageCreate', async msg => {
       await msg.channel.send(`음성 테스트 실패: ${String(e?.message || e).slice(0, 700)}`);
     }
     return;
+  }
+  if (content === '!voice-clone' || content === '!voice-clone status') {
+    const current = voiceCloneCapture.current();
+    if (current?.userId === String(msg.author.id)) {
+      return void msg.reply(`다음 유효한 음성을 ${path.relative(ROOT, current.targetPath)}에 저장할게.`);
+    }
+    return void msg.reply('대기 중인 보이스 클로닝 샘플 캡처가 없어. `!voice-clone capture`로 시작해.');
+  }
+  if (content === '!voice-clone cancel') {
+    const cancelled = voiceCloneCapture.cancel(msg.author.id);
+    return void msg.reply(cancelled ? '보이스 클로닝 샘플 캡처를 취소했어.' : '대기 중인 캡처가 없어.');
+  }
+  if (content === '!voice-clone capture') {
+    const armed = voiceCloneCapture.arm({ userId: msg.author.id, source: 'discord-command' });
+    return void msg.reply(`다음 유효한 음성을 ${path.relative(ROOT, armed.targetPath)}에 저장할게. 음성 채널에서 10~30초 정도 말해줘.`);
   }
   if (content.startsWith('!ask ')) {
     const text = content.slice(5).trim();

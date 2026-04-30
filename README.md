@@ -180,6 +180,8 @@ Runtime logs default to the path selected by your shell command. During local te
 - `!leave` — disconnect.
 - `!say <text>` — speak text directly through TTS.
 - `!voice-test <text>` — speak text with the active TTS backend, useful for comparing Edge and OpenVoice.
+- `!voice-clone capture` — save the next valid Discord voice utterance as the OpenVoice reference sample.
+- `!voice-clone status` / `!voice-clone cancel` — inspect or cancel a pending reference-sample capture.
 - `!ask <prompt>` — send text through the same selected harness adapter as voice.
 - `!session` — show the current adapter session ID when supported.
 - `!reset-session` — clear the adapter session file when supported.
@@ -214,8 +216,10 @@ Edge TTS remains the default and fallback. To try local voice cloning with OpenV
 ./scripts/setup_openvoice.sh
 # Download checkpoints_v2_0417.zip from OpenVoice docs and extract under vendor/OpenVoice/checkpoints_v2/
 mkdir -p voice-samples
-# Put a reference sample you own or have permission to clone at:
-# voice-samples/user-reference.wav
+# Option A: put a reference sample you own or have permission to clone at:
+#   voice-samples/user-reference.wav
+# Option B: while the bot is listening in Discord, say "목소리 샘플 녹음 시작해"
+#   then speak 10-30 seconds; or type `!voice-clone capture` and speak the sample.
 python3 scripts/openvoice_smoke.py
 ```
 

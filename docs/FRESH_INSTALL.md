@@ -35,7 +35,8 @@ OpenVoice voice cloning is optional. Keep `TTS_BACKEND=edge` for a fresh install
 ```bash
 ./scripts/setup_openvoice.sh
 # Download OpenVoice V2 checkpoints into vendor/OpenVoice/checkpoints_v2/
-# Add a permitted local sample at voice-samples/user-reference.wav
+# Either add a permitted local sample at voice-samples/user-reference.wav,
+# or run the bot, say "목소리 샘플 녹음 시작해", then speak 10-30 seconds.
 python3 scripts/openvoice_smoke.py
 ```
 
