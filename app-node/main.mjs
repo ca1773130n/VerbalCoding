@@ -30,7 +30,7 @@ import { splitForTTS } from './tts_chunks.mjs';
 import { playChunkedTTSWithPrefetch } from './tts_prefetch.mjs';
 import { buildTtsSettings } from './tts_settings.mjs';
 import { createTtsBackend } from './tts_backends.mjs';
-import { createBridgeLogger } from './bridge_logger.mjs';
+import { createBridgeLogger, createTransientErrorReporter, isTransientNetworkError } from './bridge_logger.mjs';
 import {
   createVoiceCloneCaptureState,
   saveVoiceCloneReference,
@@ -144,8 +144,9 @@ const bridgeLogger = createBridgeLogger({
 });
 function log(...args) { bridgeLogger.log(...args); }
 function warn(...args) { bridgeLogger.warn(...args); }
+const reportTransientProcessError = createTransientErrorReporter({ warn });
 function isBenignTransientNetworkError(error) {
-  return ['EPIPE', 'ECONNRESET', 'ETIMEDOUT'].includes(error?.code) || /write EPIPE|socket hang up/i.test(String(error?.message || error));
+  return isTransientNetworkError(error);
 }
 function writeLatencyRecord(record) {
   try {
@@ -971,18 +972,28 @@ client.on('messageCreate', async msg => {
   }
 });
 
-process.on('unhandledRejection', error => {
+process.stdout?.on?.('error', error => {
   if (isBenignTransientNetworkError(error)) {
-    warn('suppressed transient unhandled rejection', error?.code || '', error?.message || error);
+    bridgeLogger.markStdioBroken();
+    reportTransientProcessError('stdout error', error);
     return;
   }
+  warn('stdout error', error?.stack || error);
+});
+process.stderr?.on?.('error', error => {
+  if (isBenignTransientNetworkError(error)) {
+    bridgeLogger.markStdioBroken();
+    reportTransientProcessError('stderr error', error);
+    return;
+  }
+  warn('stderr error', error?.stack || error);
+});
+process.on('unhandledRejection', error => {
+  if (reportTransientProcessError('unhandled rejection', error)) return;
   warn('unhandled rejection', error?.stack || error);
 });
 process.on('uncaughtException', error => {
-  if (isBenignTransientNetworkError(error)) {
-    warn('suppressed transient uncaught exception', error?.code || '', error?.message || error);
-    return;
-  }
+  if (reportTransientProcessError('uncaught exception', error)) return;
   warn('uncaught exception; exiting', error?.stack || error);
   process.exit(1);
 });
