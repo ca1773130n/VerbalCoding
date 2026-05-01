@@ -99,6 +99,52 @@ test('Hermes verbose progress drops quiet flag and parses rich CLI final respons
   assert.ok(progress.includes('터미널 도구 사용 terminal'));
 });
 
+test('Hermes adapter falls back to saved session final answer when verbose CLI output omits it', async () => {
+  const files = new Map([
+    ['/tmp/hermes-session', 'old-session\n'],
+    ['/tmp/hermes-sessions/session_new-session.json', JSON.stringify({
+      messages: [
+        { role: 'user', content: '질문' },
+        { role: 'assistant', content: 'VERBALCODING_PROGRESS: 로그 확인' },
+        { role: 'assistant', content: '실제 최종 답변이야.' },
+      ],
+    })],
+  ]);
+  const adapter = createAgentAdapter({
+    backend: 'hermes',
+    label: 'Hermes Agent',
+    command: 'hermes chat -Q -q',
+    sessionFile: '/tmp/hermes-session',
+    taskTimeoutMs: 300000,
+    chatTimeoutMs: 45000,
+  }, {
+    hermesSessionsDir: '/tmp/hermes-sessions',
+    readFileSync: path => files.get(path),
+    writeFileSync: (path, value) => files.set(path, value),
+    spawn: (_cmd, _args) => {
+      const listeners = {};
+      const child = {
+        stdout: { on: (event, cb) => { listeners[`stdout:${event}`] = cb; } },
+        stderr: { on: (event, cb) => { listeners[`stderr:${event}`] = cb; } },
+        on: (event, cb) => { listeners[event] = cb; },
+        kill: () => {},
+      };
+      queueMicrotask(() => {
+        listeners['stdout:data']?.(Buffer.from('VERBALCODING_PROGRESS: 로그 확인\nSession: new-session\n'));
+        listeners.close?.(0, null);
+      });
+      return child;
+    },
+    execFileAsync: async () => { throw new Error('spawn should be used'); },
+    log: () => {},
+    warn: () => {},
+  });
+
+  const answer = await adapter.ask('분석해줘', undefined, { verboseProgress: true });
+
+  assert.equal(answer, '실제 최종 답변이야.');
+});
+
 test('Claude, Codex, and Gemini adapters use backend-specific default commands without Hermes resume', async () => {
   const cases = [
     { backend: 'claude', command: ['claude', '-p'], label: 'Claude Code' },

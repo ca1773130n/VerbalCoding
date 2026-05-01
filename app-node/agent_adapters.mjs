@@ -233,6 +233,7 @@ export function createAgentAdapter(settings, deps = {}) {
   const log = deps.log || (() => {});
   const warn = deps.warn || (() => {});
   const env = deps.env || process.env;
+  const hermesSessionsDir = deps.hermesSessionsDir || path.join(os.homedir(), '.hermes', 'sessions');
   const spawnProcess = deps.spawn;
   const onProgress = deps.onProgress || (() => {});
   const emittedProgress = new Set();
@@ -372,6 +373,37 @@ export function createAgentAdapter(settings, deps = {}) {
     }
   }
 
+  function contentToText(content) {
+    if (typeof content === 'string') return content;
+    if (Array.isArray(content)) {
+      return content.map(item => {
+        if (typeof item === 'string') return item;
+        if (item && typeof item === 'object') return item.text || item.content || '';
+        return '';
+      }).filter(Boolean).join('\n');
+    }
+    if (content && typeof content === 'object') return content.text || content.content || '';
+    return '';
+  }
+
+  function readHermesSessionFinalAnswer(sessionId) {
+    if (!settings.supportsHermesSession || !sessionId) return '';
+    try {
+      const sessionPath = path.join(hermesSessionsDir, `session_${sessionId}.json`);
+      const data = JSON.parse(fileApi.readFileSync(sessionPath, 'utf8'));
+      const messages = Array.isArray(data.messages) ? data.messages : [];
+      for (let i = messages.length - 1; i >= 0; i -= 1) {
+        const message = messages[i];
+        if (message?.role !== 'assistant') continue;
+        const text = sanitizeAgentOutput(contentToText(message.content));
+        if (text) return text;
+      }
+    } catch (e) {
+      warn('read Hermes session final answer failed', sessionId, e?.message || e);
+    }
+    return '';
+  }
+
   function buildArgs(text, options = {}) {
     const argv = shellSplit(settings.command);
     const cmd = argv[0];
@@ -418,7 +450,15 @@ export function createAgentAdapter(settings, deps = {}) {
       }
       log('Agent CLI done', label, 'ms', Date.now() - start);
       if (verboseProgress) onProgress(`${label} 응답 수신`);
-      return sanitizeAgentOutput(codexLastMessage) || sanitizeAgentOutput(stdout) || sanitizeAgentOutput(stderr) || '응답이 비어 있어.';
+      const stdoutAnswer = sanitizeAgentOutput(codexLastMessage) || sanitizeAgentOutput(stdout) || sanitizeAgentOutput(stderr);
+      if (stdoutAnswer) return stdoutAnswer;
+      const sessionAnswer = readHermesSessionFinalAnswer(newSessionId || sessionId);
+      if (sessionAnswer) {
+        log('Agent answer recovered from Hermes session file', label, 'chars', sessionAnswer.length);
+        return sessionAnswer;
+      }
+      warn('Agent CLI produced empty sanitized answer', 'stdoutLen', stdout.length, 'stderrLen', stderr.length, 'stdoutTail', stdout.slice(-500), 'stderrTail', stderr.slice(-500));
+      return '응답이 비어 있어.';
     } catch (e) {
       if (e?.name === 'AbortError' || e?.code === 'ABORT_ERR') throw e;
       const stderr = (e.stderr || '').toString().trim();
