@@ -46,6 +46,31 @@ test('buildTtsSettings normalizes OpenVoice settings and keeps Edge fallback', (
   assert.equal(settings.openvoice.useForProgress, true);
 });
 
+test('buildTtsSettings normalizes speech-swift CosyVoice settings', () => {
+  const root = '/project';
+  const settings = buildTtsSettings({
+    TTS_BACKEND: 'speechswift',
+    SPEECHSWIFT_COMMAND: 'audio',
+    SPEECHSWIFT_ENGINE: 'cosyvoice',
+    SPEECHSWIFT_LANGUAGE: 'korean',
+    SPEECHSWIFT_REF_AUDIO: './voice-samples/me.wav',
+    SPEECHSWIFT_MODEL_ID: 'aufklarer/CosyVoice3-0.5B-MLX-4bit',
+    SPEECHSWIFT_TIMEOUT_MS: '120000',
+    SPEECHSWIFT_STREAM: '1',
+    SPEECHSWIFT_PROGRESS: '0',
+  }, root);
+
+  assert.equal(settings.backend, 'speechswift');
+  assert.equal(settings.speechswift.command, 'audio');
+  assert.equal(settings.speechswift.engine, 'cosyvoice');
+  assert.equal(settings.speechswift.language, 'korean');
+  assert.equal(settings.speechswift.refAudio, path.join(root, 'voice-samples', 'me.wav'));
+  assert.equal(settings.speechswift.modelId, 'aufklarer/CosyVoice3-0.5B-MLX-4bit');
+  assert.equal(settings.speechswift.timeoutMs, 120000);
+  assert.equal(settings.speechswift.stream, true);
+  assert.equal(settings.speechswift.useForProgress, false);
+});
+
 test('buildTtsSettings falls back to edge for unsupported backend', () => {
   const settings = buildTtsSettings({ TTS_BACKEND: 'unknown' }, '/project');
   assert.equal(settings.backend, 'edge');

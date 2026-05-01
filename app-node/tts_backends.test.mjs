@@ -17,6 +17,19 @@ function baseSettings() {
       timeoutMs: 90000,
       useForProgress: false,
     },
+    speechswift: {
+      command: 'audio',
+      engine: 'cosyvoice',
+      language: 'korean',
+      refAudio: '/project/voice-samples/me.wav',
+      modelId: 'aufklarer/CosyVoice3-0.5B-MLX-4bit',
+      model: 'base',
+      speaker: '',
+      instruct: '',
+      timeoutMs: 120000,
+      stream: true,
+      useForProgress: false,
+    },
   };
 }
 
@@ -115,6 +128,65 @@ test('OpenVoice backend falls back to python3 when configured venv python is mis
   await backend.synthesize('복제 음성 테스트', { kind: 'final' });
 
   assert.equal(calls[0].cmd, 'python3');
+});
+
+test('SpeechSwift CosyVoice backend calls audio CLI with reference sample and output path', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'speechswift' };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 999 }),
+    execFileAsync: async (cmd, args, options) => calls.push({ cmd, args, options }),
+  });
+
+  const out = await backend.synthesize('복제 음성 테스트', { kind: 'final' });
+
+  assert.equal(calls[0].cmd, 'audio');
+  assert.deepEqual(calls[0].args.slice(0, 4), ['speak', '복제 음성 테스트', '--engine', 'cosyvoice']);
+  assert.ok(calls[0].args.includes('--voice-sample'));
+  assert.ok(calls[0].args.includes('/project/voice-samples/me.wav'));
+  assert.ok(calls[0].args.includes('--stream'));
+  assert.ok(calls[0].args.includes('--model-id'));
+  assert.equal(calls[0].options.timeout, 120000);
+  assert.match(out, /^\/tmp\/verbalcoding-speechswift-/);
+  assert.deepEqual(backend.cacheKeyParts(), ['speechswift', 'cosyvoice', '/project/voice-samples/me.wav', 'korean', 'aufklarer/CosyVoice3-0.5B-MLX-4bit', 'base', '', '']);
+});
+
+test('SpeechSwift progress uses Edge fallback unless explicitly enabled', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'speechswift' };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 123 }),
+    execFileAsync: async (cmd, args) => calls.push({ cmd, args }),
+  });
+
+  await backend.synthesize('진행 안내', { kind: 'progress' });
+
+  assert.equal(calls[0].cmd, 'edge-tts');
+});
+
+test('SpeechSwift falls back to Edge when audio CLI fails', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'speechswift' };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 123 }),
+    warn: (...args) => calls.push({ warn: args.join(' ') }),
+    execFileAsync: async (cmd, args) => {
+      calls.push({ cmd, args });
+      if (cmd === 'audio') throw new Error('speech-swift missing');
+    },
+  });
+
+  await backend.synthesize('fallback', { kind: 'final' });
+
+  assert.ok(calls.some(call => call.cmd === 'audio'));
+  assert.ok(calls.some(call => call.cmd === 'edge-tts'));
+  assert.ok(calls.some(call => /speech-swift failed; falling back to edge/i.test(call.warn || '')));
 });
 
 test('TTS backends omit signal option when no AbortSignal is provided', async () => {

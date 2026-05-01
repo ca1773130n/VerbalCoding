@@ -239,6 +239,37 @@ Restart the bridge and test in Discord:
 
 Only clone voices you own or have permission to use. If OpenVoice fails or times out, VerbalCoding falls back to Edge TTS.
 
+## Optional SpeechSwift / CosyVoice TTS
+
+On Apple Silicon, `speech-swift` is the most promising local backend for Korean voice cloning with MLX-native CosyVoice/Qwen3-TTS. Install the CLI:
+
+```bash
+brew tap soniqo/speech https://github.com/soniqo/speech-swift
+brew install speech
+```
+
+Then use the Discord-captured reference sample:
+
+```bash
+TTS_BACKEND="speechswift"
+SPEECHSWIFT_ENGINE="cosyvoice"       # cosyvoice recommended; qwen3 is also supported
+SPEECHSWIFT_LANGUAGE="korean"
+SPEECHSWIFT_REF_AUDIO="./voice-samples/user-reference.wav"
+SPEECHSWIFT_STREAM="1"
+SPEECHSWIFT_PROGRESS="0"             # keep short progress prompts on Edge
+```
+
+Local smoke test:
+
+```bash
+audio speak --engine cosyvoice --language korean \
+  --voice-sample voice-samples/user-reference.wav --stream \
+  -o /tmp/verbalcoding-speechswift.wav \
+  "안녕하세요. 스피치 스위프트 코지보이스 테스트입니다."
+```
+
+In current Mac mini testing, CosyVoice worked but was slower than Edge: first model download took about 105s; warm CLI generation for a short Korean sentence took about 6.9s wall time, with model-reported synthesis time 2.94s for 1.68s of audio. Qwen3-TTS voice cloning also worked, but warm CLI startup was much slower in this setup (about 62.5s wall time, first streamed chunk around 47.6s). Keep Edge for quick progress/backchannel prompts and reserve SpeechSwift/CosyVoice for longer or higher-value final answers.
+
 ## Latency metrics
 
 VerbalCoding always writes per-turn latency records as JSONL. Default path:

@@ -17,7 +17,8 @@ function resolveUnderRoot(root, value, fallback) {
 
 export function buildTtsSettings(env = process.env, root = process.cwd()) {
   const requestedBackend = String(env.TTS_BACKEND || 'edge').trim().toLowerCase();
-  const backend = requestedBackend === 'openvoice' ? 'openvoice' : 'edge';
+  const supportedBackends = new Set(['edge', 'openvoice', 'speechswift']);
+  const backend = supportedBackends.has(requestedBackend) ? requestedBackend : 'edge';
   return {
     backend,
     maxChars: positiveNumber(env.TTS_MAX_CHARS, 495),
@@ -34,6 +35,19 @@ export function buildTtsSettings(env = process.env, root = process.cwd()) {
       style: env.OPENVOICE_STYLE || 'default',
       timeoutMs: positiveNumber(env.OPENVOICE_TIMEOUT_MS, 90000),
       useForProgress: boolEnv(env.OPENVOICE_PROGRESS, false),
+    },
+    speechswift: {
+      command: env.SPEECHSWIFT_COMMAND || 'audio',
+      engine: env.SPEECHSWIFT_ENGINE || 'cosyvoice',
+      language: env.SPEECHSWIFT_LANGUAGE || 'korean',
+      refAudio: resolveUnderRoot(root, env.SPEECHSWIFT_REF_AUDIO || env.OPENVOICE_REF_AUDIO, path.join('voice-samples', 'user-reference.wav')),
+      modelId: env.SPEECHSWIFT_MODEL_ID || 'aufklarer/CosyVoice3-0.5B-MLX-4bit',
+      model: env.SPEECHSWIFT_MODEL || 'base',
+      speaker: env.SPEECHSWIFT_SPEAKER || '',
+      instruct: env.SPEECHSWIFT_INSTRUCT || '',
+      timeoutMs: positiveNumber(env.SPEECHSWIFT_TIMEOUT_MS, 120000),
+      stream: boolEnv(env.SPEECHSWIFT_STREAM, true),
+      useForProgress: boolEnv(env.SPEECHSWIFT_PROGRESS, false),
     },
   };
 }
