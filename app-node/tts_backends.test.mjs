@@ -29,6 +29,8 @@ function baseSettings() {
       timeoutMs: 120000,
       stream: true,
       useForProgress: false,
+      mode: 'cli',
+      serverUrl: 'http://127.0.0.1:18080',
     },
   };
 }
@@ -150,7 +152,7 @@ test('SpeechSwift CosyVoice backend calls audio CLI with reference sample and ou
   assert.ok(calls[0].args.includes('--model-id'));
   assert.equal(calls[0].options.timeout, 120000);
   assert.match(out, /^\/tmp\/verbalcoding-speechswift-/);
-  assert.deepEqual(backend.cacheKeyParts(), ['speechswift', 'cosyvoice', '/project/voice-samples/me.wav', 'korean', 'aufklarer/CosyVoice3-0.5B-MLX-4bit', 'base', '', '']);
+  assert.deepEqual(backend.cacheKeyParts(), ['speechswift', 'cli', 'http://127.0.0.1:18080', 'cosyvoice', '/project/voice-samples/me.wav', 'korean', 'aufklarer/CosyVoice3-0.5B-MLX-4bit', 'base', '', '']);
 });
 
 test('SpeechSwift progress uses Edge fallback unless explicitly enabled', async () => {
@@ -185,6 +187,60 @@ test('SpeechSwift falls back to Edge when audio CLI fails', async () => {
   await backend.synthesize('fallback', { kind: 'final' });
 
   assert.ok(calls.some(call => call.cmd === 'audio'));
+  assert.ok(calls.some(call => call.cmd === 'edge-tts'));
+  assert.ok(calls.some(call => /speech-swift failed; falling back to edge/i.test(call.warn || '')));
+});
+
+test('SpeechSwift server mode posts to audio-server and writes returned WAV', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'speechswift', speechswift: { ...baseSettings().speechswift, mode: 'server', serverUrl: 'http://127.0.0.1:18080' } };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 999 }),
+    writeFileAsync: async (file, bytes) => calls.push({ write: file, bytes: bytes.length }),
+    execFileAsync: async (cmd, args) => calls.push({ cmd, args }),
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      return {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        arrayBuffer: async () => new Uint8Array([1, 2, 3, 4]).buffer,
+      };
+    },
+  });
+
+  const out = await backend.synthesize('서버 음성 테스트', { kind: 'final' });
+
+  assert.equal(calls[0].url, 'http://127.0.0.1:18080/speak');
+  assert.equal(calls[0].options.method, 'POST');
+  assert.equal(calls[0].options.headers['content-type'], 'application/json');
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    text: '서버 음성 테스트',
+    engine: 'cosyvoice',
+    language: 'korean',
+  });
+  assert.match(calls[1].write, /^\/tmp\/verbalcoding-speechswift-server-/);
+  assert.equal(calls[1].bytes, 4);
+  assert.match(out, /^\/tmp\/verbalcoding-speechswift-server-/);
+});
+
+test('SpeechSwift server mode falls back to Edge when audio-server fails', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'speechswift', speechswift: { ...baseSettings().speechswift, mode: 'server' } };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 123 }),
+    warn: (...args) => calls.push({ warn: args.join(' ') }),
+    writeFileAsync: async () => {},
+    fetch: async () => ({ ok: false, status: 503, statusText: 'Unavailable', text: async () => 'loading' }),
+    execFileAsync: async (cmd, args) => calls.push({ cmd, args }),
+  });
+
+  await backend.synthesize('fallback', { kind: 'final' });
+
   assert.ok(calls.some(call => call.cmd === 'edge-tts'));
   assert.ok(calls.some(call => /speech-swift failed; falling back to edge/i.test(call.warn || '')));
 });

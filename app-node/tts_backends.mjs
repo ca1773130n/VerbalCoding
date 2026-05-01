@@ -37,6 +37,24 @@ function speechSwiftArgs(text, out, speechswift) {
   return args;
 }
 
+async function speechSwiftServerRequest({ fetchImpl, speechswift, text, signal }) {
+  const response = await fetchImpl(`${speechswift.serverUrl}/speak`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      text,
+      engine: speechswift.engine,
+      language: speechswift.language,
+    }),
+    ...(signal ? { signal } : {}),
+  });
+  if (!response.ok) {
+    const detail = typeof response.text === 'function' ? await response.text().catch(() => '') : '';
+    throw new Error(`audio-server /speak failed ${response.status} ${response.statusText}${detail ? `: ${detail.slice(0, 200)}` : ''}`);
+  }
+  return Buffer.from(await response.arrayBuffer());
+}
+
 export function createEdgeTtsBackend(settings, deps = {}) {
   const execFileAsync = deps.execFileAsync;
   if (!execFileAsync) throw new Error('execFileAsync dependency is required');
@@ -112,31 +130,39 @@ export function createOpenVoiceBackend(settings, deps = {}) {
 
 export function createSpeechSwiftBackend(settings, deps = {}) {
   const execFileAsync = deps.execFileAsync;
-  if (!execFileAsync) throw new Error('execFileAsync dependency is required');
   const tmpdir = deps.tmpdir || os.tmpdir();
   const warn = deps.warn || (() => {});
   const fsApi = {
     existsSync: deps.existsSync || fs.existsSync,
     statSync: deps.statSync || fs.statSync,
   };
+  const fetchImpl = deps.fetch || globalThis.fetch;
+  const writeFileAsync = deps.writeFileAsync || fs.promises.writeFile;
   const edge = createEdgeTtsBackend(settings, deps);
   const speechswift = settings.speechswift;
   return {
     name: 'speechswift',
     outputExtension: speechswift.useForProgress ? 'wav' : 'mp3',
     cacheKeyParts() {
-      return ['speechswift', speechswift.engine, speechswift.refAudio, speechswift.language, speechswift.modelId, speechswift.model, speechswift.speaker, speechswift.instruct];
+      return ['speechswift', speechswift.mode, speechswift.serverUrl, speechswift.engine, speechswift.refAudio, speechswift.language, speechswift.modelId, speechswift.model, speechswift.speaker, speechswift.instruct];
     },
     async synthesize(text, { signal, kind = 'final' } = {}) {
       if (kind === 'progress' && !speechswift.useForProgress) {
         return edge.synthesize(text, { signal, kind });
       }
-      const out = uniquePath(tmpdir, 'verbalcoding-speechswift', 'wav');
+      const out = uniquePath(tmpdir, speechswift.mode === 'server' ? 'verbalcoding-speechswift-server' : 'verbalcoding-speechswift', 'wav');
       try {
-        await execFileAsync(speechswift.command, speechSwiftArgs(text, out, speechswift), execOptions({
-          timeout: speechswift.timeoutMs,
-          maxBuffer: 4 * 1024 * 1024,
-        }, signal));
+        if (speechswift.mode === 'server') {
+          if (!fetchImpl) throw new Error('fetch is not available for speech-swift server mode');
+          const wavBytes = await speechSwiftServerRequest({ fetchImpl, speechswift, text, signal });
+          await writeFileAsync(out, wavBytes);
+        } else {
+          if (!execFileAsync) throw new Error('execFileAsync dependency is required');
+          await execFileAsync(speechswift.command, speechSwiftArgs(text, out, speechswift), execOptions({
+            timeout: speechswift.timeoutMs,
+            maxBuffer: 4 * 1024 * 1024,
+          }, signal));
+        }
         return validateOutput(out, fsApi);
       } catch (error) {
         fs.rm(out, { force: true }, () => {});

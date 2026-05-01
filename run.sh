@@ -21,6 +21,25 @@ if [ -f .env ]; then
   source ./.env
   set +a
 fi
+
+if [ "${TTS_BACKEND:-}" = "speechswift" ] && [ "${SPEECHSWIFT_MODE:-cli}" = "server" ]; then
+  export SPEECHSWIFT_SERVER_HOST="${SPEECHSWIFT_SERVER_HOST:-127.0.0.1}"
+  export SPEECHSWIFT_SERVER_PORT="${SPEECHSWIFT_SERVER_PORT:-18080}"
+  export SPEECHSWIFT_SERVER_URL="${SPEECHSWIFT_SERVER_URL:-http://${SPEECHSWIFT_SERVER_HOST}:${SPEECHSWIFT_SERVER_PORT}}"
+  if command -v audio-server >/dev/null 2>&1; then
+    if ! curl -fsS --max-time 1 "${SPEECHSWIFT_SERVER_URL%/}/health" >/dev/null 2>&1; then
+      mkdir -p .logs
+      audio-server --host "$SPEECHSWIFT_SERVER_HOST" --port "$SPEECHSWIFT_SERVER_PORT" >> .logs/speechswift-audio-server.log 2>&1 &
+      export SPEECHSWIFT_SERVER_PID="$!"
+      for _ in 1 2 3 4 5; do
+        curl -fsS --max-time 1 "${SPEECHSWIFT_SERVER_URL%/}/health" >/dev/null 2>&1 && break
+        sleep 1
+      done
+    fi
+  else
+    echo "speech-swift server mode requested but audio-server was not found; TTS will fall back if server calls fail" >&2
+  fi
+fi
 export PYTHONUNBUFFERED=1
 
 if [ ! -d node_modules ]; then

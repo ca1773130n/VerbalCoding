@@ -48,6 +48,8 @@ export function buildTtsSettings(env = process.env, root = process.cwd()) {
       timeoutMs: positiveNumber(env.SPEECHSWIFT_TIMEOUT_MS, 120000),
       stream: boolEnv(env.SPEECHSWIFT_STREAM, true),
       useForProgress: boolEnv(env.SPEECHSWIFT_PROGRESS, false),
+      mode: String(env.SPEECHSWIFT_MODE || 'cli').trim().toLowerCase() === 'server' ? 'server' : 'cli',
+      serverUrl: String(env.SPEECHSWIFT_SERVER_URL || 'http://127.0.0.1:18080').replace(/\/+$/, ''),
     },
   };
 }

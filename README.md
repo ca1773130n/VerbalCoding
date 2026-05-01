@@ -248,18 +248,32 @@ brew tap soniqo/speech https://github.com/soniqo/speech-swift
 brew install speech
 ```
 
-Then use the Discord-captured reference sample:
+Then use the Discord-captured reference sample. `server` mode is preferred because `run.sh` starts/reuses a local `audio-server` and avoids spawning the `audio` CLI on every TTS request:
 
 ```bash
 TTS_BACKEND="speechswift"
-SPEECHSWIFT_ENGINE="cosyvoice"       # cosyvoice recommended; qwen3 is also supported
+SPEECHSWIFT_MODE="server"             # server recommended; cli is available for smoke tests
+SPEECHSWIFT_ENGINE="cosyvoice"        # cosyvoice recommended; qwen3 is also supported
 SPEECHSWIFT_LANGUAGE="korean"
 SPEECHSWIFT_REF_AUDIO="./voice-samples/user-reference.wav"
-SPEECHSWIFT_STREAM="1"
-SPEECHSWIFT_PROGRESS="0"             # keep short progress prompts on Edge
+SPEECHSWIFT_SERVER_HOST="127.0.0.1"
+SPEECHSWIFT_SERVER_PORT="18080"
+SPEECHSWIFT_SERVER_URL="http://127.0.0.1:18080"
+SPEECHSWIFT_PROGRESS="0"              # keep short progress prompts on Edge
 ```
 
-Local smoke test:
+Local server smoke test:
+
+```bash
+audio-server --host 127.0.0.1 --port 18080
+curl -fsS http://127.0.0.1:18080/health
+curl -fsS -X POST http://127.0.0.1:18080/speak \
+  -H 'content-type: application/json' \
+  -d '{"text":"안녕하세요. 오디오 서버 테스트입니다.","engine":"cosyvoice","language":"korean"}' \
+  -o /tmp/verbalcoding-speechswift-server.wav
+```
+
+Local CLI smoke test:
 
 ```bash
 audio speak --engine cosyvoice --language korean \
@@ -268,7 +282,7 @@ audio speak --engine cosyvoice --language korean \
   "안녕하세요. 스피치 스위프트 코지보이스 테스트입니다."
 ```
 
-In current Mac mini testing, CosyVoice worked but was slower than Edge: first model download took about 105s; warm CLI generation for a short Korean sentence took about 6.9s wall time, with model-reported synthesis time 2.94s for 1.68s of audio. Qwen3-TTS voice cloning also worked, but warm CLI startup was much slower in this setup (about 62.5s wall time, first streamed chunk around 47.6s). Keep Edge for quick progress/backchannel prompts and reserve SpeechSwift/CosyVoice for longer or higher-value final answers.
+In current Mac mini testing, CosyVoice worked but was slower than Edge. CLI mode took about 6.9s wall time for 1.68s of audio. Server mode avoided repeated CLI process startup but still returns a completed WAV from `/speak`; warm requests were about 6.1s for roughly 3.0s of Korean audio. The current speech-swift `audio-server` `/speak` route does not expose the CLI `--voice-sample` cloning parameter, so it is useful as a warm local CosyVoice backend but not yet a true cloned-voice server path. Keep Edge for quick progress/backchannel prompts.
 
 ## Latency metrics
 

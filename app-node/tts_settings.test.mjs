@@ -58,6 +58,8 @@ test('buildTtsSettings normalizes speech-swift CosyVoice settings', () => {
     SPEECHSWIFT_TIMEOUT_MS: '120000',
     SPEECHSWIFT_STREAM: '1',
     SPEECHSWIFT_PROGRESS: '0',
+    SPEECHSWIFT_MODE: 'server',
+    SPEECHSWIFT_SERVER_URL: 'http://127.0.0.1:18080/',
   }, root);
 
   assert.equal(settings.backend, 'speechswift');
@@ -69,6 +71,8 @@ test('buildTtsSettings normalizes speech-swift CosyVoice settings', () => {
   assert.equal(settings.speechswift.timeoutMs, 120000);
   assert.equal(settings.speechswift.stream, true);
   assert.equal(settings.speechswift.useForProgress, false);
+  assert.equal(settings.speechswift.mode, 'server');
+  assert.equal(settings.speechswift.serverUrl, 'http://127.0.0.1:18080');
 });
 
 test('buildTtsSettings falls back to edge for unsupported backend', () => {
