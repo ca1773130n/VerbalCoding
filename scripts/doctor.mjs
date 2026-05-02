@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parseKeyValueEnv } from '../app-node/install_config.mjs';
+import { autoRestartVoiceBotEnabled } from '../app-node/restart_policy.mjs';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 
@@ -63,6 +64,7 @@ ok = check('Discord bot token configured', Boolean(env.DISCORD_BOT_TOKEN || env.
 note('Allowed users configured', env.DISCORD_ALLOWED_USERS ? '[REDACTED]' : 'not set; bot may accept all users depending on config');
 note('Auto-join channels', env.AUTO_JOIN_VOICE_CHANNELS || 'default: 일반,General,general');
 note('Verbose progress default', ['1', 'true', 'yes', 'on'].includes(String(env.AGENT_VERBOSE_PROGRESS || env.VERBALCODING_VERBOSE_PROGRESS || '0').toLowerCase()) ? 'on' : 'off');
+note('Auto restart voice bot after commits', autoRestartVoiceBotEnabled(env) ? 'on' : 'off');
 note('Utterance idle wait before STT', `${env.UTTERANCE_IDLE_MS || '2000'} ms`);
 note('STT language', env.WHISPER_CPP_LANGUAGE || env.STT_LANGUAGE || 'ko');
 note('Progress/voice language', env.VOICE_LANGUAGE || env.WHISPER_CPP_LANGUAGE || env.STT_LANGUAGE || 'ko');

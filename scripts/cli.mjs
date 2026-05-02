@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { applyLanguagePreset, languageStatus, normalizeLanguageKey } from '../app-node/language_config.mjs';
 import { parseKeyValueEnv } from '../app-node/install_config.mjs';
+import { AUTO_RESTART_ENV_KEY, autoRestartStatusText, normalizeAutoRestartCommand } from '../app-node/restart_policy.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ENV_PATH = path.join(ROOT, '.env');
@@ -16,12 +17,14 @@ Usage:
   verbalcoding status
   verbalcoding language <ko|en|auto>
   verbalcoding language status
+  verbalcoding restart auto <on|off|status>
   verbalcoding doctor
 
 Examples:
   npm run vc -- language en
   npm run vc -- language ko
   npm run vc -- language auto
+  npm run vc -- restart auto off
 `;
 }
 
@@ -74,6 +77,30 @@ async function main(argv = process.argv.slice(2)) {
   }
   if (command === 'status') {
     printLanguageStatus(readEnvFile());
+    console.log(autoRestartStatusText(readEnvFile()));
+    return;
+  }
+  if (command === 'restart') {
+    if (subcommand !== 'auto') {
+      console.error('Use: verbalcoding restart auto <on|off|status>');
+      process.exitCode = 2;
+      return;
+    }
+    const value = argv[2] || 'status';
+    if (value === 'status') {
+      console.log(autoRestartStatusText(readEnvFile()));
+      return;
+    }
+    const normalized = normalizeAutoRestartCommand(value);
+    if (normalized === null) {
+      console.error(`Unknown auto restart setting: ${value}`);
+      console.error('Use on, off, or status.');
+      process.exitCode = 2;
+      return;
+    }
+    upsertEnvFile(ENV_PATH, { [AUTO_RESTART_ENV_KEY]: normalized });
+    console.log(`Updated ${ENV_PATH}`);
+    console.log(autoRestartStatusText({ [AUTO_RESTART_ENV_KEY]: normalized }));
     return;
   }
   if (command === 'language') {
