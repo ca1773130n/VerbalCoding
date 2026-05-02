@@ -75,7 +75,8 @@ if (!['edge', 'openvoice', 'speechswift', 'supertonic'].includes(ttsBackend)) {
   ok = check('TTS_BACKEND value', false, 'must be edge, openvoice, speechswift, or supertonic') && ok;
 }
 if (ttsBackend === 'edge') {
-  ok = check('edge-tts', commandExists('edge-tts'), commandExists('edge-tts') || 'missing') && ok;
+  const edgeCommand = env.EDGE_TTS_COMMAND || env.TTS_EDGE_COMMAND || 'edge-tts';
+  ok = check('edge-tts', commandExists(edgeCommand), commandExists(edgeCommand) || 'missing') && ok;
 } else if (ttsBackend === 'openvoice') {
   ok = check('Python for OpenVoice', commandExists('python3'), commandExists('python3') || 'missing') && ok;
   const openvoiceDir = path.resolve(ROOT, env.OPENVOICE_DIR || './vendor/OpenVoice');

@@ -186,6 +186,7 @@ const voiceCloneCapture = createVoiceCloneCaptureState({ defaultTargetPath: sett
 
 let connection = null;
 let activeVoiceChannelId = '';
+let activeTranscriptChannelId = '';
 let player = createAudioPlayer();
 let speaking = false;
 let processing = false;
@@ -500,7 +501,7 @@ function spokenResultOnly(userPrompt, answer, language = settings.voiceLanguage)
 async function sendText(text) {
   return sendDiscordText({
     client,
-    channelId: settings.transcriptChannelId,
+    channelId: activeTranscriptChannelId || settings.transcriptChannelId,
     text,
     log,
     warn,
@@ -866,7 +867,9 @@ async function handleTextAgentMessage(msg, text, { speakResponse = false } = {})
   activeProgressAbortController = progressController;
   activeProgressSignal = progressController.signal;
   activeProgressLastEventAt = Date.now();
+  const previousTranscriptChannelId = activeTranscriptChannelId;
   const session = resolveProjectSessionForChannel(msg.channelId);
+  activeTranscriptChannelId = session?.transcriptChannelId || msg.channelId;
   const selectedAgentAdapter = adapterForProjectSession(session);
   const projectContext = projectSessionContextText(session);
   const plan = {
@@ -901,6 +904,7 @@ async function handleTextAgentMessage(msg, text, { speakResponse = false } = {})
     if (activeProgressAbortController?.signal === progressController.signal) activeProgressAbortController = null;
     clearProgressSpeechBatch(progressController.signal);
     if (currentAbortController === controller) currentAbortController = null;
+    activeTranscriptChannelId = previousTranscriptChannelId;
     processing = false;
   }
 }
@@ -1154,6 +1158,9 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
   const controller = new AbortController();
   currentAbortController = controller;
   const signal = controller.signal;
+  const sessionForVoice = resolveProjectSessionForChannel(activeVoiceChannelId || settings.transcriptChannelId);
+  const previousTranscriptChannelId = activeTranscriptChannelId;
+  activeTranscriptChannelId = sessionForVoice?.transcriptChannelId || settings.transcriptChannelId;
   try {
     const runtimeLanguage = reloadRuntimeLanguageFromEnv();
     if (runtimeLanguage.changed) {
@@ -1162,6 +1169,9 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
       metricsTurn?.finish({ status: 'drop_stale_language_change' });
       return;
     }
+    const session = resolveProjectSessionForChannel(activeVoiceChannelId || settings.transcriptChannelId);
+    activeTranscriptChannelId = session?.transcriptChannelId || settings.transcriptChannelId;
+    log('voice turn text target', session ? `project=${session.slug}` : 'project=default', 'channel', activeTranscriptChannelId ? 'project-or-default' : 'none');
     log('transcribing', userId, wavPath, 'pcmBytes', pcmBytes, 'segments', segments, 'turn', turnId);
     const sttNotice = formatSttStartMessage(settings.voiceLanguage);
     await sendText(sttNotice);
@@ -1211,7 +1221,6 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
         return;
       }
     }
-    const session = resolveProjectSessionForChannel(activeVoiceChannelId || settings.transcriptChannelId);
     const selectedAgentAdapter = adapterForProjectSession(session);
     const projectContext = projectSessionContextText(session);
     const plan = {
@@ -1305,6 +1314,7 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     if (activeProgressSignal === activeProgressAbortController?.signal) activeProgressSignal = null;
     activeProgressAbortController = null;
     if (currentAbortController === controller) currentAbortController = null;
+    activeTranscriptChannelId = previousTranscriptChannelId;
     interruptedTurns.delete(turnId);
     if (activeTurnId === turnId) activeTurnId = 0;
     processing = false;
