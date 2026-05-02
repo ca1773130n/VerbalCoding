@@ -97,10 +97,37 @@ npm run vc -- status              # show STT language, progress language, and TT
 npm run vc -- language en         # English STT + English progress/TTS voice
 npm run vc -- language ko         # Korean STT + Korean progress/TTS voice
 npm run vc -- language auto       # Whisper auto-detect STT + English progress/TTS voice
+npm run vc -- restart auto status # show commit-time voice-bot auto-restart setting
+npm run vc -- restart auto on     # enable commit-time voice-bot auto-restart
+npm run vc -- restart auto off    # disable it; this is the default
 npm run vc -- doctor              # run the redacted doctor check
+npm run mcp                       # run the stdio MCP server for Hermes/other MCP clients
 ```
 
 Language changes update `.env`; restart the bridge with `./run.sh` or the running process manager for them to take effect.
+
+## MCP server
+
+VerbalCoding ships a stdio MCP server so Hermes Agent or any MCP client can control the bridge through tools instead of relying on skills or free-form shell commands.
+
+Hermes config example:
+
+```yaml
+mcp_servers:
+  verbalcoding:
+    command: "node"
+    args: ["/Users/neo/Developer/Projects/VerbalCoding/scripts/mcp-server.mjs"]
+    timeout: 120
+    connect_timeout: 30
+```
+
+Exposed MCP tools:
+
+- `status` — report bridge/config status without secrets.
+- `doctor` — run the redacted doctor check.
+- `set_auto_restart` — enable/disable commit-time voice-bot auto-restart; default is off.
+- `set_language` — update STT/progress/TTS language together.
+- `start`, `stop`, `restart` — control the long-running Discord voice bridge.
 
 ## Fresh install checklist
 

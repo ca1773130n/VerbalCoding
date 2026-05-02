@@ -4,13 +4,15 @@
   "private": true,
   "type": "module",
   "bin": {
-    "verbalcoding": "scripts/cli.mjs"
+    "verbalcoding": "scripts/cli.mjs",
+    "verbalcoding-mcp": "scripts/mcp-server.mjs"
   },
   "scripts": {
     "start": "node app-node/main.mjs",
     "setup": "node scripts/install.mjs",
     "doctor": "node scripts/doctor.mjs",
     "vc": "node scripts/cli.mjs",
+    "mcp": "node scripts/mcp-server.mjs",
     "test": "node --test app-node/*.test.mjs"
   },
   "dependencies": {
