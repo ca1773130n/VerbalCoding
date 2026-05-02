@@ -1403,16 +1403,26 @@ async function connectTo(channel) {
 }
 
 async function autoJoin() {
-  for (const guild of client.guilds.cache.values()) {
-    const channels = await guild.channels.fetch();
-    for (const ch of channels.values()) {
-      if (ch?.isVoiceBased?.() && settings.autoJoinVoiceChannels.includes(ch.name.toLowerCase())) {
-        await connectTo(ch);
-        return;
+  const attempted = [];
+  for (const preferredName of settings.autoJoinVoiceChannels) {
+    for (const guild of client.guilds.cache.values()) {
+      const channels = await guild.channels.fetch();
+      for (const ch of channels.values()) {
+        if (!ch?.isVoiceBased?.() || ch.name.toLowerCase() !== preferredName) continue;
+        attempted.push(`${guild.name}/${ch.name}`);
+        try {
+          await connectTo(ch);
+          return;
+        } catch (e) {
+          warn('auto-join failed; trying next configured voice channel', guild.name, ch.name, e?.stack || e);
+          try { connection?.destroy(); } catch {}
+          connection = null;
+          activeVoiceChannelId = '';
+        }
       }
     }
   }
-  warn('No auto-join channel found', settings.autoJoinVoiceChannels);
+  warn('No auto-join channel found or reachable', settings.autoJoinVoiceChannels, 'attempted', attempted);
 }
 
 function consumeRestartNotice() {

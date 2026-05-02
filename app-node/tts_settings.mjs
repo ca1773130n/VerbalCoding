@@ -25,6 +25,7 @@ export function buildTtsSettings(env = process.env, root = process.cwd()) {
     volume: positiveNumber(env.TTS_VOLUME, 1.0),
     progressCacheDir: resolveUnderRoot(root, env.PROGRESS_TTS_CACHE_DIR, path.join('.cache', 'progress-tts')),
     edge: {
+      command: env.EDGE_TTS_COMMAND || env.TTS_EDGE_COMMAND || 'edge-tts',
       voice: env.TTS_VOICE || 'ko-KR-SunHiNeural',
       rate: env.TTS_RATE || '+10%',
     },

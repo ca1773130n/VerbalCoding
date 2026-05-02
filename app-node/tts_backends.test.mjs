@@ -90,6 +90,24 @@ test('Edge backend reads dynamic voice before each TTS request', async () => {
   assert.deepEqual(backend.cacheKeyParts(), ['edge', 'en-US-GuyNeural', '+10%']);
 });
 
+test('Edge backend honors configurable command path', async () => {
+  const calls = [];
+  const settings = baseSettings();
+  settings.edge.command = '/project/.venv/bin/edge-tts';
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 123 }),
+    execFileAsync: async (cmd, args, options) => {
+      calls.push({ cmd, args, options });
+    },
+  });
+
+  await backend.synthesize('안녕하세요', { kind: 'final' });
+
+  assert.equal(calls[0].cmd, '/project/.venv/bin/edge-tts');
+});
+
 test('OpenVoice final synthesis calls Python wrapper with reference audio and output path', async () => {
   const calls = [];
   const settings = { ...baseSettings(), backend: 'openvoice' };

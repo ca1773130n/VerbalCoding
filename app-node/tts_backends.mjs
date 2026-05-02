@@ -95,6 +95,7 @@ export function createEdgeTtsBackend(settings, deps = {}) {
   const edge = settings.edge || {};
   const voiceProvider = deps.voiceProvider || (() => edge.voice);
   const currentVoice = () => voiceProvider() || edge.voice;
+  const edgeCommand = edge.command || 'edge-tts';
   return {
     name: 'edge',
     outputExtension: 'mp3',
@@ -103,7 +104,7 @@ export function createEdgeTtsBackend(settings, deps = {}) {
     },
     async synthesize(text, { signal } = {}) {
       const out = uniquePath(tmpdir, 'verbalcoding-edge', 'mp3');
-      await execFileAsync('edge-tts', ['-v', currentVoice(), '--rate', edge.rate, '-t', text, '--write-media', out], execOptions({
+      await execFileAsync(edgeCommand, ['-v', currentVoice(), '--rate', edge.rate, '-t', text, '--write-media', out], execOptions({
         timeout: 60000,
         maxBuffer: 2 * 1024 * 1024,
       }, signal));

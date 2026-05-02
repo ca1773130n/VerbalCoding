@@ -9,11 +9,19 @@ test('buildTtsSettings defaults to Edge TTS with Korean voice', () => {
   const settings = buildTtsSettings({}, root);
 
   assert.equal(settings.backend, 'edge');
+  assert.equal(settings.edge.command, 'edge-tts');
   assert.equal(settings.edge.voice, 'ko-KR-SunHiNeural');
   assert.equal(settings.edge.rate, '+10%');
   assert.equal(settings.maxChars, 495);
   assert.equal(settings.volume, 1.0);
   assert.equal(settings.progressCacheDir, path.join(root, '.cache', 'progress-tts'));
+});
+
+test('buildTtsSettings allows explicit Edge TTS command path', () => {
+  const root = '/project';
+  const settings = buildTtsSettings({ EDGE_TTS_COMMAND: '/project/.venv/bin/edge-tts' }, root);
+
+  assert.equal(settings.edge.command, '/project/.venv/bin/edge-tts');
 });
 
 test('buildTtsSettings normalizes OpenVoice settings and keeps Edge fallback', () => {
