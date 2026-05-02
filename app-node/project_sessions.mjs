@@ -113,13 +113,16 @@ function parseVoiceOption(parts) {
 
 export function parseProjectSessionCommand(content) {
   const text = String(content || '').trim();
-  const match = /^!(?:project-session|session)\s+(new|create|use|bind|status|list|reset)\b\s*(.*)$/i.exec(text);
-  if (!match) return null;
+  const match = /^!(?:project-session|session)\s+(new|create|use|bind|attach-voice|voice|status|list|reset)\b\s*(.*)$/i.exec(text);
+  if (!match) return parseNaturalVoiceAttachCommand(text);
   const action = match[1].toLowerCase();
   const rest = match[2].trim();
   if (action === 'status' || action === 'list' || action === 'reset') return { action, rest };
   const parsed = parseVoiceOption(tokenParts(rest));
   if (action === 'use' || action === 'bind') return { action: 'use', name: parsed.parts.join(' '), voice: parsed.voice };
+  if (action === 'attach-voice' || action === 'voice') {
+    return { action: 'attach-voice', voice: parsed.voice || parsed.parts.join(' ') };
+  }
   return {
     action: 'new',
     name: parsed.parts[0] || '',
@@ -127,4 +130,15 @@ export function parseProjectSessionCommand(content) {
     mcpContext: parsed.parts.slice(2).join(' '),
     voice: parsed.voice,
   };
+}
+
+export function parseNaturalVoiceAttachCommand(content) {
+  const text = String(content || '').trim();
+  if (!text || text.startsWith('!')) return null;
+  const compact = text.replace(/\s+/g, ' ');
+  const hasVoiceTarget = /(음성|보이스)\s*(채널|세션)|voice\s*(channel|session)|vc\b/i.test(compact);
+  const asksAttach = /(붙여\s*(줘|줘라|달라|주세요|주라)|연결\s*(해|해줘|해줘라|해주세요|시켜|시켜줘)|attach|connect)/i.test(compact);
+  if (!hasVoiceTarget || !asksAttach) return null;
+  const explicit = /(?:--voice(?:-channel)?|--vc)\s+(["']?)([^"'\s][^"']*?)\1(?:\s|$)/i.exec(compact);
+  return { action: 'attach-voice', voice: explicit?.[2]?.trim() || '' };
 }

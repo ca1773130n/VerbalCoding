@@ -1480,8 +1480,52 @@ async function voiceChannelLabel(guild, channelId) {
   }
 }
 
+async function resolveVoiceChannelForAttach(msg, selector = '') {
+  if (selector) return findVoiceChannelBySelector(msg.guild, selector);
+  if (msg.member?.voice?.channel) return msg.member.voice.channel;
+  if (activeVoiceChannelId && msg.guild) {
+    try {
+      const ch = await msg.guild.channels.fetch(activeVoiceChannelId);
+      if (ch?.isVoiceBased?.()) return ch;
+    } catch {}
+  }
+  throw new Error('붙일 음성 채널을 못 찾았어. 음성채널에 들어가서 `!session attach-voice`를 치거나 `--voice "채널명"`을 붙여줘.');
+}
+
+async function attachVoiceChannelToTextSession(msg, command) {
+  const voiceChannel = await resolveVoiceChannelForAttach(msg, command.voice);
+  let session = null;
+  if (command.name) {
+    session = bindProjectSessionToChannel({ state: projectSessionsState, nameOrSlug: command.name, channelId: msg.channelId });
+  } else {
+    session = resolveProjectSessionForChannel(msg.channelId);
+    if (!session) {
+      const fallbackName = String(msg.channel?.name || `channel-${msg.channelId}`).trim() || `channel-${msg.channelId}`;
+      session = createProjectSession({
+        root: ROOT,
+        state: projectSessionsState,
+        name: fallbackName,
+        workdir: settings.agent.cwd || ROOT,
+        channelId: msg.channelId,
+        voiceChannelId: voiceChannel.id,
+        transcriptChannelId: msg.channelId,
+        mcpContext: 'Ad-hoc Discord text channel session',
+      });
+    }
+  }
+  session.transcriptChannelId = msg.channelId;
+  session.voiceChannelId = voiceChannel.id;
+  projectSessionsState.channelSessions[msg.channelId] = session.slug;
+  projectSessionsState.channelSessions[voiceChannel.id] = session.slug;
+  saveProjectSessionsState();
+  agentAdaptersBySession.delete(session.slug);
+  if (activeVoiceChannelId !== voiceChannel.id) await connectTo(voiceChannel);
+  return msg.reply(`${session.name} 세션을 이 텍스트 채널과 음성 채널 ${voiceChannel.name}에 붙였어. 이제 그 음성채널 발화의 STT/답변 텍스트는 이 채널로 가.`);
+}
+
 async function handleProjectSessionCommand(msg, command) {
   const activeSession = resolveProjectSessionForChannel(msg.channelId) || resolveProjectSessionForChannel(activeVoiceChannelId);
+  if (command.action === 'attach-voice') return void await attachVoiceChannelToTextSession(msg, command);
   if (command.action === 'status') {
     if (!activeSession) return void msg.reply(`${agentAdapter.label} 기본 세션: ${agentAdapter.readSessionId?.() || '아직 없음'}`);
     const adapter = adapterForProjectSession(activeSession);
@@ -1645,7 +1689,7 @@ client.on('messageCreate', async msg => {
     content,
     channelId: msg.channelId,
     transcriptChannelId: settings.transcriptChannelId,
-  })) {
+  }) || resolveProjectSessionForChannel(msg.channelId)) {
     await handleTextAgentMessage(msg, content, { speakResponse: false });
     return;
   }

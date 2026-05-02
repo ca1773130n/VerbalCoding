@@ -8,6 +8,7 @@ import {
   bindProjectSessionToChannel,
   createProjectSession,
   loadProjectSessions,
+  parseNaturalVoiceAttachCommand,
   parseProjectSessionCommand,
   projectSessionContextText,
   projectSessionForChannel,
@@ -54,4 +55,20 @@ test('project session command parser supports explicit voice channel selection',
   assert.deepEqual(parseProjectSessionCommand('!session use wiki --voice=LLM-Voice'), {
     action: 'use', name: 'wiki', voice: 'LLM-Voice',
   });
+  assert.deepEqual(parseProjectSessionCommand('!session attach-voice --voice "LLM-Wiki"'), {
+    action: 'attach-voice', voice: 'LLM-Wiki',
+  });
+  assert.deepEqual(parseProjectSessionCommand('!session voice LLM-Wiki'), {
+    action: 'attach-voice', voice: 'LLM-Wiki',
+  });
+});
+
+test('project session parser treats natural voice attach requests as control commands', () => {
+  assert.deepEqual(parseProjectSessionCommand('이 쓰레드에 음성 채널 붙여줘'), {
+    action: 'attach-voice', voice: '',
+  });
+  assert.deepEqual(parseNaturalVoiceAttachCommand('보이스 세션 연결해줘 --voice "LLM Wiki"'), {
+    action: 'attach-voice', voice: 'LLM Wiki',
+  });
+  assert.equal(parseNaturalVoiceAttachCommand('음성 채널 상태가 어때?'), null);
 });
