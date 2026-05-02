@@ -64,11 +64,13 @@ note('Allowed users configured', env.DISCORD_ALLOWED_USERS ? '[REDACTED]' : 'not
 note('Auto-join channels', env.AUTO_JOIN_VOICE_CHANNELS || 'default: 일반,General,general');
 note('Verbose progress default', ['1', 'true', 'yes', 'on'].includes(String(env.AGENT_VERBOSE_PROGRESS || env.VERBALCODING_VERBOSE_PROGRESS || '0').toLowerCase()) ? 'on' : 'off');
 note('Utterance idle wait before STT', `${env.UTTERANCE_IDLE_MS || '2000'} ms`);
+note('STT language', env.WHISPER_CPP_LANGUAGE || env.STT_LANGUAGE || 'ko');
+note('Progress/voice language', env.VOICE_LANGUAGE || env.WHISPER_CPP_LANGUAGE || env.STT_LANGUAGE || 'ko');
 note('Latency log path', env.LATENCY_LOG_PATH || './.logs/latency.jsonl');
 note('TTS voice fallback', env.TTS_VOICE || 'ko-KR-SunHiNeural');
 
-if (!['edge', 'openvoice'].includes(ttsBackend)) {
-  ok = check('TTS_BACKEND value', false, 'must be edge or openvoice') && ok;
+if (!['edge', 'openvoice', 'speechswift', 'supertonic'].includes(ttsBackend)) {
+  ok = check('TTS_BACKEND value', false, 'must be edge, openvoice, speechswift, or supertonic') && ok;
 }
 if (ttsBackend === 'edge') {
   ok = check('edge-tts', commandExists('edge-tts'), commandExists('edge-tts') || 'missing') && ok;
@@ -82,6 +84,15 @@ if (ttsBackend === 'edge') {
   ok = check('OpenVoice reference audio', fs.existsSync(refAudio), path.relative(ROOT, refAudio)) && ok;
   ok = check('OpenVoice synth wrapper help', spawnSync('python3', ['scripts/openvoice_synth.py', '--help'], { cwd: ROOT, encoding: 'utf8' }).status === 0, 'scripts/openvoice_synth.py') && ok;
   note('OpenVoice progress prompts', ['1', 'true', 'yes', 'on'].includes(String(env.OPENVOICE_PROGRESS || '0').toLowerCase()) ? 'openvoice' : 'edge fallback');
+} else if (ttsBackend === 'speechswift') {
+  const mode = String(env.SPEECHSWIFT_MODE || 'cli').toLowerCase() === 'server' ? 'server' : 'cli';
+  ok = check(mode === 'server' ? 'audio-server' : 'audio CLI', commandExists(mode === 'server' ? 'audio-server' : (env.SPEECHSWIFT_COMMAND || 'audio')), commandExists(mode === 'server' ? 'audio-server' : (env.SPEECHSWIFT_COMMAND || 'audio')) || 'missing') && ok;
+  note('SpeechSwift progress prompts', ['1', 'true', 'yes', 'on'].includes(String(env.SPEECHSWIFT_PROGRESS || '0').toLowerCase()) ? 'speechswift' : 'edge fallback');
+} else if (ttsBackend === 'supertonic') {
+  const supertonicCommand = env.SUPERTONIC_COMMAND || 'supertonic';
+  ok = check('supertonic CLI', commandExists(supertonicCommand), commandExists(supertonicCommand) || 'install with: python3 -m pip install supertonic') && ok;
+  note('Supertonic voice/lang/steps', `${env.SUPERTONIC_VOICE || 'M1'} / ${env.SUPERTONIC_LANGUAGE || 'ko'} / ${env.SUPERTONIC_STEPS || '2'}`);
+  note('Supertonic progress prompts', ['1', 'true', 'yes', 'on'].includes(String(env.SUPERTONIC_PROGRESS || '0').toLowerCase()) ? 'supertonic' : 'edge fallback');
 }
 
 const backendCommand = {

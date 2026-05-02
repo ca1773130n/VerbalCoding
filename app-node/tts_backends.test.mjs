@@ -32,6 +32,21 @@ function baseSettings() {
       mode: 'cli',
       serverUrl: 'http://127.0.0.1:18080',
     },
+    supertonic: {
+      command: 'supertonic',
+      voice: 'M1',
+      language: 'ko',
+      steps: 2,
+      speed: 1.08,
+      maxChunkLength: 300,
+      silenceDuration: 0.15,
+      customStylePath: '',
+      timeoutMs: 60000,
+      useForProgress: false,
+      cacheDir: '',
+      intraOpThreads: '',
+      interOpThreads: '',
+    },
   };
 }
 
@@ -55,6 +70,24 @@ test('Edge backend calls edge-tts with voice, rate, text, and output path', asyn
   assert.match(out, /^\/tmp\/verbalcoding-edge-/);
   assert.equal(calls[0].options.timeout, 60000);
   assert.deepEqual(backend.cacheKeyParts(), ['edge', 'ko-KR-InJoonNeural', '+10%']);
+});
+
+test('Edge backend reads dynamic voice before each TTS request', async () => {
+  const calls = [];
+  const backend = createTtsBackend(baseSettings(), {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 123 }),
+    voiceProvider: () => 'en-US-GuyNeural',
+    execFileAsync: async (cmd, args, options) => {
+      calls.push({ cmd, args, options });
+    },
+  });
+
+  await backend.synthesize('hello', { kind: 'final' });
+
+  assert.deepEqual(calls[0].args.slice(0, 2), ['-v', 'en-US-GuyNeural']);
+  assert.deepEqual(backend.cacheKeyParts(), ['edge', 'en-US-GuyNeural', '+10%']);
 });
 
 test('OpenVoice final synthesis calls Python wrapper with reference audio and output path', async () => {
@@ -191,6 +224,33 @@ test('SpeechSwift falls back to Edge when audio CLI fails', async () => {
   assert.ok(calls.some(call => /speech-swift failed; falling back to edge/i.test(call.warn || '')));
 });
 
+test('SpeechSwift server mode passes an AbortSignal timeout to audio-server fetch', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'speechswift', speechswift: { ...baseSettings().speechswift, mode: 'server', serverUrl: 'http://127.0.0.1:18080', timeoutMs: 50 } };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 999 }),
+    writeFileAsync: async () => {},
+    execFileAsync: async () => {},
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      return {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        arrayBuffer: async () => new Uint8Array([1, 2, 3, 4]).buffer,
+      };
+    },
+  });
+
+  await backend.synthesize('서버 음성 테스트', { kind: 'final' });
+
+  assert.equal(calls[0].url, 'http://127.0.0.1:18080/speak');
+  assert.ok(calls[0].options.signal instanceof AbortSignal);
+  assert.equal(calls[0].options.signal.aborted, false);
+});
+
 test('SpeechSwift server mode posts to audio-server and writes returned WAV', async () => {
   const calls = [];
   const settings = { ...baseSettings(), backend: 'speechswift', speechswift: { ...baseSettings().speechswift, mode: 'server', serverUrl: 'http://127.0.0.1:18080' } };
@@ -243,6 +303,67 @@ test('SpeechSwift server mode falls back to Edge when audio-server fails', async
 
   assert.ok(calls.some(call => call.cmd === 'edge-tts'));
   assert.ok(calls.some(call => /speech-swift failed; falling back to edge/i.test(call.warn || '')));
+});
+
+test('Supertonic backend calls local supertonic CLI with Korean low-latency options', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'supertonic' };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 999 }),
+    execFileAsync: async (cmd, args, options) => calls.push({ cmd, args, options }),
+  });
+
+  const out = await backend.synthesize('수퍼토닉 테스트', { kind: 'final' });
+
+  assert.equal(calls[0].cmd, 'supertonic');
+  assert.deepEqual(calls[0].args.slice(0, 6), ['tts', '수퍼토닉 테스트', '-o', calls[0].args[3], '--lang', 'ko']);
+  assert.ok(calls[0].args.includes('--voice'));
+  assert.ok(calls[0].args.includes('M1'));
+  assert.ok(calls[0].args.includes('--steps'));
+  assert.ok(calls[0].args.includes('2'));
+  assert.ok(calls[0].args.includes('--speed'));
+  assert.ok(calls[0].args.includes('1.08'));
+  assert.equal(calls[0].options.timeout, 60000);
+  assert.match(out, /^\/tmp\/verbalcoding-supertonic-/);
+  assert.deepEqual(backend.cacheKeyParts(), ['supertonic', 'supertonic', 'M1', 'ko', 2, 1.08, 300, 0.15, '']);
+});
+
+test('Supertonic progress uses Edge fallback unless explicitly enabled', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'supertonic' };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 123 }),
+    execFileAsync: async (cmd, args) => calls.push({ cmd, args }),
+  });
+
+  await backend.synthesize('진행 안내', { kind: 'progress' });
+
+  assert.equal(calls[0].cmd, 'edge-tts');
+});
+
+test('Supertonic falls back to Edge when local CLI fails', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'supertonic' };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 123 }),
+    warn: (...args) => calls.push({ warn: args.join(' ') }),
+    execFileAsync: async (cmd, args) => {
+      calls.push({ cmd, args });
+      if (cmd === 'supertonic') throw new Error('supertonic missing');
+    },
+  });
+
+  await backend.synthesize('fallback', { kind: 'final' });
+
+  assert.ok(calls.some(call => call.cmd === 'supertonic'));
+  assert.ok(calls.some(call => call.cmd === 'edge-tts'));
+  assert.ok(calls.some(call => /supertonic failed; falling back to edge/i.test(call.warn || '')));
 });
 
 test('TTS backends omit signal option when no AbortSignal is provided', async () => {

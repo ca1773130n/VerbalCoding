@@ -30,9 +30,16 @@ async function main() {
     const allowedUsers = await ask('Allowed Discord user IDs, comma-separated', process.env.DISCORD_ALLOWED_USERS || '');
     const autoJoinVoiceChannels = await ask('Auto-join voice channel names', process.env.AUTO_JOIN_VOICE_CHANNELS || '일반,General,general');
     const transcriptChannelId = await ask('Transcript text channel/thread ID', process.env.TRANSCRIPT_CHANNEL_ID || '');
-    const ttsBackend = await ask('TTS backend: edge/openvoice', process.env.TTS_BACKEND || 'edge');
+    const language = await ask('Default voice language: ko/en/auto', process.env.VOICE_LANGUAGE || process.env.WHISPER_CPP_LANGUAGE || process.env.STT_LANGUAGE || 'ko');
+    const ttsBackend = await ask('TTS backend: edge/openvoice/speechswift/supertonic', process.env.TTS_BACKEND || 'edge');
     const ttsVoice = await ask('TTS voice', process.env.TTS_VOICE || 'ko-KR-SunHiNeural');
     const ttsRate = await ask('TTS rate', process.env.TTS_RATE || '+10%');
+    const ttsVolume = await ask('TTS playback volume', process.env.TTS_VOLUME || '1.0');
+    const supertonicCommand = await ask('Supertonic command', process.env.SUPERTONIC_COMMAND || 'supertonic');
+    const supertonicVoice = await ask('Supertonic voice', process.env.SUPERTONIC_VOICE || 'M1');
+    const supertonicLanguage = await ask('Supertonic language', process.env.SUPERTONIC_LANGUAGE || 'ko');
+    const supertonicSteps = await ask('Supertonic steps', process.env.SUPERTONIC_STEPS || '2');
+    const supertonicSpeed = await ask('Supertonic speed', process.env.SUPERTONIC_SPEED || '1.0');
     const openvoiceDir = await ask('OpenVoice repo dir', process.env.OPENVOICE_DIR || './vendor/OpenVoice');
     const openvoiceVenv = await ask('OpenVoice venv dir', process.env.OPENVOICE_VENV || './.venv-openvoice');
     const openvoiceRefAudio = await ask('OpenVoice reference audio path', process.env.OPENVOICE_REF_AUDIO || './voice-samples/user-reference.wav');
@@ -49,9 +56,16 @@ async function main() {
       allowedUsers,
       autoJoinVoiceChannels,
       transcriptChannelId,
+      language,
       ttsBackend,
       ttsVoice,
       ttsRate,
+      ttsVolume,
+      supertonicCommand,
+      supertonicVoice,
+      supertonicLanguage,
+      supertonicSteps,
+      supertonicSpeed,
       openvoiceDir,
       openvoiceVenv,
       openvoiceRefAudio,

@@ -1,8 +1,12 @@
 const DEFAULT_MAX_CHARS = 450;
 
+function hasSpeakableText(text) {
+  return /[\p{L}\p{N}]/u.test(String(text || ''));
+}
+
 export function splitForTTS(text, maxChars = DEFAULT_MAX_CHARS) {
   const normalized = String(text || '').replace(/\s+/g, ' ').trim();
-  if (!normalized) return [];
+  if (!normalized || !hasSpeakableText(normalized)) return [];
   const limit = Math.max(1, Number(maxChars) || DEFAULT_MAX_CHARS);
 
   const sentences = normalized.match(/[^.!?。！？…]+[.!?。！？…]*|.+$/gu) || [normalized];
@@ -10,11 +14,11 @@ export function splitForTTS(text, maxChars = DEFAULT_MAX_CHARS) {
 
   for (const rawSentence of sentences) {
     const sentence = rawSentence.trim();
-    if (!sentence) continue;
+    if (!sentence || !hasSpeakableText(sentence)) continue;
     if (sentence.length <= limit) {
       chunks.push(sentence);
     } else {
-      chunks.push(...splitLongSentence(sentence, limit));
+      chunks.push(...splitLongSentence(sentence, limit).filter(hasSpeakableText));
     }
   }
   return chunks;

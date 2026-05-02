@@ -15,6 +15,7 @@ test('normalizeInstallAnswers maps supported harnesses to backend env', () => {
     allowedUsers: '111,222',
     autoJoinVoiceChannels: '일반,General',
     transcriptChannelId: '333',
+    language: 'en',
     ttsVoice: '',
     ttsRate: '',
     requireWakeWord: false,
@@ -26,8 +27,15 @@ test('normalizeInstallAnswers maps supported harnesses to backend env', () => {
   assert.equal(answers.AUTO_JOIN_VOICE_CHANNELS, '일반,General');
   assert.equal(answers.TRANSCRIPT_CHANNEL_ID, '333');
   assert.equal(answers.TTS_BACKEND, 'edge');
-  assert.equal(answers.TTS_VOICE, 'ko-KR-SunHiNeural');
+  assert.equal(answers.VOICE_LANGUAGE, 'en');
+  assert.equal(answers.WHISPER_CPP_LANGUAGE, 'en');
+  assert.equal(answers.STT_LANGUAGE, 'en');
+  assert.equal(answers.TTS_VOICE, 'en-US-GuyNeural');
   assert.equal(answers.TTS_RATE, '+10%');
+  assert.equal(answers.TTS_VOLUME, '1.0');
+  assert.equal(answers.SUPERTONIC_COMMAND, 'supertonic');
+  assert.equal(answers.SUPERTONIC_SPEED, '1.0');
+  assert.equal(answers.SUPERTONIC_LANGUAGE, 'ko');
   assert.equal(answers.OPENVOICE_LANGUAGE, 'KR');
   assert.equal(answers.REQUIRE_WAKE_WORD, '0');
   assert.equal(answers.UTTERANCE_IDLE_MS, '2000');
@@ -38,13 +46,19 @@ test('buildEnvFile writes configurable CLI harness and Discord settings without 
     AGENT_BACKEND: 'custom',
     AGENT_LABEL: 'My Harness',
     AGENT_COMMAND: 'my-harness run --json',
-    TTS_BACKEND: 'openvoice',
+    VOICE_LANGUAGE: 'auto',
+    WHISPER_CPP_LANGUAGE: 'auto',
+    STT_LANGUAGE: 'auto',
+    TTS_BACKEND: 'supertonic',
+    SUPERTONIC_VOICE: 'M4',
+    SUPERTONIC_STEPS: '3',
     DISCORD_BOT_TOKEN: 'token-abc',
     DISCORD_ALLOWED_USERS: '111',
     AUTO_JOIN_VOICE_CHANNELS: '일반',
     TRANSCRIPT_CHANNEL_ID: '222',
     TTS_VOICE: 'ko-KR-SunHiNeural',
     TTS_RATE: '+10%',
+    TTS_VOLUME: '1.6',
     REQUIRE_WAKE_WORD: '0',
     OPENVOICE_REF_AUDIO: './voice-samples/me.wav',
   });
@@ -53,7 +67,13 @@ test('buildEnvFile writes configurable CLI harness and Discord settings without 
   assert.equal(parsed.AGENT_BACKEND, 'custom');
   assert.equal(parsed.AGENT_LABEL, 'My Harness');
   assert.equal(parsed.AGENT_COMMAND, 'my-harness run --json');
-  assert.equal(parsed.TTS_BACKEND, 'openvoice');
+  assert.equal(parsed.TTS_BACKEND, 'supertonic');
+  assert.equal(parsed.VOICE_LANGUAGE, 'auto');
+  assert.equal(parsed.WHISPER_CPP_LANGUAGE, 'auto');
+  assert.equal(parsed.STT_LANGUAGE, 'auto');
+  assert.equal(parsed.SUPERTONIC_VOICE, 'M4');
+  assert.equal(parsed.SUPERTONIC_STEPS, '3');
+  assert.equal(parsed.TTS_VOLUME, '1.6');
   assert.equal(parsed.OPENVOICE_REF_AUDIO, './voice-samples/me.wav');
   assert.equal(parsed.DISCORD_BOT_TOKEN, 'token-abc');
   assert.equal(parsed.REQUIRE_WAKE_WORD, '0');

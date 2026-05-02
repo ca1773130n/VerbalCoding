@@ -1,3 +1,5 @@
+import { languagePreset, normalizeLanguageKey } from './language_config.mjs';
+
 export const SUPPORTED_HARNESSES = [
   'hermes',
   'claude-code',
@@ -17,18 +19,32 @@ function clean(value, fallback = '') {
 export function normalizeInstallAnswers(input = {}) {
   const harness = clean(input.harness || input.AGENT_BACKEND, 'hermes').toLowerCase();
   const normalizedHarness = SUPPORTED_HARNESSES.includes(harness) ? harness : 'custom';
+  const language = normalizeLanguageKey(input.language || input.VOICE_LANGUAGE || input.WHISPER_CPP_LANGUAGE || input.STT_LANGUAGE || 'ko');
+  const preset = languagePreset(language);
   const out = {
     AGENT_BACKEND: normalizedHarness,
     DISCORD_BOT_TOKEN: clean(input.discordBotToken || input.DISCORD_BOT_TOKEN),
     DISCORD_ALLOWED_USERS: clean(input.allowedUsers || input.DISCORD_ALLOWED_USERS),
     AUTO_JOIN_VOICE_CHANNELS: clean(input.autoJoinVoiceChannels || input.AUTO_JOIN_VOICE_CHANNELS, '일반,General,general'),
     TRANSCRIPT_CHANNEL_ID: clean(input.transcriptChannelId || input.TRANSCRIPT_CHANNEL_ID),
-    TTS_BACKEND: ['edge', 'openvoice'].includes(clean(input.ttsBackend || input.TTS_BACKEND, 'edge').toLowerCase())
+    TTS_BACKEND: ['edge', 'openvoice', 'speechswift', 'supertonic'].includes(clean(input.ttsBackend || input.TTS_BACKEND, 'edge').toLowerCase())
       ? clean(input.ttsBackend || input.TTS_BACKEND, 'edge').toLowerCase()
       : 'edge',
-    TTS_VOICE: clean(input.ttsVoice || input.TTS_VOICE, 'ko-KR-SunHiNeural'),
+    VOICE_LANGUAGE: clean(input.voiceLanguage || input.VOICE_LANGUAGE, preset.voiceLanguage),
+    WHISPER_CPP_LANGUAGE: clean(input.whisperLanguage || input.WHISPER_CPP_LANGUAGE || input.STT_LANGUAGE, preset.sttLanguage),
+    STT_LANGUAGE: clean(input.sttLanguage || input.STT_LANGUAGE || input.WHISPER_CPP_LANGUAGE, preset.sttLanguage),
+    TTS_VOICE: clean(input.ttsVoice || input.TTS_VOICE, preset.ttsVoice),
     TTS_RATE: clean(input.ttsRate || input.TTS_RATE, '+10%'),
     TTS_MAX_CHARS: clean(input.ttsMaxChars || input.TTS_MAX_CHARS, '495'),
+    TTS_VOLUME: clean(input.ttsVolume || input.TTS_VOLUME, '1.0'),
+    SUPERTONIC_COMMAND: clean(input.supertonicCommand || input.SUPERTONIC_COMMAND, 'supertonic'),
+    SUPERTONIC_VOICE: clean(input.supertonicVoice || input.SUPERTONIC_VOICE, 'M1'),
+    SUPERTONIC_LANGUAGE: clean(input.supertonicLanguage || input.SUPERTONIC_LANGUAGE, 'ko'),
+    SUPERTONIC_STEPS: clean(input.supertonicSteps || input.SUPERTONIC_STEPS, '2'),
+    SUPERTONIC_SPEED: clean(input.supertonicSpeed || input.SUPERTONIC_SPEED, '1.0'),
+    SUPERTONIC_MAX_CHUNK_LENGTH: clean(input.supertonicMaxChunkLength || input.SUPERTONIC_MAX_CHUNK_LENGTH, '300'),
+    SUPERTONIC_SILENCE_DURATION: clean(input.supertonicSilenceDuration || input.SUPERTONIC_SILENCE_DURATION, '0.15'),
+    SUPERTONIC_PROGRESS: input.supertonicProgress === true || input.SUPERTONIC_PROGRESS === '1' ? '1' : '0',
     OPENVOICE_DIR: clean(input.openvoiceDir || input.OPENVOICE_DIR, './vendor/OpenVoice'),
     OPENVOICE_VENV: clean(input.openvoiceVenv || input.OPENVOICE_VENV, './.venv-openvoice'),
     OPENVOICE_REF_AUDIO: clean(input.openvoiceRefAudio || input.OPENVOICE_REF_AUDIO, './voice-samples/user-reference.wav'),
@@ -62,10 +78,22 @@ export function buildEnvFile(values = {}) {
     'AGENT_BACKEND',
     'AGENT_LABEL',
     'AGENT_COMMAND',
+    'VOICE_LANGUAGE',
+    'WHISPER_CPP_LANGUAGE',
+    'STT_LANGUAGE',
     'TTS_BACKEND',
     'TTS_VOICE',
     'TTS_RATE',
     'TTS_MAX_CHARS',
+    'TTS_VOLUME',
+    'SUPERTONIC_COMMAND',
+    'SUPERTONIC_VOICE',
+    'SUPERTONIC_LANGUAGE',
+    'SUPERTONIC_STEPS',
+    'SUPERTONIC_SPEED',
+    'SUPERTONIC_MAX_CHUNK_LENGTH',
+    'SUPERTONIC_SILENCE_DURATION',
+    'SUPERTONIC_PROGRESS',
     'OPENVOICE_DIR',
     'OPENVOICE_VENV',
     'OPENVOICE_REF_AUDIO',

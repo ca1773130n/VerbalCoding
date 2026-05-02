@@ -3,10 +3,14 @@
   "version": "0.2.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "verbalcoding": "scripts/cli.mjs"
+  },
   "scripts": {
     "start": "node app-node/main.mjs",
     "setup": "node scripts/install.mjs",
     "doctor": "node scripts/doctor.mjs",
+    "vc": "node scripts/cli.mjs",
     "test": "node --test app-node/*.test.mjs"
   },
   "dependencies": {

@@ -47,7 +47,6 @@ def main() -> int:
     try:
         import torch  # type: ignore
         from melo.api import TTS  # type: ignore
-        from openvoice import se_extractor  # type: ignore
         from openvoice.api import ToneColorConverter  # type: ignore
     except Exception as exc:  # pragma: no cover - depends on optional env
         fail(
@@ -71,8 +70,9 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="verbalcoding-openvoice-") as tmp:
         tmp_wav = Path(tmp) / "base.wav"
         tone_color_converter = ToneColorConverter(str(config), device=device)
+        tone_color_converter.watermark_model = None
         tone_color_converter.load_ckpt(str(checkpoint))
-        target_se, _ = se_extractor.get_se(str(ref_audio), tone_color_converter, vad=True)
+        target_se = tone_color_converter.extract_se([str(ref_audio)])
 
         model = TTS(language=args.language, device=device)
         speaker_ids = model.hps.data.spk2id

@@ -28,9 +28,38 @@ import {
 } from './latency_metrics.mjs';
 import { splitForTTS } from './tts_chunks.mjs';
 import { playChunkedTTSWithPrefetch } from './tts_prefetch.mjs';
+import { progressCategory, summarizeProgressEvents, formatProgressMessage } from './progress_speech.mjs';
 import { buildTtsSettings } from './tts_settings.mjs';
 import { createTtsBackend } from './tts_backends.mjs';
+import {
+  applyTtsVoiceSelectionToEnv,
+  defaultTtsVoiceConfig,
+  effectiveTtsVoiceSelection,
+  preferredVoiceTypeForLanguage,
+  readTtsVoiceConfig,
+  updateTtsVoiceConfig,
+  voiceCommandFromTranscript,
+  writeTtsVoiceConfig,
+} from './tts_voice_config.mjs';
 import { createBridgeLogger, createTransientErrorReporter, isTransientNetworkError } from './bridge_logger.mjs';
+import { createBridgeState } from './bridge_state.mjs';
+import { sendDiscordText } from './discord_text.mjs';
+import { progressTtsCacheFileName } from './progress_cache.mjs';
+import { shouldPassWhisperLanguage, voiceLanguageCommandFromTranscript, languagePreset } from './language_config.mjs';
+import { formatRestartCompleteNotice, formatRestartShutdownNotice } from './restart_notice.mjs';
+import {
+  agentAnswerHeader,
+  emptyAgentAnswer,
+  formatSttResultMessage,
+  formatSttStartMessage,
+  formatVoiceErrorMessage,
+  formatWakeRejectedMessage,
+  sensitivityChangedSpeech,
+  sensitivityStatusTextForLanguage,
+  verboseChangedSpeech,
+  verboseStatusTextForLanguage,
+} from './voice_messages.mjs';
+import { enqueueDeferredUtterance } from './deferred_queue.mjs';
 import {
   createVoiceCloneCaptureState,
   saveVoiceCloneReference,
@@ -87,6 +116,35 @@ function loadZshrcExports() {
 loadZshrcExports();
 loadDotEnv();
 
+const TTS_VOICE_CONFIG_PATH = process.env.TTS_VOICE_CONFIG || path.join(ROOT, 'config', 'tts-voices.json');
+function ensureTtsVoiceConfig() {
+  if (!fs.existsSync(TTS_VOICE_CONFIG_PATH)) {
+    writeTtsVoiceConfig(TTS_VOICE_CONFIG_PATH, defaultTtsVoiceConfig());
+  }
+  return readTtsVoiceConfig(TTS_VOICE_CONFIG_PATH);
+}
+function applyVoiceConfigToProcessEnv(config = ensureTtsVoiceConfig()) {
+  const selection = effectiveTtsVoiceSelection(config, {});
+  const configuredVoiceLanguage = process.env.VOICE_LANGUAGE;
+  const nextEnv = applyTtsVoiceSelectionToEnv(process.env, selection);
+  if (configuredVoiceLanguage) nextEnv.VOICE_LANGUAGE = configuredVoiceLanguage;
+  for (const [key, value] of Object.entries(nextEnv)) process.env[key] = value;
+  return { config, selection };
+}
+function reloadRuntimeLanguageFromEnv() {
+  const previousWhisperLanguage = settings?.whisperLanguage;
+  const previousVoiceLanguage = settings?.voiceLanguage;
+  loadDotEnv();
+  settings.whisperLanguage = process.env.WHISPER_CPP_LANGUAGE || process.env.STT_LANGUAGE || settings.whisperLanguage || 'ko';
+  settings.voiceLanguage = process.env.VOICE_LANGUAGE || process.env.WHISPER_CPP_LANGUAGE || process.env.STT_LANGUAGE || settings.voiceLanguage || 'ko';
+  const changed = previousWhisperLanguage !== undefined && (
+    previousWhisperLanguage !== settings.whisperLanguage || previousVoiceLanguage !== settings.voiceLanguage
+  );
+  if (changed) discardVoiceInputQueues('external-language-change');
+  return { whisperLanguage: settings.whisperLanguage, voiceLanguage: settings.voiceLanguage, changed };
+}
+applyVoiceConfigToProcessEnv();
+
 const settings = {
   token: process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN,
   allowedUsers: new Set((process.env.DISCORD_ALLOWED_USERS || '').split(/[;,]/).map(s => s.trim()).filter(Boolean)),
@@ -94,6 +152,8 @@ const settings = {
   transcriptChannelId: (process.env.TRANSCRIPT_CHANNEL_ID || '1497890694730219540').trim(),
   whisperBin: process.env.WHISPER_CPP_BIN || 'whisper-cli',
   whisperModel: process.env.WHISPER_CPP_MODEL || path.join(ROOT, 'models', 'ggml-small-q5_1.bin'),
+  whisperLanguage: process.env.WHISPER_CPP_LANGUAGE || process.env.STT_LANGUAGE || 'ko',
+  voiceLanguage: process.env.VOICE_LANGUAGE || process.env.WHISPER_CPP_LANGUAGE || process.env.STT_LANGUAGE || 'ko',
   tts: buildTtsSettings(process.env, ROOT),
   requireWakeWord: ['1', 'true', 'yes'].includes((process.env.REQUIRE_WAKE_WORD || '0').toLowerCase()),
   wakeWords: (process.env.WAKE_WORDS || 'hermes,헤르메스,허미스').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
@@ -109,7 +169,7 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
   partials: [Partials.Channel],
 });
-const ttsBackend = createTtsBackend(settings.tts, { execFileAsync, log, warn });
+let ttsBackend = createTtsBackend(settings.tts, { execFileAsync, log, warn, voiceProvider: () => settings.tts.edge.voice });
 const voiceCloneCapture = createVoiceCloneCaptureState({ defaultTargetPath: settings.tts.openvoice.refAudio });
 
 let connection = null;
@@ -120,21 +180,26 @@ let activeTurnId = 0;
 let currentAbortController = null;
 const interruptedTurns = new Set();
 const activeStreams = new Map();
-const pendingUtterances = new Map();
-const MIN_UTTERANCE_SECONDS = Number(process.env.MIN_UTTERANCE_SECONDS || '1.0');
+let bridgeState = null;
+const MAX_DEFERRED_PROCESSING_UTTERANCES = Number(process.env.MAX_DEFERRED_PROCESSING_UTTERANCES || '0');
+const MIN_UTTERANCE_SECONDS = Number(process.env.MIN_UTTERANCE_SECONDS || '1.4');
 const MIN_UTTERANCE_BYTES = 48000 * 2 * 2 * MIN_UTTERANCE_SECONDS;
-const BARGE_IN_MIN_SECONDS = Number(process.env.BARGE_IN_MIN_SECONDS || '0.9');
-const BARGE_IN_MIN_MEAN_VOLUME_DB = Number(process.env.BARGE_IN_MIN_MEAN_VOLUME_DB || '-35');
-const BARGE_IN_MIN_MAX_VOLUME_DB = Number(process.env.BARGE_IN_MIN_MAX_VOLUME_DB || '-18');
-const BARGE_IN_CONSERVATIVE_MIN_SECONDS = Number(process.env.BARGE_IN_CONSERVATIVE_MIN_SECONDS || '1.4');
-const BARGE_IN_CONSERVATIVE_MIN_MEAN_VOLUME_DB = Number(process.env.BARGE_IN_CONSERVATIVE_MIN_MEAN_VOLUME_DB || '-30');
-const BARGE_IN_CONSERVATIVE_MIN_MAX_VOLUME_DB = Number(process.env.BARGE_IN_CONSERVATIVE_MIN_MAX_VOLUME_DB || '-14');
+const BARGE_IN_MIN_SECONDS = Number(process.env.BARGE_IN_MIN_SECONDS || '1.4');
+const BARGE_IN_MIN_MEAN_VOLUME_DB = Number(process.env.BARGE_IN_MIN_MEAN_VOLUME_DB || '-30');
+const BARGE_IN_MIN_MAX_VOLUME_DB = Number(process.env.BARGE_IN_MIN_MAX_VOLUME_DB || '-14');
+const PLAYBACK_BARGE_IN_MIN_SECONDS = Number(process.env.PLAYBACK_BARGE_IN_MIN_SECONDS || '0.45');
+const PLAYBACK_BARGE_IN_MIN_MEAN_VOLUME_DB = Number(process.env.PLAYBACK_BARGE_IN_MIN_MEAN_VOLUME_DB || '-42');
+const PLAYBACK_BARGE_IN_MIN_MAX_VOLUME_DB = Number(process.env.PLAYBACK_BARGE_IN_MIN_MAX_VOLUME_DB || '-22');
+const BARGE_IN_CONSERVATIVE_MIN_SECONDS = Number(process.env.BARGE_IN_CONSERVATIVE_MIN_SECONDS || '1.8');
+const BARGE_IN_CONSERVATIVE_MIN_MEAN_VOLUME_DB = Number(process.env.BARGE_IN_CONSERVATIVE_MIN_MEAN_VOLUME_DB || '-27');
+const BARGE_IN_CONSERVATIVE_MIN_MAX_VOLUME_DB = Number(process.env.BARGE_IN_CONSERVATIVE_MIN_MAX_VOLUME_DB || '-12');
 const SENSITIVITY_MODE_DEFAULT = (process.env.BARGE_IN_SENSITIVITY_MODE || 'normal').toLowerCase() === 'conservative' ? 'conservative' : 'normal';
 const SENSITIVITY_OUTDOOR_SECONDS = Number(process.env.BARGE_IN_OUTDOOR_SECONDS || '900');
 const SUBSCRIBE_AFTER_SILENCE_MS = Number(process.env.SUBSCRIBE_AFTER_SILENCE_MS || '2200');
 const UTTERANCE_IDLE_MS = Number(process.env.UTTERANCE_IDLE_MS || '2000');
 const MIN_MEAN_VOLUME_DB = Number(process.env.MIN_MEAN_VOLUME_DB || '-35');
-const MIN_MAX_VOLUME_DB = Number(process.env.MIN_MAX_VOLUME_DB || '-18');
+const MIN_MAX_VOLUME_DB = Number(process.env.MIN_MAX_VOLUME_DB || '-12');
+const STT_START_VOICE_NOTICE = !['0', 'false', 'no', 'off'].includes((process.env.STT_START_VOICE_NOTICE || '1').toLowerCase());
 
 const bridgeLogger = createBridgeLogger({
   appendLine: line => {
@@ -144,6 +209,7 @@ const bridgeLogger = createBridgeLogger({
 });
 function log(...args) { bridgeLogger.log(...args); }
 function warn(...args) { bridgeLogger.warn(...args); }
+bridgeState = createBridgeState({ log, cleanupFile: file => fs.rm(file, { force: true }, () => {}) });
 const reportTransientProcessError = createTransientErrorReporter({ warn });
 function isBenignTransientNetworkError(error) {
   return isTransientNetworkError(error);
@@ -160,9 +226,27 @@ function newLatencyTurn(userId, startedAtMs) {
   const id = `${Date.now()}-${userId}-${Math.random().toString(16).slice(2, 8)}`;
   return createLatencyTurn({ id, userId, startedAtMs, writeRecord: writeLatencyRecord });
 }
+
+function discardVoiceInputQueues(reason = 'config-change') {
+  return bridgeState?.discardQueues(reason) || 0;
+}
 let verboseProgress = Boolean(settings.agent.verboseProgress);
 let activeProgressSignal = null;
 let verboseProgressSpeechQueue = Promise.resolve();
+let activeProgressAbortController = null;
+let speechPlaybackGeneration = 0;
+let progressSpeechBatch = [];
+let progressSpeechBatchTimer = null;
+let progressSpeechBatchSignal = null;
+let progressSpeechBatchStartedAt = 0;
+let activeProgressLastEventAt = 0;
+let lastVerboseProgressText = '';
+let lastVerboseProgressTextAt = 0;
+const PROGRESS_IDLE_NOTICE_INITIAL_MS = Number(process.env.PROGRESS_IDLE_NOTICE_INITIAL_MS || process.env.PROGRESS_IDLE_NOTICE_MS || '10000');
+const PROGRESS_IDLE_NOTICE_MAX_MS = Number(process.env.PROGRESS_IDLE_NOTICE_MAX_MS || '30000');
+const PROGRESS_IDLE_NOTICE_MULTIPLIER = Number(process.env.PROGRESS_IDLE_NOTICE_MULTIPLIER || '1.8');
+const PROGRESS_IDLE_CHECK_MS = Number(process.env.PROGRESS_IDLE_CHECK_MS || '5000');
+const PROGRESS_IDLE_NOTICE_LIMIT = Number(process.env.PROGRESS_IDLE_NOTICE_LIMIT || '20');
 const agentAdapter = createAgentAdapter(settings.agent, {
   execFileAsync,
   spawn,
@@ -170,7 +254,8 @@ const agentAdapter = createAgentAdapter(settings.agent, {
   warn,
   onProgress: event => {
     if (!verboseProgress) return;
-    sendText(`🔎 진행: ${event}`).catch(e => warn('send verbose progress failed', e?.stack || e));
+    activeProgressLastEventAt = Date.now();
+    sendVerboseProgressText(event, activeProgressSignal);
     queueVerboseProgressSpeech(event, activeProgressSignal);
   },
 });
@@ -191,6 +276,15 @@ function currentBargeInThresholds() {
     conservativeMinMaxDb: BARGE_IN_CONSERVATIVE_MIN_MAX_VOLUME_DB,
   });
 }
+function currentPlaybackBargeInThresholds() {
+  return {
+    minBytes: 48000 * 2 * 2 * PLAYBACK_BARGE_IN_MIN_SECONDS,
+    minSeconds: PLAYBACK_BARGE_IN_MIN_SECONDS,
+    minMeanDb: PLAYBACK_BARGE_IN_MIN_MEAN_VOLUME_DB,
+    minMaxDb: PLAYBACK_BARGE_IN_MIN_MAX_VOLUME_DB,
+    mode: 'playback',
+  };
+}
 function setSensitivityMode(mode, reason = 'manual') {
   sensitivityMode = mode === 'conservative' ? 'conservative' : 'normal';
   sensitivityModeExpiresAt = sensitivityMode === 'conservative' && SENSITIVITY_OUTDOOR_SECONDS > 0
@@ -203,11 +297,31 @@ function setSensitivityMode(mode, reason = 'manual') {
 function sensitivityStatusText() {
   const thresholds = currentBargeInThresholds();
   const ttl = sensitivityModeExpiresAt ? Math.max(0, Math.round((sensitivityModeExpiresAt - Date.now()) / 1000)) : 0;
-  return `감도 모드: ${thresholds.mode}, 최소 ${(thresholds.minBytes / (48000 * 2 * 2)).toFixed(1)}초, mean>=${thresholds.minMeanDb}dB 또는 max>=${thresholds.minMaxDb}dB${ttl ? `, ${ttl}초 뒤 기본으로 복귀` : ''}`;
+  return sensitivityStatusTextForLanguage(thresholds, ttl, settings.voiceLanguage);
 }
 
 function verboseStatusText() {
-  return `verbose 진행 모드: ${verboseProgress ? '켜짐' : '꺼짐'}${verboseProgress ? ' — 에이전트의 파일 읽기/스킬 사용/툴 사용/웹 검색/터미널 실행 같은 중간 항목을 텍스트와 음성으로 알려줄게.' : ' — 기본은 조용하게 최종 결과 중심으로만 알려줄게.'}`;
+  return verboseStatusTextForLanguage(verboseProgress, settings.voiceLanguage);
+}
+
+function progressEmoji(event) {
+  const category = progressCategory(event, { language: settings.voiceLanguage })?.key;
+  return {
+    test: '🧪',
+    edit: '✏️',
+    read: '📖',
+    search: '🔎',
+    terminal: '⌨️',
+    skill: '🧰',
+    browser: '🌐',
+    tool: '🛠️',
+    agent: '🤖',
+    work: '⚙️',
+  }[category] || '⚙️';
+}
+
+function formatProgressText(event) {
+  return formatProgressMessage(event, { language: settings.voiceLanguage });
 }
 
 function setVerboseProgress(enabled, reason = 'manual') {
@@ -216,12 +330,102 @@ function setVerboseProgress(enabled, reason = 'manual') {
   return verboseProgress;
 }
 
+function persistEnvValues(values) {
+  const envPath = path.join(ROOT, '.env');
+  let lines = [];
+  try {
+    if (fs.existsSync(envPath)) lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
+  } catch (e) {
+    warn('read .env for update failed', e?.stack || e);
+  }
+  const pending = new Map(Object.entries(values));
+  const updated = lines.map(line => {
+    const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=.*$/);
+    if (!match || !pending.has(match[1])) return line;
+    const key = match[1];
+    const value = pending.get(key);
+    pending.delete(key);
+    return `${key}=${value}`;
+  });
+  for (const [key, value] of pending) updated.push(`${key}=${value}`);
+  fs.writeFileSync(envPath, `${updated.filter((line, idx) => line !== '' || idx < updated.length - 1).join('\n')}\n`, { mode: 0o600 });
+}
+
+function applyRuntimeLanguage(language) {
+  discardVoiceInputQueues('language-change');
+  const preset = languagePreset(language);
+  settings.whisperLanguage = preset.sttLanguage;
+  settings.voiceLanguage = preset.voiceLanguage;
+  let config = ensureTtsVoiceConfig();
+  config = updateTtsVoiceConfig(config, { voiceType: preferredVoiceTypeForLanguage(config, preset.voiceLanguage) });
+  writeTtsVoiceConfig(TTS_VOICE_CONFIG_PATH, config);
+  const { selection } = applyVoiceConfigToProcessEnv(config);
+  settings.tts.backend = selection.backend;
+  settings.tts.edge.voice = selection.backend === 'edge' ? selection.voice.voice : preset.ttsVoice;
+  process.env.VOICE_LANGUAGE = preset.voiceLanguage;
+  process.env.WHISPER_CPP_LANGUAGE = preset.sttLanguage;
+  process.env.STT_LANGUAGE = preset.sttLanguage;
+  process.env.TTS_VOICE = settings.tts.edge.voice;
+  process.env.TTS_VOICE_TYPE = selection.voiceType;
+  persistEnvValues({
+    VOICE_LANGUAGE: preset.voiceLanguage,
+    WHISPER_CPP_LANGUAGE: preset.sttLanguage,
+    STT_LANGUAGE: preset.sttLanguage,
+    TTS_BACKEND: selection.backend,
+    TTS_VOICE: settings.tts.edge.voice,
+    TTS_VOICE_TYPE: selection.voiceType,
+  });
+  return preset;
+}
+
+function languageChangedText(preset) {
+  if (preset.key === 'ko') return '언어를 한국어로 바꿨어. STT, 중간 음성, 최종 음성, 목소리 타입까지 한국어 설정으로 맞췄어.';
+  if (preset.key === 'auto') return 'Language set to auto-detect STT with English voice. Progress voice will stay in English.';
+  return 'Language set to English. STT, progress voice, final voice, and voice type are English now.';
+}
+
+function voiceChangedText(selection) {
+  const lang = selection.voice?.language || settings.voiceLanguage;
+  if (/^ko/i.test(String(lang))) return `목소리를 ${selection.voice?.label || selection.voiceType}로 바꿨어.`;
+  return `Voice changed to ${selection.voice?.label || selection.voiceType}.`;
+}
+
+async function handleTtsVoiceCommand(prompt, signal) {
+  const request = voiceCommandFromTranscript(prompt);
+  if (!request) return false;
+  discardVoiceInputQueues('voice-change');
+  let config = ensureTtsVoiceConfig();
+  config = updateTtsVoiceConfig(config, request);
+  writeTtsVoiceConfig(TTS_VOICE_CONFIG_PATH, config);
+  const { selection } = applyVoiceConfigToProcessEnv(config);
+  settings.tts.backend = selection.backend;
+  if (selection.backend === 'edge') settings.tts.edge.voice = selection.voice.voice;
+  if (selection.voice?.language) settings.voiceLanguage = selection.voice.language;
+  persistEnvValues({
+    TTS_BACKEND: selection.backend,
+    TTS_VOICE_TYPE: selection.voiceType,
+    TTS_VOICE: selection.backend === 'edge' ? selection.voice.voice : process.env.TTS_VOICE,
+    VOICE_LANGUAGE: settings.voiceLanguage,
+  });
+  await speakText(voiceChangedText(selection), signal);
+  return true;
+}
+
+async function handleLanguageCommand(prompt, signal) {
+  const request = voiceLanguageCommandFromTranscript(prompt);
+  if (!request) return false;
+  const preset = applyRuntimeLanguage(request.language);
+  await speakText(languageChangedText(preset), signal);
+  return true;
+}
+
 function isAllowed(userId) { return settings.allowedUsers.size === 0 || settings.allowedUsers.has(String(userId)); }
 function stamp() { return new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '-'); }
 
-function stripMarkdownNoise(text) {
+function stripMarkdownNoise(text, language = settings.voiceLanguage) {
+  const codeBlockText = /^en/i.test(String(language || '')) ? 'I left the code block in the text channel.' : '코드 블록은 텍스트 채널에 남겼어.';
   return String(text || '')
-    .replace(/```[\s\S]*?```/g, '코드 블록은 텍스트 채널에 남겼어.')
+    .replace(/```[\s\S]*?```/g, codeBlockText)
     .replace(/^\s*[-*+]\s+/gm, '')
     .replace(/^\s*#{1,6}\s*/gm, '')
     .replace(/`([^`]+)`/g, '$1')
@@ -230,41 +434,52 @@ function stripMarkdownNoise(text) {
     .trim();
 }
 
-function spokenResultOnly(userPrompt, answer) {
-  const cleaned = stripMarkdownNoise(answer);
+function spokenResultOnly(userPrompt, answer, language = settings.voiceLanguage) {
+  const english = /^en/i.test(String(language || ''));
+  const cleaned = stripMarkdownNoise(answer, language);
   if (isPatchLikeOutput(cleaned)) {
-    return '코드 변경 diff가 길게 나와서 음성으로는 읽지 않을게. 변경 파일과 테스트 결과만 텍스트 채널에 정리할게.';
+    return english
+      ? 'The code diff is too long to read aloud. I will keep the changed files and test results in the text channel.'
+      : '코드 변경 diff가 길게 나와서 음성으로는 읽지 않을게. 변경 파일과 테스트 결과만 텍스트 채널에 정리할게.';
   }
-  if (!isTaskRequest(userPrompt)) return cleaned;
+  const tooLongForVoice = cleaned.length > 3000;
+  const hasBulkyCodeOrLogs = /I left the code block in the text channel|코드 블록은 텍스트 채널에 남겼어|^\s*(run|log|command|diff|changed files|verification log|test output|실행|로그|명령|diff|변경사항 상세|검증 로그|테스트 출력)\s*[:：]/im.test(cleaned);
+  if (!tooLongForVoice) return cleaned;
 
   const lines = cleaned
     .split(/\r?\n/)
     .map(line => line.trim())
     .filter(Boolean)
-    .filter(line => !/^\s*(실행|로그|명령|diff|변경사항 상세|검증 로그|테스트 출력)\s*[:：]/i.test(line));
+    .filter(line => !/^\s*(run|log|command|diff|changed files|verification log|test output|실행|로그|명령|diff|변경사항 상세|검증 로그|테스트 출력)\s*[:：]/i.test(line));
 
-  const resultish = lines.filter(line => /(완료|고쳤|수정|추가|생성|적용|확인|성공|실패|에러|남았|필요|바뀐|변경|결과)/.test(line));
-  const selected = (resultish.length ? resultish : lines).slice(0, 4).join(' ');
-  let spoken = selected || cleaned;
-  if (spoken.length > 520) spoken = `${spoken.slice(0, 500).replace(/[\s,.;:，。]+$/u, '')}. 자세한 내용은 텍스트 채널에 남겼어.`;
-  if (spoken.length < cleaned.length && !/텍스트 채널/.test(spoken)) spoken += ' 자세한 내용은 텍스트 채널에 남겼어.';
+  let spoken = hasBulkyCodeOrLogs ? lines.slice(0, 10).join(' ') : cleaned;
+  const moreText = english ? 'I left the rest in the text channel.' : '나머지는 텍스트 채널에 남겼어.';
+  if (spoken.length > 1800) spoken = `${spoken.slice(0, 1760).replace(/[\s,.;:，。]+$/u, '')}. ${moreText}`;
+  if (spoken.length < cleaned.length && !/(text channel|텍스트 채널)/i.test(spoken)) spoken += ` ${moreText}`;
   return spoken;
 }
 
-function cacheKeyForText(text) {
-  return Buffer.from(text, 'utf8').toString('base64url').slice(0, 160);
+async function sendText(text) {
+  return sendDiscordText({
+    client,
+    channelId: settings.transcriptChannelId,
+    text,
+    log,
+    warn,
+  });
 }
 
-async function sendText(text) {
-  const body = String(text || '');
-  if (!settings.transcriptChannelId) { log('transcript:', body); return; }
-  try {
-    const ch = await client.channels.fetch(settings.transcriptChannelId);
-    if (!ch?.isTextBased()) return;
-    const chunks = [];
-    for (let i = 0; i < body.length; i += 1900) chunks.push(body.slice(i, i + 1900));
-    for (const chunk of chunks.length ? chunks : ['']) await ch.send(chunk);
-  } catch (e) { warn('sendText failed', e?.stack || e); }
+function sendVerboseProgressText(event, signal) {
+  if (!verboseProgress || !signal || signal.aborted || activeProgressSignal !== signal) return;
+  if (progressCategory(event, { language: settings.voiceLanguage })?.key === 'agent') return;
+  const formatted = formatProgressText(event).replace(/\s+/g, ' ').trim();
+  if (!formatted) return;
+  const message = formatted.slice(0, 1900);
+  const now = Date.now();
+  if (message === lastVerboseProgressText && now - lastVerboseProgressTextAt < 2000) return;
+  lastVerboseProgressText = message;
+  lastVerboseProgressTextAt = now;
+  void sendText(message).catch(e => warn('verbose progress text delivery failed', e?.stack || e));
 }
 
 function sleep(ms) {
@@ -283,7 +498,9 @@ function waitEvent(emitter, event, timeoutMs = 60000) {
 }
 
 async function transcribeOnce(wavPath, input16k, outBase) {
-  const args = ['-m', settings.whisperModel, '-f', input16k, '-l', 'ko', '-nt', '-otxt', '-of', outBase, '-sns', '-nf', '-nth', '0.35', '-et', '2.2', '-lpt', '-0.8'];
+  const args = ['-m', settings.whisperModel, '-f', input16k];
+  if (shouldPassWhisperLanguage(settings.whisperLanguage)) args.push('-l', settings.whisperLanguage);
+  args.push('-nt', '-otxt', '-of', outBase, '-sns', '-nf', '-nth', '0.35', '-et', '2.2', '-lpt', '-0.8');
   try {
     await execFileAsync(settings.whisperBin, args, { timeout: 25000, maxBuffer: 2 * 1024 * 1024 });
   } catch (e) {
@@ -351,7 +568,7 @@ function cleanTranscript(raw) {
     if (!compact) continue;
     if (/^[\(\[（【].*[\)\]）】]$/.test(line.replace(/\s+/g, ''))) continue;
     if (['끄덕', '끄덕끄덕', '박수', '웃음', '음악', '자막', '침묵', '무음'].includes(compact)) continue;
-    if (bad.some(b => compact.includes(b))) continue;
+    if (bad.some(b => compact.toLowerCase().includes(b))) continue;
     if (isRepeatedNoiseTranscript(compact)) continue;
     kept.push(line);
   }
@@ -387,7 +604,23 @@ function isVerboseOnlyRequest(text) {
   return verboseModeFromTranscript(compact) !== null && !isTaskRequest(compact) && !/(그리고|그다음|다음에|추가로)/u.test(compact);
 }
 
+async function refreshTtsRuntimeConfig() {
+  reloadRuntimeLanguageFromEnv();
+  const { selection } = applyVoiceConfigToProcessEnv(ensureTtsVoiceConfig());
+  const previousBackend = settings.tts.backend;
+  settings.tts.backend = selection.backend;
+  if (selection.backend === 'edge') settings.tts.edge.voice = selection.voice.voice;
+  if (previousBackend !== settings.tts.backend) {
+    const rebuilt = buildTtsSettings(process.env, ROOT);
+    Object.assign(settings.tts, rebuilt);
+    ttsBackend = createTtsBackend(settings.tts, { execFileAsync, log, warn, voiceProvider: () => settings.tts.edge.voice });
+    log('tts backend reloaded from voice config', settings.tts.backend, 'voiceType', selection.voiceType);
+  }
+  return selection;
+}
+
 async function synthTTS(text, signal) {
+  await refreshTtsRuntimeConfig();
   let lastError = null;
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
@@ -406,8 +639,13 @@ async function synthTTS(text, signal) {
 }
 
 async function synthProgressTTS(text, signal) {
+  await refreshTtsRuntimeConfig();
   const ext = ttsBackend.outputExtension || 'mp3';
-  const cachePath = path.join(settings.tts.progressCacheDir, `${cacheKeyForText(`${ttsBackend.cacheKeyParts().join('\n')}\n${text}`)}.${ext}`);
+  const cachePath = path.join(settings.tts.progressCacheDir, progressTtsCacheFileName({
+    backendKeyParts: ttsBackend.cacheKeyParts(),
+    text,
+    ext,
+  }));
   if (fs.existsSync(cachePath) && fs.statSync(cachePath).size > 0) {
     log('progress tts cache hit', text, cachePath);
     return cachePath;
@@ -422,7 +660,8 @@ async function playAudio(file, { deleteAfter = true } = {}) {
   if (!connection) return;
   speaking = true;
   try {
-    const resource = createAudioResource(file, { inputType: StreamType.Arbitrary });
+    const resource = createAudioResource(file, { inputType: StreamType.Arbitrary, inlineVolume: true });
+    resource.volume?.setVolume(settings.tts.volume);
     player.play(resource);
     connection.subscribe(player);
     await waitEvent(player, AudioPlayerStatus.Idle, 120000).catch(() => {});
@@ -432,10 +671,15 @@ async function playAudio(file, { deleteAfter = true } = {}) {
   }
 }
 
-async function speakText(text, signal, metricsTurn = null) {
+async function speakText(text, signal, metricsTurn = null, options = {}) {
   const chunks = splitForTTS(text, settings.tts.maxChars);
   if (!chunks.length) return;
+  if (options.mirrorText !== false) {
+    await sendText(`${options.mirrorPrefix || '🔊 음성으로 읽는 내용'}:\n${String(text || '')}`);
+  }
   log('TTS chunks', chunks.length, 'maxChars', settings.tts.maxChars, 'backend', ttsBackend.name);
+  const playbackGeneration = speechPlaybackGeneration;
+  const playbackStopped = () => playbackGeneration !== speechPlaybackGeneration;
   let synthMs = 0;
   let playMs = 0;
   const ttsStart = Date.now();
@@ -443,11 +687,16 @@ async function speakText(text, signal, metricsTurn = null) {
     signal,
     log,
     synth: async chunk => {
+      if (playbackStopped()) return null;
       const start = Date.now();
       try { return await synthTTS(chunk, signal); }
       finally { synthMs += Date.now() - start; }
     },
     play: async file => {
+      if (playbackStopped()) {
+        await fs.promises.rm(file, { force: true }).catch(() => {});
+        return;
+      }
       const start = Date.now();
       try { return await playAudio(file); }
       finally { playMs += Date.now() - start; }
@@ -470,16 +719,95 @@ async function speakProgress(text, signal) {
   }
 }
 
-function queueVerboseProgressSpeech(event, signal) {
-  if (!verboseProgress || !signal || signal.aborted) return;
-  const text = String(event || '').replace(/\s+/g, ' ').trim().slice(0, 120);
-  if (!text) return;
+async function speakImmediateNotice(text, signal, reason = 'notice') {
+  if (signal?.aborted) return;
+  try {
+    log('immediate notice speech', reason, 'text', String(text || '').slice(0, 80));
+    const mp3 = await synthProgressTTS(text, signal);
+    if (signal?.aborted) return;
+    await playAudio(mp3, { deleteAfter: false });
+  } catch (e) {
+    if (!isAbortError(e)) warn('immediate notice speech failed', reason, e?.stack || e);
+  }
+}
+
+function queueProgressSpeechText(text, signal, reason = 'status') {
+  const spoken = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!spoken || !signal || signal.aborted || activeProgressSignal !== signal) return;
   verboseProgressSpeechQueue = verboseProgressSpeechQueue
     .catch(() => {})
     .then(async () => {
-      if (!verboseProgress || signal.aborted || !processing) return;
-      await speakProgress(text, signal);
+      if (signal.aborted || activeProgressSignal !== signal || !processing) return;
+      log('progress speech queued', reason, 'text', spoken);
+      await speakProgress(spoken, signal);
     });
+}
+
+function flushProgressSpeechBatch(signal, reason = 'timer') {
+  if (!signal || signal.aborted || activeProgressSignal !== signal) return;
+  if (progressSpeechBatchTimer) {
+    clearTimeout(progressSpeechBatchTimer);
+    progressSpeechBatchTimer = null;
+  }
+  const events = progressSpeechBatch;
+  progressSpeechBatch = [];
+  progressSpeechBatchSignal = null;
+  progressSpeechBatchStartedAt = 0;
+  const text = summarizeProgressEvents(events, { maxCategories: 3, language: settings.voiceLanguage });
+  if (!text) return;
+  queueProgressSpeechText(text, signal, `batch-${reason}-${events.length}`);
+}
+
+function queueVerboseProgressSpeech(event, signal) {
+  if (!verboseProgress || !signal || signal.aborted || activeProgressSignal !== signal) return;
+  if (progressCategory(event, { language: settings.voiceLanguage })?.key === 'agent') return;
+  const text = String(event || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+  if (!text) return;
+  if (progressSpeechBatchSignal && progressSpeechBatchSignal !== signal) {
+    progressSpeechBatch = [];
+    if (progressSpeechBatchTimer) clearTimeout(progressSpeechBatchTimer);
+    progressSpeechBatchTimer = null;
+    progressSpeechBatchStartedAt = 0;
+  }
+  progressSpeechBatchSignal = signal;
+  if (!progressSpeechBatchStartedAt) progressSpeechBatchStartedAt = Date.now();
+  progressSpeechBatch.push(text);
+  const elapsedMs = Date.now() - progressSpeechBatchStartedAt;
+  const ratePerSecond = progressSpeechBatch.length / Math.max(0.2, elapsedMs / 1000);
+  const maxBatchEvents = ratePerSecond >= 6 ? 5 : ratePerSecond >= 3 ? 4 : 3;
+  const batchDelayMs = ratePerSecond >= 6 ? 650 : ratePerSecond >= 3 ? 550 : 450;
+  if (progressSpeechBatch.length >= maxBatchEvents) {
+    flushProgressSpeechBatch(signal, 'full');
+    return;
+  }
+  if (progressSpeechBatchTimer) clearTimeout(progressSpeechBatchTimer);
+  progressSpeechBatchTimer = setTimeout(() => flushProgressSpeechBatch(signal, 'timer'), batchDelayMs);
+}
+
+function clearProgressSpeechBatch(signal = activeProgressSignal) {
+  if (progressSpeechBatchTimer) {
+    clearTimeout(progressSpeechBatchTimer);
+    progressSpeechBatchTimer = null;
+  }
+  if (!signal || progressSpeechBatchSignal === signal) {
+    progressSpeechBatch = [];
+    progressSpeechBatchSignal = null;
+    progressSpeechBatchStartedAt = 0;
+  }
+}
+
+function stopProgressSpeech(signal, reason = 'final-answer') {
+  if (activeProgressSignal !== signal) return;
+  clearProgressSpeechBatch(signal);
+  activeProgressSignal = null;
+  if (activeProgressAbortController && !activeProgressAbortController.signal.aborted) {
+    try { activeProgressAbortController.abort(); } catch (e) { warn('abort progress speech failed', e?.stack || e); }
+  }
+  if (speaking) {
+    log('stop progress speech before final answer', reason);
+    try { player.stop(true); } catch (e) { warn('stop progress speech failed', e?.stack || e); }
+    speaking = false;
+  }
 }
 
 async function saveCapturedVoiceCloneSample(userId, wavPath, pcmBytes, segments, signal = null) {
@@ -523,6 +851,15 @@ async function handleVoiceCloneCommand(userId, prompt, signal = null) {
   const armed = voiceCloneCapture.arm({ userId, source: 'voice-command' });
   await sendText(`🎙️ 보이스 클로닝 샘플 캡처 대기 중. 다음 10초에서 30초 정도 말하면 ${path.relative(ROOT, armed.targetPath)}에 저장할게.`);
   await speakText('좋아. 다음에 10초에서 30초 정도 말하면 그 음성을 목소리 샘플로 저장할게.', signal);
+  return true;
+}
+
+function stopPlaybackForBargeIn(userId, reason = 'playback-barge-in') {
+  if (!speaking) return false;
+  log('stop playback for barge-in', 'byUser', userId, 'reason', reason, 'speaking', speaking, 'processing', processing, 'turn', activeTurnId);
+  speechPlaybackGeneration += 1;
+  try { player.stop(true); } catch (e) { warn('stop playback failed', e?.stack || e); }
+  speaking = false;
   return true;
 }
 
@@ -588,18 +925,14 @@ async function concatWavs(files, output) {
 }
 
 function queueSegment(userId, file, pcmBytes, startedAtMs = Date.now(), endedAtMs = Date.now()) {
-  let pending = pendingUtterances.get(userId);
-  if (!pending) {
-    pending = { files: [], pcmBytes: 0, timer: null, firstPacketAt: startedAtMs, lastSegmentEndAt: endedAtMs };
-    pendingUtterances.set(userId, pending);
-  }
-  pending.files.push(file);
-  pending.pcmBytes += pcmBytes;
-  pending.firstPacketAt = Math.min(pending.firstPacketAt || startedAtMs, startedAtMs);
-  pending.lastSegmentEndAt = Math.max(pending.lastSegmentEndAt || endedAtMs, endedAtMs);
-  if (pending.timer) clearTimeout(pending.timer);
-  pending.timer = setTimeout(() => flushUtterance(userId).catch(e => warn('flushUtterance failed', userId, e?.stack || e)), UTTERANCE_IDLE_MS);
-  log('queued segment', userId, 'segments', pending.files.length, 'totalPcmBytes', pending.pcmBytes, 'idleMs', UTTERANCE_IDLE_MS);
+  const pending = bridgeState.appendSegment(userId, {
+    file,
+    pcmBytes,
+    startedAtMs,
+    endedAtMs,
+    timerFactory: () => setTimeout(() => flushUtterance(userId).catch(e => warn('flushUtterance failed', userId, e?.stack || e)), UTTERANCE_IDLE_MS),
+  });
+  log('queued segment', userId, 'segments', pending.files.length, 'totalPcmBytes', pending.pcmBytes, 'idleMs', UTTERANCE_IDLE_MS, 'epoch', pending.epoch);
 }
 
 function isBargeInCandidate(pcmBytes, levels) {
@@ -607,26 +940,51 @@ function isBargeInCandidate(pcmBytes, levels) {
   return isValidatedBargeInCandidate(pcmBytes, levels, thresholds);
 }
 
+function enqueueDeferredProcessingUtterance({ userId, wavPath, pcmBytes, segments, startedAtMs = Date.now() }) {
+  const item = { userId, wavPath, pcmBytes, segments, startedAtMs };
+  const result = bridgeState.enqueueDeferred(item, enqueueDeferredUtterance, MAX_DEFERRED_PROCESSING_UTTERANCES);
+  if (!result.queued) {
+    log('drop deferred utterance because queue disabled', userId, wavPath, 'max', MAX_DEFERRED_PROCESSING_UTTERANCES);
+    return false;
+  }
+  if (result.dropped) {
+    log('drop oldest deferred utterance because queue is full', result.dropped?.userId, result.dropped?.wavPath);
+  }
+  log('queued deferred utterance while processing', userId, wavPath, 'queueSize', bridgeState.deferredSize(), 'epoch', bridgeState.currentEpoch());
+  return true;
+}
+
+async function drainDeferredProcessingUtterances() {
+  if (processing || bridgeState.deferredSize() === 0) return;
+  const next = bridgeState.shiftDeferred();
+  if (!next) return;
+  log('drain deferred utterance', next.userId, next.wavPath, 'remaining', bridgeState.deferredSize());
+  const metricsTurn = newLatencyTurn(next.userId, next.startedAtMs || Date.now());
+  metricsTurn.mark('voice_first_packet', next.startedAtMs || Date.now());
+  metricsTurn.mark('utterance_flush');
+  metricsTurn.addMeta({ segments: next.segments, pcmBytes: next.pcmBytes, deferred: true });
+  await handleRecording(next.userId, next.wavPath, next.pcmBytes, next.segments, metricsTurn);
+}
+
 async function validateProcessingBargeIn(userId, wavPath, pcmBytes, segments) {
   log('validating processing barge-in transcript', userId, wavPath, 'pcmBytes', pcmBytes, 'segments', segments);
   const text = await transcribe(wavPath);
   if (!text) {
     log('ignore processing barge-in: empty transcript', userId, wavPath);
-    return false;
+    return { action: 'ignore', text: '' };
   }
   if (!isExplicitBargeInTranscript(text)) {
-    log('ignore processing barge-in: not explicit stop phrase', userId, JSON.stringify(text));
-    return false;
+    log('defer processing barge-in: not explicit stop phrase', userId, JSON.stringify(text));
+    return { action: 'defer', text };
   }
   log('confirmed processing barge-in by explicit transcript', userId, JSON.stringify(text));
   interruptCurrentResponse(userId, 'confirmed-processing-barge-in');
-  return true;
+  return { action: 'interrupt', text };
 }
 
 async function flushUtterance(userId) {
-  const pending = pendingUtterances.get(userId);
+  const pending = bridgeState.deletePending(userId);
   if (!pending) return;
-  pendingUtterances.delete(userId);
   if (pending.timer) clearTimeout(pending.timer);
   const files = pending.files;
   const pcmBytes = pending.pcmBytes;
@@ -634,7 +992,13 @@ async function flushUtterance(userId) {
   metricsTurn.mark('voice_first_packet', pending.firstPacketAt || Date.now());
   metricsTurn.mark('voice_segment_end', pending.lastSegmentEndAt || Date.now());
   metricsTurn.mark('utterance_flush');
-  metricsTurn.addMeta({ segments: files.length, pcmBytes });
+  metricsTurn.addMeta({ segments: files.length, pcmBytes, epoch: pending.epoch });
+  if (pending.epoch !== bridgeState.currentEpoch()) {
+    log('drop stale utterance after voice input queue reset', userId, 'utteranceEpoch', pending.epoch, 'currentEpoch', bridgeState.currentEpoch());
+    for (const file of files) fs.rm(file, { force: true }, () => {});
+    metricsTurn.finish({ status: 'stale_after_config_change' });
+    return;
+  }
   if (pcmBytes < MIN_UTTERANCE_BYTES) {
     log('skip short utterance', userId, 'segments', files.length, 'pcmBytes', pcmBytes, 'minBytes', MIN_UTTERANCE_BYTES);
     metricsTurn.finish({ status: 'skip_short' });
@@ -650,17 +1014,29 @@ async function flushUtterance(userId) {
     return;
   }
   const candidate = isBargeInCandidate(pcmBytes, levels);
-  if (processing && candidate) {
-    await validateProcessingBargeIn(userId, merged, pcmBytes, files.length);
-    metricsTurn.finish({ status: 'barge_in_processing_candidate' });
-    return;
-  } else if (speaking && candidate) {
-    metricsTurn.finish({ status: 'barge_in_playback' });
-    interruptCurrentResponse(userId, 'confirmed-barge-in');
-    return;
-  } else if (speaking || processing) {
+  if (speaking || processing) {
     const thresholds = currentBargeInThresholds();
-    log('ignore weak barge-in candidate', userId, 'pcmBytes', pcmBytes, 'meanDb', levels.meanDb, 'maxDb', levels.maxDb, 'thresholdBytes', thresholds.minBytes, 'thresholds', thresholds.minMeanDb, thresholds.minMaxDb, 'mode', thresholds.mode);
+    if (!candidate) {
+      log('check weak barge-in for explicit stop transcript', userId, 'pcmBytes', pcmBytes, 'meanDb', levels.meanDb, 'maxDb', levels.maxDb, 'thresholdBytes', thresholds.minBytes, 'thresholds', thresholds.minMeanDb, thresholds.minMaxDb, 'mode', thresholds.mode);
+    }
+    const validation = await validateProcessingBargeIn(userId, merged, pcmBytes, files.length);
+    if (validation?.action === 'interrupt') {
+      metricsTurn.finish({ status: processing ? 'barge_in_processing_interrupt' : 'barge_in_playback_interrupt' });
+      return;
+    }
+    if (processing && validation?.action === 'defer') {
+      const queued = enqueueDeferredProcessingUtterance({
+        userId,
+        wavPath: merged,
+        pcmBytes,
+        segments: files.length,
+        startedAtMs: pending.firstPacketAt || Date.now(),
+      });
+      metricsTurn.finish({ status: queued ? 'deferred_during_processing' : 'drop_deferred_during_processing' });
+      return;
+    }
+    metricsTurn.finish({ status: speaking ? 'barge_in_playback_ignored' : 'barge_in_processing_ignored' });
+    return;
   }
   // Drop only when BOTH overall energy and peak are low. Real Discord speech from this
   // mic can have low mean volume while still carrying intelligible peaks; using OR here
@@ -684,17 +1060,38 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
   currentAbortController = controller;
   const signal = controller.signal;
   try {
+    const runtimeLanguage = reloadRuntimeLanguageFromEnv();
+    if (runtimeLanguage.changed) {
+      log('drop current utterance because language changed before STT', userId, 'turn', turnId, 'language', runtimeLanguage.voiceLanguage);
+      fs.rm(wavPath, { force: true }, () => {});
+      metricsTurn?.finish({ status: 'drop_stale_language_change' });
+      return;
+    }
     log('transcribing', userId, wavPath, 'pcmBytes', pcmBytes, 'segments', segments, 'turn', turnId);
+    const sttNotice = formatSttStartMessage(settings.voiceLanguage);
+    await sendText(sttNotice);
+    const sttNoticeSpeech = STT_START_VOICE_NOTICE
+      ? speakImmediateNotice(sttNotice.replace(/^🎧\s*/u, ''), signal, 'stt-start')
+      : Promise.resolve();
     const sttStart = Date.now();
     const text = await transcribe(wavPath);
+    await sttNoticeSpeech;
     metricsTurn?.stage('stt', Date.now() - sttStart, { transcriptChars: String(text || '').length });
     if (interruptedTurns.has(turnId) || signal.aborted) { metricsTurn?.finish({ status: 'aborted_after_stt' }); return; }
     if (!text) { log('empty transcript', userId, wavPath); metricsTurn?.finish({ status: 'empty_transcript' }); return; }
     log(`user ${userId} said: ${text}`);
-    await sendText(`📝 STT 결과 <@${userId}>: ${text}`);
-    if (!acceptsWake(text)) { await sendText('wake word 없음: 응답은 안 함'); metricsTurn?.finish({ status: 'wake_rejected' }); return; }
+    await sendText(formatSttResultMessage(settings.voiceLanguage, userId, text));
+    if (!acceptsWake(text)) { await sendText(formatWakeRejectedMessage(settings.voiceLanguage)); metricsTurn?.finish({ status: 'wake_rejected' }); return; }
 
     const prompt = stripWake(text);
+    if (await handleLanguageCommand(prompt, signal)) {
+      metricsTurn?.finish({ status: 'language_command' });
+      return;
+    }
+    if (await handleTtsVoiceCommand(prompt, signal)) {
+      metricsTurn?.finish({ status: 'voice_command' });
+      return;
+    }
     if (await handleVoiceCloneCommand(userId, prompt, signal)) {
       metricsTurn?.finish({ status: 'voice_clone_command' });
       return;
@@ -704,7 +1101,7 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
       const thresholds = setSensitivityMode(sensitivityRequest.mode, sensitivityRequest.reason);
       await sendText(`🎚️ ${sensitivityStatusText()}`);
       if (isSensitivityOnlyRequest(prompt)) {
-        await speakText(`${thresholds.mode === 'conservative' ? '외부 보수 모드' : '기본 감도'}로 바꿨어.`, signal, metricsTurn);
+        await speakText(sensitivityChangedSpeech(thresholds.mode, settings.voiceLanguage), signal, metricsTurn);
         metricsTurn?.finish({ status: 'sensitivity_only' });
         return;
       }
@@ -714,29 +1111,57 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
       setVerboseProgress(verboseRequest, 'voice-command');
       await sendText(`🔎 ${verboseStatusText()}`);
       if (isVerboseOnlyRequest(prompt)) {
-        await speakText(verboseRequest ? '상세 진행 모드 켰어.' : '상세 진행 모드 껐어.', signal, metricsTurn);
+        await speakText(verboseChangedSpeech(verboseRequest, settings.voiceLanguage), signal, metricsTurn);
         metricsTurn?.finish({ status: 'verbose_only' });
         return;
       }
     }
-    const plan = { task: true, label: agentAdapter.label, verboseProgress };
-    log('Agent plan', plan.label, 'backend', agentAdapter.backend, 'task', plan.task);
+    const plan = { task: true, label: agentAdapter.label, verboseProgress, language: settings.voiceLanguage };
+    log('Agent plan', plan.label, 'backend', agentAdapter.backend, 'task', plan.task, 'language', plan.language);
     const agentStart = Date.now();
-    activeProgressSignal = signal;
+    const progressController = new AbortController();
+    activeProgressAbortController = progressController;
+    activeProgressSignal = progressController.signal;
+    activeProgressLastEventAt = Date.now();
     const agentPromise = agentAdapter.ask(prompt, signal, plan);
     let done = false;
-    // Stage announcements say the actual pipeline step. They are delayed so very
-    // fast answers do not get blocked by status TTS.
+    // Status announcements share one queue with verbose progress so they never
+    // talk over each other. In verbose mode, skip the generic initial prompt;
+    // the detailed tool/file/test events are the initial progress voice.
     const progressLoop = (async () => {
-      await sleep(2500);
-      if (!done && !signal.aborted && !interruptedTurns.has(turnId)) {
-        await speakProgress('에이전트 호출했어. 응답 기다리는 중.', signal);
+      if (!verboseProgress) {
+        await sleep(2500);
+        if (!done && !signal.aborted && !interruptedTurns.has(turnId)) {
+          const initial = /^en/i.test(String(settings.voiceLanguage || ''))
+            ? 'calling the agent.'
+            : '에이전트 호출했어. 응답 기다리는 중.';
+          queueProgressSpeechText(initial, progressController.signal, 'generic-initial');
+        }
       }
-      // Do not repeat the same status phrase indefinitely; it makes the bridge
-      // feel stuck. One extra long-running notice is enough for voice UX.
-      await sleep(18000);
-      if (!done && !signal.aborted && !interruptedTurns.has(turnId)) {
-        await speakProgress('아직 작업 중이야.', signal);
+      let idleNotices = 0;
+      let nextIdleNoticeMs = PROGRESS_IDLE_NOTICE_INITIAL_MS;
+      let lastObservedProgressAt = activeProgressLastEventAt;
+      while (!done && !signal.aborted && !interruptedTurns.has(turnId) && idleNotices < PROGRESS_IDLE_NOTICE_LIMIT) {
+        await sleep(Math.min(PROGRESS_IDLE_CHECK_MS, nextIdleNoticeMs));
+        if (done || signal.aborted || interruptedTurns.has(turnId)) break;
+        if (activeProgressLastEventAt !== lastObservedProgressAt) {
+          lastObservedProgressAt = activeProgressLastEventAt;
+          nextIdleNoticeMs = PROGRESS_IDLE_NOTICE_INITIAL_MS;
+          continue;
+        }
+        const idleMs = Date.now() - activeProgressLastEventAt;
+        if (idleMs < nextIdleNoticeMs) continue;
+        idleNotices += 1;
+        activeProgressLastEventAt = Date.now();
+        lastObservedProgressAt = activeProgressLastEventAt;
+        const idle = /^en/i.test(String(settings.voiceLanguage || ''))
+          ? 'still working on that.'
+          : '아직 작업 중이야.';
+        queueProgressSpeechText(idle, progressController.signal, `idle-${idleNotices}-${Math.round(nextIdleNoticeMs / 1000)}s`);
+        nextIdleNoticeMs = Math.min(
+          PROGRESS_IDLE_NOTICE_MAX_MS,
+          Math.max(nextIdleNoticeMs + 1000, Math.round(nextIdleNoticeMs * PROGRESS_IDLE_NOTICE_MULTIPLIER)),
+        );
       }
     })().catch(e => {
       if (!isAbortError(e)) warn('progress loop failed', e?.stack || e);
@@ -747,13 +1172,16 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     if (interruptedTurns.has(turnId) || signal.aborted) { metricsTurn?.finish({ status: 'aborted_after_agent' }); return; }
 
     log('Agent answer', agentAdapter.label, answer.slice(0, 200));
-    await sendText(`✅ ${agentAdapter.label} 응답:\n${answer}`);
-    const spokenAnswer = spokenResultOnly(prompt, answer);
-    log('spoken answer', spokenAnswer.slice(0, 200));
-    if (!signal.aborted && !interruptedTurns.has(turnId)) {
-      speakProgress('응답 받았어. 음성으로 바꾸는 중.', signal).catch(() => {});
+    const spokenAnswer = spokenResultOnly(prompt, answer, settings.voiceLanguage);
+    const fullAnswerText = `${agentAnswerHeader(settings.voiceLanguage, agentAdapter.label)}\n${answer || emptyAgentAnswer(settings.voiceLanguage)}`;
+    log('send agent answer text', 'chars', fullAnswerText.length);
+    const answerTextDelivered = await sendText(fullAnswerText);
+    if (!answerTextDelivered) {
+      warn('agent answer text delivery failed; still speaking answer');
     }
-    await speakText(spokenAnswer, signal, metricsTurn);
+    log('spoken answer', spokenAnswer.slice(0, 200));
+    stopProgressSpeech(progressController.signal, 'agent-answer-ready');
+    await speakText(spokenAnswer, signal, metricsTurn, { mirrorText: !answerTextDelivered });
     metricsTurn?.finish({ status: 'ok' });
   } catch (e) {
     if (isAbortError(e) || interruptedTurns.has(turnId)) {
@@ -764,13 +1192,20 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     warn('handleRecording failed', e?.stack || e);
     const shortMsg = String(e?.message || e).slice(0, 800);
     metricsTurn?.finish({ status: 'error', error: shortMsg });
-    await sendText(`⚠️ 음성 처리 실패: ${shortMsg}`);
+    await sendText(formatVoiceErrorMessage(settings.voiceLanguage, shortMsg));
   } finally {
-    if (activeProgressSignal === signal) activeProgressSignal = null;
+    if (activeProgressAbortController && !activeProgressAbortController.signal.aborted) {
+      try { activeProgressAbortController.abort(); } catch (e) { warn('abort progress speech in cleanup failed', e?.stack || e); }
+    }
+    if (activeProgressSignal === activeProgressAbortController?.signal) activeProgressSignal = null;
+    activeProgressAbortController = null;
     if (currentAbortController === controller) currentAbortController = null;
     interruptedTurns.delete(turnId);
     if (activeTurnId === turnId) activeTurnId = 0;
     processing = false;
+    if (bridgeState.deferredSize() > 0) {
+      setImmediate(() => drainDeferredProcessingUtterances().catch(e => warn('drain deferred utterance failed', e?.stack || e)));
+    }
   }
 }
 
@@ -778,17 +1213,16 @@ function subscribeUser(receiver, userId) {
   if (!isAllowed(userId)) return;
   if (String(userId) === client.user?.id) return;
   if ((speaking || processing) && !activeStreams.has(userId)) {
-    // Do not abort on Discord speaking.start alone. Progress/final TTS can echo
-    // into the user's mic and Discord also fires this for breath/clicks. Record
-    // the candidate first; queueUtterance validates duration + volume before it
-    // can interrupt the current turn.
+    // During voice playback, real user speech should stop only the currently
+    // playing audio chunk. If an agent/task is still processing, keep it alive;
+    // the recorded segment will be validated and only explicit stop phrases abort.
+    if (speaking) stopPlaybackForBargeIn(userId, 'playback-speaking-start');
     log('possible barge-in start; waiting for segment validation', userId, 'speaking', speaking, 'processing', processing);
   }
   if (activeStreams.has(userId)) return;
-  const pending = pendingUtterances.get(userId);
+  const pending = bridgeState.getPending(userId);
   if (pending?.timer) {
-    clearTimeout(pending.timer);
-    pending.timer = null;
+    bridgeState.clearPendingTimer(userId);
     log('extend pending utterance because new segment started', userId, 'segments', pending.files.length, 'totalPcmBytes', pending.pcmBytes);
   }
 
@@ -799,7 +1233,7 @@ function subscribeUser(receiver, userId) {
   const writer = new wav.FileWriter(file, { sampleRate: 48000, channels: 2, bitDepth: 16 });
   activeStreams.set(userId, { opusStream, decoder, writer, file, startedAtMs: Date.now() });
   let pcmBytes = 0;
-  const liveThresholds = currentBargeInThresholds();
+  const liveThresholds = speaking && !processing ? currentPlaybackBargeInThresholds() : currentBargeInThresholds();
   const liveBargeIn = shouldUseLivePlaybackBargeIn({ speaking, processing }) ? createLiveBargeInMonitor({
     minBytes: liveThresholds.minBytes,
     minMeanDb: liveThresholds.minMeanDb,
@@ -807,7 +1241,7 @@ function subscribeUser(receiver, userId) {
     log,
     onConfirm: ({ pcmBytes: confirmedBytes, levels }) => {
       log('confirmed live playback barge-in before segment end', userId, 'pcmBytes', confirmedBytes, 'meanDb', levels.meanDb, 'maxDb', levels.maxDb);
-      interruptCurrentResponse(userId, 'confirmed-live-playback-barge-in');
+      stopPlaybackForBargeIn(userId, 'confirmed-live-playback-barge-in');
     },
   }) : null;
   decoder.on('data', chunk => {
@@ -875,9 +1309,31 @@ async function autoJoin() {
   warn('No auto-join channel found', settings.autoJoinVoiceChannels);
 }
 
+function consumeRestartNotice() {
+  const noticePath = path.join(ROOT, '.cache', 'restart-notice.txt');
+  try {
+    if (!fs.existsSync(noticePath)) return '';
+    const detail = fs.readFileSync(noticePath, 'utf8').replace(/\s+/g, ' ').trim().slice(0, 120);
+    fs.rmSync(noticePath, { force: true });
+    return detail;
+  } catch (e) {
+    warn('consume restart notice failed', e?.stack || e);
+    return '';
+  }
+}
+
+async function announceRestartComplete() {
+  const detail = consumeRestartNotice();
+  const { text, speech } = formatRestartCompleteNotice(detail, settings.tts.edge.voice);
+  const delivered = await sendText(text);
+  if (!delivered) warn('restart-complete text delivery failed');
+  await speakText(speech, undefined, null, { mirrorText: false });
+}
+
 client.once('ready', async () => {
   log(`Logged in as ${client.user.tag} (${client.user.id})`);
   await autoJoin();
+  await announceRestartComplete();
 });
 
 client.on('messageCreate', async msg => {
@@ -962,11 +1418,11 @@ client.on('messageCreate', async msg => {
     const text = content.slice(5).trim();
     if (!text) return void msg.reply('물어볼 내용을 붙여줘.');
     await msg.channel.send(`텍스트 입력을 음성 세션과 같은 ${agentAdapter.label} 세션으로 보낼게.`);
-    const plan = { task: true, label: agentAdapter.label, verboseProgress };
+    const plan = { task: true, label: agentAdapter.label, verboseProgress, language: settings.voiceLanguage };
     const answer = await agentAdapter.ask(text, undefined, plan);
     await msg.channel.send(answer.slice(0, 1900));
     if (connection) {
-      await speakText(answer);
+      await speakText(answer, undefined, null, { mirrorText: false });
     }
     return;
   }
@@ -999,7 +1455,39 @@ process.on('uncaughtException', error => {
 });
 client.on('error', e => warn('discord client error', e?.stack || e));
 client.on('shardError', e => warn('discord shard error', e?.stack || e));
-process.on('SIGTERM', () => { try { connection?.destroy(); } catch {}; client.destroy(); process.exit(0); });
-process.on('SIGINT', () => { try { connection?.destroy(); } catch {}; client.destroy(); process.exit(0); });
+
+let shutdownStarted = false;
+async function gracefulShutdown(signalName) {
+  if (shutdownStarted) return;
+  shutdownStarted = true;
+  log('graceful shutdown requested', signalName, 'connection', Boolean(connection));
+  try {
+    if (currentAbortController && !currentAbortController.signal.aborted) currentAbortController.abort();
+  } catch (e) {
+    warn('abort before shutdown failed', e?.stack || e);
+  }
+  try {
+    if (connection) {
+      let detail = '';
+      const noticePath = path.join(ROOT, '.cache', 'restart-notice.txt');
+      try {
+        if (fs.existsSync(noticePath)) {
+          detail = fs.readFileSync(noticePath, 'utf8').replace(/\s+/g, ' ').trim().slice(0, 120);
+        }
+      } catch (e) {
+        warn('read restart notice failed', e?.stack || e);
+      }
+      await speakText(formatRestartShutdownNotice(detail, settings.tts.edge.voice));
+      await waitEvent(player, AudioPlayerStatus.Idle, 30000).catch(() => {});
+    }
+  } catch (e) {
+    warn('shutdown voice notice failed', e?.stack || e);
+  }
+  try { connection?.destroy(); } catch {}
+  try { client.destroy(); } catch {}
+  process.exit(0);
+}
+process.on('SIGTERM', () => { void gracefulShutdown('SIGTERM'); });
+process.on('SIGINT', () => { void gracefulShutdown('SIGINT'); });
 
 client.login(settings.token);

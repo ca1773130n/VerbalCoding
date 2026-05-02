@@ -27,3 +27,9 @@ test('splitForTTS falls back to whitespace splitting when a sentence is too long
   assert.equal(chunks.join(' '), text);
   assert.ok(chunks.every(chunk => chunk.length <= 12));
 });
+
+test('splitForTTS drops punctuation-only chunks that make Edge TTS fail', () => {
+  assert.deepEqual(splitForTTS('”.', 80), []);
+  assert.deepEqual(splitForTTS('Done. ”.', 80), ['Done.']);
+  assert.deepEqual(splitForTTS('응답 완료. ”.', 80), ['응답 완료.']);
+});

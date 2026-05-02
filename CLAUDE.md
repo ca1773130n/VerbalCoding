@@ -1,0 +1,50 @@
+# LLM-Wiki Harness: verbalcoding_wiki
+
+This project has a compiled LLM-Wiki research graph. Treat markdown pages as a human-readable projection; the graph JSON is authoritative.
+
+## Artifacts
+
+- `.llm-wiki/graph.json` — authoritative typed ResearchGraph
+- `.llm-wiki/markdown_projection/` — Obsidian/VS Code markdown projection
+- `.llm-wiki/obsidian_vault/` — generated Obsidian vault
+- `.llm-wiki/temporal_facts.jsonl` — temporal/provenance fact projection
+- `.llm-wiki/graphiti_episodes.jsonl` — Graphiti-compatible episode export
+- `.llm-wiki/cognee_bundle/` — Cognee JSONL bundle
+
+## MCP server
+
+Use the local MCP server to query the graph:
+
+```text
+command: python3
+args: ["-m", "llm_wiki.mcp_server", "--graph", "/Users/neo/Developer/Projects/VerbalCoding/.llm-wiki/graph.json"]
+```
+
+Expected MCP tools: `schema`, `graph_summary`, `search_nodes`, `node_context`, `search_facts`, `timeline`.
+
+## Graph summary
+
+- Nodes: 243
+- Edges: 371
+
+## Representative nodes
+
+- **Agent** (`CodeClass`) — /Users/neo/Developer/Projects/VerbalCoding/app/agent.py
+- **DiscordAudio** (`CodeClass`) — /Users/neo/Developer/Projects/VerbalCoding/app/audio_discord.py
+- **FasterWhisperSTT** (`CodeClass`) — /Users/neo/Developer/Projects/VerbalCoding/app/stt.py
+- **HermesClient** (`CodeClass`) — /Users/neo/Developer/Projects/VerbalCoding/app/hermes.py
+- **Settings** (`CodeClass`) — /Users/neo/Developer/Projects/VerbalCoding/app/config.py
+- **SpeakerManager** (`CodeClass`) — /Users/neo/Developer/Projects/VerbalCoding/app/speaker.py
+- **STT** (`CodeClass`) — /Users/neo/Developer/Projects/VerbalCoding/app/stt.py
+- **TTS** (`CodeClass`) — /Users/neo/Developer/Projects/VerbalCoding/app/tts.py
+- **UtteranceBuffer** (`CodeClass`) — /Users/neo/Developer/Projects/VerbalCoding/app/agent.py
+- **VAD** (`CodeClass`) — /Users/neo/Developer/Projects/VerbalCoding/app/vad.py
+- **VoiceSink** (`CodeClass`) — /Users/neo/Developer/Projects/VerbalCoding/app/audio_discord.py
+- **WakeWord** (`CodeClass`) — /Users/neo/Developer/Projects/VerbalCoding/app/wakeword.py
+
+## Agent instructions
+
+- Prefer MCP graph queries before grep-style rediscovery.
+- Preserve the controlled ontology; do not invent node or edge types outside the LLM-Wiki schema.
+- Keep markdown projection generated; update sources and re-run project compile instead of hand-editing generated pages.
+- When adding code, run the project tests before reporting success.

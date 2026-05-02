@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { agentAdapterCapabilities, createAgentRunResult } from './agent_contract.mjs';
+
 export function shellSplit(s) {
   const out = [];
   let cur = '', quote = null, esc = false;
@@ -18,7 +20,14 @@ export function shellSplit(s) {
 }
 
 export function voiceBridgePrompt(text, options = {}) {
-  const lines = [
+  const english = /^en/i.test(String(options.language || ''));
+  const lines = english ? [
+    'This is a user utterance from a Discord voice call.',
+    'Answer in English. For simple conversation/status questions, do not use tools; answer directly in 1-3 sentences.',
+    'Use tools only for real work requests such as file edits, command execution, log checks, or web/search tasks.',
+    'If code changes are made, do not read diffs or full code aloud; summarize outcome and next checks briefly.',
+    'Do not include CLI metadata or session_id in the answer.',
+  ] : [
     'Discord 음성 대화로 들어온 사용자 발화다.',
     '단순 대화/상태 질문이면 도구를 쓰지 말고 1~3문장으로 바로 한국어 답변해라.',
     '파일 수정, 실행, 로그 확인, 검색 같은 실제 작업 지시일 때만 필요한 도구를 사용해라.',
@@ -26,13 +35,23 @@ export function voiceBridgePrompt(text, options = {}) {
     'CLI 메타정보나 session_id는 답변에 포함하지 마라.',
   ];
   if (options.verboseProgress) {
-    lines.push(
-      'VERBOSE 진행 공유 모드가 켜져 있다.',
-      '긴 작업에서 중요한 중간 동작을 할 때마다 한 줄로 `VERBALCODING_PROGRESS: <짧은 한국어 단계>` 형식을 출력해라.',
-      '예: `VERBALCODING_PROGRESS: 파일 읽기 app-node/main.mjs`, `VERBALCODING_PROGRESS: 웹 검색 VerbalCoding setup`, `VERBALCODING_PROGRESS: 터미널 실행 npm test`, `VERBALCODING_PROGRESS: 툴 사용 read_file`, `VERBALCODING_PROGRESS: 스킬 사용 discord-voice-hermes-bridge`.',
-      '토큰, API 키, 비밀번호, 연결 문자열, 개인 식별자는 절대 진행 로그에 쓰지 마라.',
-      '진행 로그는 파일 읽기, 웹 검색, 터미널 실행, 테스트 실행, 툴 사용, 스킬 사용 같은 항목만 짧게 써라.',
-    );
+    if (english) {
+      lines.push(
+        'VERBOSE progress sharing mode is enabled.',
+        'For important intermediate steps during long work, output one line in the format `VERBALCODING_PROGRESS: <short English step>`.',
+        'Examples: `VERBALCODING_PROGRESS: reading files app-node/main.mjs`, `VERBALCODING_PROGRESS: searching web VerbalCoding setup`, `VERBALCODING_PROGRESS: running terminal commands npm test`, `VERBALCODING_PROGRESS: using tools read_file`, `VERBALCODING_PROGRESS: loading skills discord-voice-hermes-bridge`.',
+        'Never include tokens, API keys, passwords, connection strings, or personal identifiers in progress logs.',
+        'Keep progress logs short: reading files, searching web, running terminal commands, running tests, using tools, or loading skills.',
+      );
+    } else {
+      lines.push(
+        'VERBOSE 진행 공유 모드가 켜져 있다.',
+        '긴 작업에서 중요한 중간 동작을 할 때마다 한 줄로 `VERBALCODING_PROGRESS: <짧은 한국어 단계>` 형식을 출력해라.',
+        '예: `VERBALCODING_PROGRESS: 파일 읽기 app-node/main.mjs`, `VERBALCODING_PROGRESS: 웹 검색 VerbalCoding setup`, `VERBALCODING_PROGRESS: 터미널 실행 npm test`, `VERBALCODING_PROGRESS: 툴 사용 read_file`, `VERBALCODING_PROGRESS: 스킬 사용 discord-voice-hermes-bridge`.',
+        '토큰, API 키, 비밀번호, 연결 문자열, 개인 식별자는 절대 진행 로그에 쓰지 마라.',
+        '진행 로그는 파일 읽기, 웹 검색, 터미널 실행, 테스트 실행, 툴 사용, 스킬 사용 같은 항목만 짧게 써라.',
+      );
+    }
   }
   return lines.concat(['', text]).join('\n');
 }
@@ -131,11 +150,31 @@ export function isPatchLikeOutput(text) {
   return markerHit || changedLines >= 8;
 }
 
-export function interruptedAgentMessage(label, hadPatchLikeOutput = false) {
+export function interruptedAgentMessage(label, hadPatchLikeOutput = false, language = 'ko') {
+  const english = /^en/i.test(String(language || ''));
   if (hadPatchLikeOutput) {
+    if (english) return `${label} was interrupted or timed out, and the partial output looked like a code diff. I will not read the diff aloud; check the text channel for files and test status.`;
     return `${label} 작업이 제한 시간에 걸렸고 코드 diff 출력이 감지됐어. diff는 음성으로 읽지 않을게. 변경 파일과 테스트 상태를 확인해서 이어서 정리할게.`;
   }
+  if (english) return `${label} was interrupted or timed out before I could verify the final result.`;
   return `${label} 작업이 제한 시간이나 끼어들기로 중단됐어. 출력이 비어 있어서 결과를 확인하지 못했어.`;
+}
+
+function agentProgressEvent(label, kind, language = 'ko') {
+  const english = /^en/i.test(String(language || ''));
+  if (kind === 'start') return english ? `calling the agent ${label}` : `${label} 호출 시작`;
+  if (kind === 'done') return english ? `received agent response ${label}` : `${label} 응답 수신`;
+  return english ? `agent ${label}` : `${label}`;
+}
+
+function emptyAgentMessage(language = 'ko') {
+  return /^en/i.test(String(language || '')) ? 'The response was empty.' : '응답이 비어 있어.';
+}
+
+function failedAgentMessage(label, detail, language = 'ko') {
+  return /^en/i.test(String(language || ''))
+    ? `${label} failed: ${detail}`
+    : `${label} 실행에 실패했어: ${detail}`;
 }
 
 export function extractHermesSessionId(text) {
@@ -237,6 +276,7 @@ export function createAgentAdapter(settings, deps = {}) {
   const spawnProcess = deps.spawn;
   const onProgress = deps.onProgress || (() => {});
   const emittedProgress = new Set();
+  const capabilities = agentAdapterCapabilities(settings);
 
   function emitVerboseProgress(text) {
     if (!text) return;
@@ -407,7 +447,7 @@ export function createAgentAdapter(settings, deps = {}) {
   function buildArgs(text, options = {}) {
     const argv = shellSplit(settings.command);
     const cmd = argv[0];
-    const query = voiceBridgePrompt(text, { verboseProgress: options.verboseProgress });
+    const query = voiceBridgePrompt(text, { verboseProgress: options.verboseProgress, language: options.language });
     let args = argv.slice(1);
     if (settings.backend === 'hermes' && options.verboseProgress) {
       // Hermes quiet mode intentionally suppresses tool previews.  In verbose
@@ -425,15 +465,17 @@ export function createAgentAdapter(settings, deps = {}) {
     return { cmd, args, sessionId };
   }
 
-  async function ask(text, signal, plan = { task: true, label: settings.label }) {
+  async function run(request, signal, plan = { task: true, label: settings.label }) {
+    const text = typeof request === 'string' ? request : request?.text;
     const verboseProgress = Boolean(plan.verboseProgress ?? settings.verboseProgress);
+    const language = plan.language || settings.language;
     emittedProgress.clear();
-    const { cmd, args, sessionId } = buildArgs(text, { verboseProgress });
+    const { cmd, args, sessionId } = buildArgs(text, { verboseProgress, language });
     const start = Date.now();
     const label = plan.label || settings.label;
     const { args: finalArgs, outputPath } = addCodexOutputCapture(args);
     log('Agent CLI start', label, cmd, finalArgs.slice(0, -1).join(' '), sessionId ? `resume=${sessionId}` : 'new-session', 'verbose', verboseProgress);
-    if (verboseProgress) onProgress(`${label} 호출 시작`);
+    if (verboseProgress) onProgress(agentProgressEvent(label, 'start', language));
     try {
       const { stdout, stderr } = await execWithOptionalProgress(cmd, finalArgs, {
         timeout: resolveExecTimeout(plan.task ? settings.taskTimeoutMs : settings.chatTimeoutMs),
@@ -449,16 +491,16 @@ export function createAgentAdapter(settings, deps = {}) {
         log('Agent session saved', settings.backend, newSessionId);
       }
       log('Agent CLI done', label, 'ms', Date.now() - start);
-      if (verboseProgress) onProgress(`${label} 응답 수신`);
+      if (verboseProgress) onProgress(agentProgressEvent(label, 'done', language));
       const stdoutAnswer = sanitizeAgentOutput(codexLastMessage) || sanitizeAgentOutput(stdout) || sanitizeAgentOutput(stderr);
-      if (stdoutAnswer) return stdoutAnswer;
+      if (stdoutAnswer) return createAgentRunResult({ status: 'ok', answer: stdoutAnswer, backend: settings.backend, label, elapsedMs: Date.now() - start, sessionId: newSessionId || sessionId });
       const sessionAnswer = readHermesSessionFinalAnswer(newSessionId || sessionId);
       if (sessionAnswer) {
         log('Agent answer recovered from Hermes session file', label, 'chars', sessionAnswer.length);
-        return sessionAnswer;
+        return createAgentRunResult({ status: 'ok', answer: sessionAnswer, backend: settings.backend, label, elapsedMs: Date.now() - start, sessionId: newSessionId || sessionId, recoveredFromSession: true });
       }
       warn('Agent CLI produced empty sanitized answer', 'stdoutLen', stdout.length, 'stderrLen', stderr.length, 'stdoutTail', stdout.slice(-500), 'stderrTail', stderr.slice(-500));
-      return '응답이 비어 있어.';
+      return createAgentRunResult({ status: 'empty', answer: emptyAgentMessage(language), backend: settings.backend, label, elapsedMs: Date.now() - start, sessionId: newSessionId || sessionId });
     } catch (e) {
       if (e?.name === 'AbortError' || e?.code === 'ABORT_ERR') throw e;
       const stderr = (e.stderr || '').toString().trim();
@@ -476,18 +518,33 @@ export function createAgentAdapter(settings, deps = {}) {
       warn('Agent CLI failed', 'backend', settings.backend, 'label', label, 'ms', Date.now() - start, 'code', e.code, 'signal', e.signal, 'stdout', stdout.slice(-500), 'stderr', stderr.slice(-500), 'message', message.slice(-500));
       if ((e.signal === 'SIGINT' || e.signal === 'SIGTERM') && cleanedPartial && !patchLikePartial) {
         log('Agent CLI returned partial output after signal; using sanitized partial answer', 'chars', cleanedPartial.length);
-        return cleanedPartial;
+        return createAgentRunResult({ status: 'partial', answer: cleanedPartial, backend: settings.backend, label, elapsedMs: Date.now() - start, sessionId: newSessionId || sessionId, error: { signal: e.signal } });
       }
       if (e.signal === 'SIGINT' || e.signal === 'SIGTERM') {
-        return interruptedAgentMessage(label, patchLikePartial);
+        return createAgentRunResult({ status: 'interrupted', answer: interruptedAgentMessage(label, patchLikePartial, language), backend: settings.backend, label, elapsedMs: Date.now() - start, sessionId: newSessionId || sessionId, error: { signal: e.signal } });
       }
-      return `${label} 실행에 실패했어: ${sanitizeAgentOutput(stderr || stdout || message || e.code || 'unknown error').slice(0, 700)}`;
+      return createAgentRunResult({
+        status: 'error',
+        answer: failedAgentMessage(label, sanitizeAgentOutput(stderr || stdout || message || e.code || 'unknown error').slice(0, 700), language),
+        backend: settings.backend,
+        label,
+        elapsedMs: Date.now() - start,
+        sessionId: newSessionId || sessionId,
+        error: { code: e.code, signal: e.signal },
+      });
     }
+  }
+
+  async function ask(text, signal, plan = { task: true, label: settings.label }) {
+    const result = await run(text, signal, plan);
+    return result.answer;
   }
 
   return {
     backend: settings.backend,
     label: settings.label,
+    capabilities,
+    run,
     ask,
     buildArgs,
     readSessionId,

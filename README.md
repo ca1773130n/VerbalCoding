@@ -9,9 +9,9 @@ VerbalCoding keeps the Discord voice/STT/TTS layer separate from the agent runne
 - Auto-joins a configured Discord voice channel, or joins with `!join`.
 - Receives Discord voice through Node `@discordjs/voice`.
 - Converts Discord 48 kHz stereo audio to 16 kHz mono STT input.
-- Transcribes Korean speech locally with `whisper.cpp` + Metal on macOS.
+- Transcribes speech locally with `whisper.cpp` + Metal on macOS; language can be `ko`, `en`, or `auto`.
 - Sends transcripts to a selected CLI harness adapter.
-- Speaks answers back with Edge TTS (`ko-KR-SunHiNeural` by default).
+- Speaks answers back with Edge TTS; language presets switch STT, progress voice language, and TTS voice together.
 - Shares the selected harness session between voice and `!ask` text input when supported.
 - Splits long answers into sentence-sized TTS chunks for responsive barge-in.
 - Avoids reading long diffs, code blocks, and stack traces aloud.
@@ -59,6 +59,17 @@ UTTERANCE_IDLE_MS=2000        # wait after last voice segment before STT
 LATENCY_LOG_PATH=./.logs/latency.jsonl
 ```
 
+## Agent adapter contract
+
+The voice bridge talks to every backend through one adapter contract:
+
+- `run({ text }, signal, plan)` returns a structured result: status, final answer text, backend label, elapsed time, and optional session metadata.
+- `ask(text, signal, plan)` is the compatibility shortcut that returns only final answer text.
+- `capabilities` declares whether the backend supports session resume, streaming progress, and cancellation.
+- Hermes is the reference adapter: it supports resume, verbose progress streaming, cancellation, and final-answer recovery from Hermes session files when verbose CLI output omits the final answer.
+
+New backends should implement the same contract and keep voice/STT/TTS behavior outside the adapter.
+
 ## Quick start
 
 ```bash
@@ -69,13 +80,27 @@ npm run doctor
 ./run.sh
 ```
 
-The installer asks for Discord token, allowed users, auto-join voice channel names, transcript channel/thread, CLI harness backend, TTS settings, and wake-word behavior. It writes `.env` with mode `0600`; `.env` is ignored by git.
+The installer asks for Discord token, allowed users, auto-join voice channel names, transcript channel/thread, CLI harness backend, default voice language, TTS settings, and wake-word behavior. It writes `.env` with mode `0600`; `.env` is ignored by git.
 
 You can also run the installer directly:
 
 ```bash
 npm run setup
 ```
+
+## CLI commands
+
+VerbalCoding includes a small project CLI for common operator actions:
+
+```bash
+npm run vc -- status              # show STT language, progress language, and TTS voice
+npm run vc -- language en         # English STT + English progress/TTS voice
+npm run vc -- language ko         # Korean STT + Korean progress/TTS voice
+npm run vc -- language auto       # Whisper auto-detect STT + English progress/TTS voice
+npm run vc -- doctor              # run the redacted doctor check
+```
+
+Language changes update `.env`; restart the bridge with `./run.sh` or the running process manager for them to take effect.
 
 ## Fresh install checklist
 
@@ -137,10 +162,17 @@ STT_ENGINE="whisper_cpp"
 WHISPER_CPP_BIN="whisper-cli"
 WHISPER_CPP_MODEL="./models/ggml-small-q5_1.bin"
 
-TTS_BACKEND="edge"   # edge | openvoice
+TTS_BACKEND="edge"   # edge | openvoice | speechswift | supertonic
 TTS_VOICE="ko-KR-SunHiNeural"
 TTS_RATE="+10%"
 TTS_MAX_CHARS="495"
+TTS_VOLUME="1.0"
+SUPERTONIC_COMMAND="supertonic"
+SUPERTONIC_VOICE="M1"
+SUPERTONIC_LANGUAGE="ko"
+SUPERTONIC_STEPS="2"
+SUPERTONIC_SPEED="1.0"
+SUPERTONIC_PROGRESS="0"
 OPENVOICE_DIR="./vendor/OpenVoice"
 OPENVOICE_VENV="./.venv-openvoice"
 OPENVOICE_REF_AUDIO="./voice-samples/user-reference.wav"
@@ -199,11 +231,11 @@ Voice equivalents such as “외부 모드”, “보수 모드”, “실내”
 Verbose progress is **off by default** unless `AGENT_VERBOSE_PROGRESS=1` is set. When enabled with `!verbose on`, `AGENT_VERBOSE_PROGRESS=1`, or a voice command like “상세 진행 켜”, VerbalCoding sends progress notes and speaks the action names, such as:
 
 ```text
-🔎 진행: Hermes Agent 호출 시작
-🔎 진행: 파일 읽기 app-node/main.mjs
-🔎 진행: 웹 검색 실행
-🔎 진행: 터미널 명령 실행
-🔎 진행: Hermes Agent 응답 수신
+🤖 Hermes Agent 호출 시작
+📖 파일 읽기 app-node/main.mjs
+🔎 웹 검색 실행
+⌨️ 터미널 명령 실행
+🤖 Hermes Agent 응답 수신
 ```
 
 This mode asks the selected CLI harness to emit `VERBALCODING_PROGRESS: ...` lines and also summarizes common tool markers from streaming stdout/stderr when available. Secret-looking fields are redacted and progress lines are removed from the final spoken answer.
@@ -238,6 +270,36 @@ Restart the bridge and test in Discord:
 ```
 
 Only clone voices you own or have permission to use. If OpenVoice fails or times out, VerbalCoding falls back to Edge TTS.
+
+## Optional Supertonic TTS
+
+Supertonic is a local/on-device TTS backend from Supertone. It supports Korean (`--lang ko`) and is designed for very low latency after the first model download. It does not require an API key.
+
+```bash
+./scripts/setup_supertonic.sh
+# or: python3 -m pip install supertonic
+supertonic tts '안녕하세요. 수퍼토닉 테스트입니다.' --lang ko --voice M1 --steps 2 --speed 1.0 -o /tmp/verbalcoding-supertonic.wav
+```
+
+Then set:
+
+```bash
+TTS_BACKEND="supertonic"
+SUPERTONIC_COMMAND="./.venv-supertonic/bin/supertonic"  # or "supertonic" if globally installed
+SUPERTONIC_VOICE="M1"      # M1-M5, F1-F5
+SUPERTONIC_LANGUAGE="ko"
+SUPERTONIC_STEPS="2"       # fastest practical setting; raise for quality
+SUPERTONIC_SPEED="1.0"
+SUPERTONIC_PROGRESS="0"    # keep short progress prompts on Edge
+```
+
+Restart the bridge and compare it with:
+
+```text
+!voice-test 안녕하세요. 수퍼토닉 백엔드 테스트입니다.
+```
+
+If Supertonic is missing, fails, or times out, VerbalCoding falls back to Edge TTS.
 
 ## Optional SpeechSwift / CosyVoice TTS
 

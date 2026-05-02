@@ -12,6 +12,7 @@ test('buildTtsSettings defaults to Edge TTS with Korean voice', () => {
   assert.equal(settings.edge.voice, 'ko-KR-SunHiNeural');
   assert.equal(settings.edge.rate, '+10%');
   assert.equal(settings.maxChars, 495);
+  assert.equal(settings.volume, 1.0);
   assert.equal(settings.progressCacheDir, path.join(root, '.cache', 'progress-tts'));
 });
 
@@ -73,6 +74,43 @@ test('buildTtsSettings normalizes speech-swift CosyVoice settings', () => {
   assert.equal(settings.speechswift.useForProgress, false);
   assert.equal(settings.speechswift.mode, 'server');
   assert.equal(settings.speechswift.serverUrl, 'http://127.0.0.1:18080');
+});
+
+test('buildTtsSettings normalizes Supertonic local backend settings', () => {
+  const root = '/project';
+  const settings = buildTtsSettings({
+    TTS_BACKEND: 'supertonic',
+    SUPERTONIC_COMMAND: './.venv-supertonic/bin/supertonic',
+    SUPERTONIC_VOICE: 'M4',
+    SUPERTONIC_LANGUAGE: 'ko',
+    SUPERTONIC_STEPS: '3',
+    SUPERTONIC_SPEED: '1.15',
+    SUPERTONIC_MAX_CHUNK_LENGTH: '240',
+    SUPERTONIC_SILENCE_DURATION: '0.1',
+    SUPERTONIC_CUSTOM_STYLE_PATH: './voice-styles/custom.json',
+    SUPERTONIC_TIMEOUT_MS: '45000',
+    SUPERTONIC_PROGRESS: '1',
+    SUPERTONIC_CACHE_DIR: './.cache/supertonic',
+    SUPERTONIC_INTRA_OP_THREADS: '4',
+    SUPERTONIC_INTER_OP_THREADS: '1',
+    TTS_VOLUME: '1.6',
+  }, root);
+
+  assert.equal(settings.backend, 'supertonic');
+  assert.equal(settings.volume, 1.6);
+  assert.equal(settings.supertonic.command, './.venv-supertonic/bin/supertonic');
+  assert.equal(settings.supertonic.voice, 'M4');
+  assert.equal(settings.supertonic.language, 'ko');
+  assert.equal(settings.supertonic.steps, 3);
+  assert.equal(settings.supertonic.speed, 1.15);
+  assert.equal(settings.supertonic.maxChunkLength, 240);
+  assert.equal(settings.supertonic.silenceDuration, 0.1);
+  assert.equal(settings.supertonic.customStylePath, path.join(root, 'voice-styles', 'custom.json'));
+  assert.equal(settings.supertonic.timeoutMs, 45000);
+  assert.equal(settings.supertonic.useForProgress, true);
+  assert.equal(settings.supertonic.cacheDir, path.join(root, '.cache', 'supertonic'));
+  assert.equal(settings.supertonic.intraOpThreads, '4');
+  assert.equal(settings.supertonic.interOpThreads, '1');
 });
 
 test('buildTtsSettings falls back to edge for unsupported backend', () => {

@@ -11,6 +11,7 @@ import {
   sanitizeAgentOutput,
   voiceBridgePrompt,
 } from './agent_adapters.mjs';
+import { assertAgentAdapterContract } from './agent_contract.mjs';
 
 test('buildAgentSettings defaults to Hermes backend and uses VerbalCoding session file', () => {
   const settings = buildAgentSettings({ ROOT: '/project', env: {} });
@@ -51,6 +52,33 @@ test('Hermes adapter resumes and saves Hermes CLI session ids', async () => {
   assert.match(calls[0].args.at(-1), /Discord 음성 대화로 들어온 사용자 발화다/);
   assert.match(calls[0].args.at(-1), /테스트해줘/);
   assert.equal(files.get('/tmp/hermes-session'), 'new-session\n');
+  assert.equal(assertAgentAdapterContract(adapter), true);
+  assert.equal(adapter.capabilities.supportsSessionResume, true);
+});
+
+test('adapter run returns formal result while ask keeps string compatibility', async () => {
+  const adapter = createAgentAdapter({
+    backend: 'hermes',
+    label: 'Hermes Agent',
+    command: 'hermes chat -Q -q',
+    sessionFile: '/tmp/hermes-session',
+    taskTimeoutMs: 300000,
+    chatTimeoutMs: 45000,
+  }, {
+    readFileSync: () => '',
+    writeFileSync: () => {},
+    execFileAsync: async () => ({ stdout: 'Done.\n', stderr: 'session_id: new-session\n' }),
+    log: () => {},
+    warn: () => {},
+  });
+
+  const result = await adapter.run({ text: 'do it' }, undefined, { language: 'en' });
+  assert.equal(result.contractVersion, 1);
+  assert.equal(result.status, 'ok');
+  assert.equal(result.answer, 'Done.');
+  assert.equal(result.backend, 'hermes');
+  assert.equal(result.sessionId, 'new-session');
+  assert.equal(await adapter.ask('do it', undefined, { language: 'en' }), 'Done.');
 });
 
 test('Hermes verbose progress drops quiet flag and parses rich CLI final response', async () => {
@@ -97,6 +125,45 @@ test('Hermes verbose progress drops quiet flag and parses rich CLI final respons
   assert.equal(files.get('/tmp/hermes-session'), 'new-session\n');
   assert.ok(progress.includes('Hermes Agent 호출 시작'));
   assert.ok(progress.includes('터미널 도구 사용 terminal'));
+});
+
+test('Hermes verbose progress uses English lifecycle events when language is English', async () => {
+  const progress = [];
+  const adapter = createAgentAdapter({
+    backend: 'hermes',
+    label: 'Hermes Agent',
+    command: 'hermes chat -Q -q',
+    sessionFile: '/tmp/hermes-session',
+    taskTimeoutMs: 300000,
+    chatTimeoutMs: 45000,
+  }, {
+    readFileSync: () => '',
+    writeFileSync: () => {},
+    spawn: () => {
+      const listeners = {};
+      const child = {
+        stdout: { on: (event, cb) => { listeners[`stdout:${event}`] = cb; } },
+        stderr: { on: (event, cb) => { listeners[`stderr:${event}`] = cb; } },
+        on: (event, cb) => { listeners[event] = cb; },
+        kill: () => {},
+      };
+      queueMicrotask(() => {
+        listeners['stdout:data']?.(Buffer.from('╭─ ⚕ Hermes ─╮\n    Done.\n╰────────────╯\n'));
+        listeners.close?.(0, null);
+      });
+      return child;
+    },
+    execFileAsync: async () => { throw new Error('spawn should be used'); },
+    onProgress: event => progress.push(event),
+    log: () => {},
+    warn: () => {},
+  });
+
+  const answer = await adapter.ask('do it', undefined, { verboseProgress: true, language: 'en' });
+
+  assert.equal(answer, 'Done.');
+  assert.ok(progress.includes('calling the agent Hermes Agent'));
+  assert.ok(progress.includes('received agent response Hermes Agent'));
 });
 
 test('Hermes adapter falls back to saved session final answer when verbose CLI output omits it', async () => {
@@ -227,6 +294,14 @@ test('voiceBridgePrompt adds optional verbose progress instructions only when en
   assert.doesNotMatch(normal, /VERBALCODING_PROGRESS/);
   assert.match(verbose, /VERBALCODING_PROGRESS/);
   assert.match(verbose, /파일 읽기|웹 검색|터미널 실행|툴 사용/);
+});
+
+test('voiceBridgePrompt uses English instructions and progress language when requested', () => {
+  const prompt = voiceBridgePrompt('test this', { verboseProgress: true, language: 'en' });
+
+  assert.match(prompt, /Answer in English/);
+  assert.match(prompt, /VERBALCODING_PROGRESS: reading files/);
+  assert.doesNotMatch(prompt, /짧은 한국어 단계/);
 });
 
 test('extractVerboseProgressEvents summarizes tool activity without leaking raw logs', () => {

@@ -37,22 +37,51 @@ function speechSwiftArgs(text, out, speechswift) {
   return args;
 }
 
+function supertonicArgs(text, out, supertonic) {
+  const args = ['tts', text, '-o', out, '--lang', supertonic.language];
+  if (supertonic.customStylePath) args.push('--custom-style-path', supertonic.customStylePath);
+  else if (supertonic.voice) args.push('--voice', supertonic.voice);
+  if (supertonic.steps) args.push('--steps', String(supertonic.steps));
+  if (supertonic.speed) args.push('--speed', String(supertonic.speed));
+  if (supertonic.maxChunkLength) args.push('--max-chunk-length', String(supertonic.maxChunkLength));
+  if (supertonic.silenceDuration != null) args.push('--silence-duration', String(supertonic.silenceDuration));
+  return args;
+}
+
+function supertonicEnv(baseEnv, supertonic) {
+  const env = { ...baseEnv };
+  if (supertonic.cacheDir) env.SUPERTONIC_CACHE_DIR = supertonic.cacheDir;
+  if (supertonic.intraOpThreads) env.SUPERTONIC_INTRA_OP_THREADS = String(supertonic.intraOpThreads);
+  if (supertonic.interOpThreads) env.SUPERTONIC_INTER_OP_THREADS = String(supertonic.interOpThreads);
+  return env;
+}
+
 async function speechSwiftServerRequest({ fetchImpl, speechswift, text, signal }) {
-  const response = await fetchImpl(`${speechswift.serverUrl}/speak`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      text,
-      engine: speechswift.engine,
-      language: speechswift.language,
-    }),
-    ...(signal ? { signal } : {}),
-  });
-  if (!response.ok) {
-    const detail = typeof response.text === 'function' ? await response.text().catch(() => '') : '';
-    throw new Error(`audio-server /speak failed ${response.status} ${response.statusText}${detail ? `: ${detail.slice(0, 200)}` : ''}`);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), speechswift.timeoutMs);
+  const abortFromCaller = () => controller.abort(signal.reason);
+  if (signal?.aborted) controller.abort(signal.reason);
+  else signal?.addEventListener?.('abort', abortFromCaller, { once: true });
+  try {
+    const response = await fetchImpl(`${speechswift.serverUrl}/speak`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        engine: speechswift.engine,
+        language: speechswift.language,
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      const detail = typeof response.text === 'function' ? await response.text().catch(() => '') : '';
+      throw new Error(`audio-server /speak failed ${response.status} ${response.statusText}${detail ? `: ${detail.slice(0, 200)}` : ''}`);
+    }
+    return Buffer.from(await response.arrayBuffer());
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener?.('abort', abortFromCaller);
   }
-  return Buffer.from(await response.arrayBuffer());
 }
 
 export function createEdgeTtsBackend(settings, deps = {}) {
@@ -64,15 +93,17 @@ export function createEdgeTtsBackend(settings, deps = {}) {
   };
   const tmpdir = deps.tmpdir || os.tmpdir();
   const edge = settings.edge || {};
+  const voiceProvider = deps.voiceProvider || (() => edge.voice);
+  const currentVoice = () => voiceProvider() || edge.voice;
   return {
     name: 'edge',
     outputExtension: 'mp3',
     cacheKeyParts() {
-      return ['edge', edge.voice, edge.rate];
+      return ['edge', currentVoice(), edge.rate];
     },
     async synthesize(text, { signal } = {}) {
       const out = uniquePath(tmpdir, 'verbalcoding-edge', 'mp3');
-      await execFileAsync('edge-tts', ['-v', edge.voice, '--rate', edge.rate, '-t', text, '--write-media', out], execOptions({
+      await execFileAsync('edge-tts', ['-v', currentVoice(), '--rate', edge.rate, '-t', text, '--write-media', out], execOptions({
         timeout: 60000,
         maxBuffer: 2 * 1024 * 1024,
       }, signal));
@@ -173,8 +204,47 @@ export function createSpeechSwiftBackend(settings, deps = {}) {
   };
 }
 
+export function createSupertonicBackend(settings, deps = {}) {
+  const execFileAsync = deps.execFileAsync;
+  if (!execFileAsync) throw new Error('execFileAsync dependency is required');
+  const tmpdir = deps.tmpdir || os.tmpdir();
+  const warn = deps.warn || (() => {});
+  const fsApi = {
+    existsSync: deps.existsSync || fs.existsSync,
+    statSync: deps.statSync || fs.statSync,
+  };
+  const edge = createEdgeTtsBackend(settings, deps);
+  const supertonic = settings.supertonic;
+  return {
+    name: 'supertonic',
+    outputExtension: supertonic.useForProgress ? 'wav' : 'mp3',
+    cacheKeyParts() {
+      return ['supertonic', supertonic.command, supertonic.voice, supertonic.language, supertonic.steps, supertonic.speed, supertonic.maxChunkLength, supertonic.silenceDuration, supertonic.customStylePath];
+    },
+    async synthesize(text, { signal, kind = 'final' } = {}) {
+      if (kind === 'progress' && !supertonic.useForProgress) {
+        return edge.synthesize(text, { signal, kind });
+      }
+      const out = uniquePath(tmpdir, 'verbalcoding-supertonic', 'wav');
+      try {
+        await execFileAsync(supertonic.command, supertonicArgs(text, out, supertonic), execOptions({
+          timeout: supertonic.timeoutMs,
+          maxBuffer: 4 * 1024 * 1024,
+          env: supertonicEnv(process.env, supertonic),
+        }, signal));
+        return validateOutput(out, fsApi);
+      } catch (error) {
+        fs.rm(out, { force: true }, () => {});
+        warn('supertonic failed; falling back to edge', error?.message || error);
+        return edge.synthesize(text, { signal, kind });
+      }
+    },
+  };
+}
+
 export function createTtsBackend(settings, deps = {}) {
   if (settings.backend === 'openvoice') return createOpenVoiceBackend(settings, deps);
   if (settings.backend === 'speechswift') return createSpeechSwiftBackend(settings, deps);
+  if (settings.backend === 'supertonic') return createSupertonicBackend(settings, deps);
   return createEdgeTtsBackend(settings, deps);
 }

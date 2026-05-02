@@ -1,0 +1,76 @@
+{
+  "currentBackend": "edge",
+  "currentVoiceType": "korean_male",
+  "backends": {
+    "edge": {
+      "currentVoiceType": "korean_male",
+      "voices": {
+        "english_male": {
+          "label": "English male",
+          "language": "en",
+          "voice": "en-US-GuyNeural"
+        },
+        "english_female": {
+          "label": "English female",
+          "language": "en",
+          "voice": "en-US-AriaNeural"
+        },
+        "korean_male": {
+          "label": "Korean male",
+          "language": "ko",
+          "voice": "ko-KR-InJoonNeural"
+        },
+        "korean_female": {
+          "label": "Korean female",
+          "language": "ko",
+          "voice": "ko-KR-SunHiNeural"
+        },
+        "korean_multilingual_male": {
+          "label": "Korean multilingual male",
+          "language": "ko",
+          "voice": "ko-KR-HyunsuMultilingualNeural"
+        },
+        "english_male_christopher": {
+          "label": "English male Christopher",
+          "language": "en",
+          "voice": "en-US-ChristopherNeural"
+        }
+      }
+    },
+    "openvoice": {
+      "currentVoiceType": "cloned_reference",
+      "voices": {
+        "cloned_reference": {
+          "label": "OpenVoice reference sample",
+          "language": "ko",
+          "voice": "voice-samples/user-reference.wav"
+        }
+      }
+    },
+    "speechswift": {
+      "currentVoiceType": "cosyvoice_reference",
+      "voices": {
+        "cosyvoice_reference": {
+          "label": "CosyVoice reference sample",
+          "language": "ko",
+          "voice": "voice-samples/user-reference.wav"
+        },
+        "qwen3_default": {
+          "label": "Qwen3 default speaker",
+          "language": "ko",
+          "voice": "qwen3_default"
+        }
+      }
+    },
+    "supertonic": {
+      "currentVoiceType": "m1",
+      "voices": {
+        "m1": {
+          "label": "Supertonic M1",
+          "language": "ko",
+          "voice": "M1"
+        }
+      }
+    }
+  }
+}
