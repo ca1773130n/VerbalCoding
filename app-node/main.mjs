@@ -49,6 +49,16 @@ import { shouldPassWhisperLanguage, voiceLanguageCommandFromTranscript, language
 import { formatRestartCompleteNotice, formatRestartShutdownNotice } from './restart_notice.mjs';
 import { shouldRouteDiscordTextToAgent } from './text_routing.mjs';
 import {
+  bindProjectSessionToChannel,
+  createProjectSession,
+  listProjectSessions,
+  loadProjectSessions,
+  parseProjectSessionCommand,
+  projectSessionContextText,
+  projectSessionForChannel,
+  saveProjectSessions,
+} from './project_sessions.mjs';
+import {
   agentAnswerHeader,
   emptyAgentAnswer,
   formatSttResultMessage,
@@ -160,6 +170,7 @@ const settings = {
   wakeWords: (process.env.WAKE_WORDS || 'hermes,헤르메스,허미스').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
   debugDir: process.env.NODE_AUDIO_DEBUG_DIR || '/tmp/verbalcoding-node-debug',
   latencyLogPath: process.env.LATENCY_LOG_PATH || path.join(ROOT, '.logs', 'latency.jsonl'),
+  projectSessionsPath: process.env.PROJECT_SESSIONS_FILE || path.join(ROOT, 'config', 'project-sessions.json'),
   agent: buildAgentSettings({ ROOT, env: process.env }),
 };
 if (!settings.token) throw new Error('DISCORD_BOT_TOKEN or DISCORD_TOKEN is required');
@@ -174,6 +185,7 @@ let ttsBackend = createTtsBackend(settings.tts, { execFileAsync, log, warn, voic
 const voiceCloneCapture = createVoiceCloneCaptureState({ defaultTargetPath: settings.tts.openvoice.refAudio });
 
 let connection = null;
+let activeVoiceChannelId = '';
 let player = createAudioPlayer();
 let speaking = false;
 let processing = false;
@@ -248,18 +260,43 @@ const PROGRESS_IDLE_NOTICE_MAX_MS = Number(process.env.PROGRESS_IDLE_NOTICE_MAX_
 const PROGRESS_IDLE_NOTICE_MULTIPLIER = Number(process.env.PROGRESS_IDLE_NOTICE_MULTIPLIER || '1.8');
 const PROGRESS_IDLE_CHECK_MS = Number(process.env.PROGRESS_IDLE_CHECK_MS || '5000');
 const PROGRESS_IDLE_NOTICE_LIMIT = Number(process.env.PROGRESS_IDLE_NOTICE_LIMIT || '20');
-const agentAdapter = createAgentAdapter(settings.agent, {
-  execFileAsync,
-  spawn,
-  log,
-  warn,
-  onProgress: event => {
-    if (!verboseProgress) return;
-    activeProgressLastEventAt = Date.now();
-    sendVerboseProgressText(event, activeProgressSignal);
-    queueVerboseProgressSpeech(event, activeProgressSignal);
-  },
-});
+const projectSessionsState = loadProjectSessions(settings.projectSessionsPath);
+const agentAdaptersBySession = new Map();
+function createBridgeAgentAdapter(agentSettings) {
+  return createAgentAdapter(agentSettings, {
+    execFileAsync,
+    spawn,
+    log,
+    warn,
+    onProgress: event => {
+      if (!verboseProgress) return;
+      activeProgressLastEventAt = Date.now();
+      sendVerboseProgressText(event, activeProgressSignal);
+      queueVerboseProgressSpeech(event, activeProgressSignal);
+    },
+  });
+}
+const agentAdapter = createBridgeAgentAdapter(settings.agent);
+function adapterForProjectSession(session) {
+  if (!session) return agentAdapter;
+  const key = session.slug || session.name;
+  if (!agentAdaptersBySession.has(key)) {
+    agentAdaptersBySession.set(key, createBridgeAgentAdapter({
+      ...settings.agent,
+      label: `${settings.agent.label} · ${session.name}`,
+      sessionFile: session.sessionFile,
+      cwd: session.workdir,
+      projectContext: projectSessionContextText(session),
+    }));
+  }
+  return agentAdaptersBySession.get(key);
+}
+function resolveProjectSessionForChannel(channelId) {
+  return projectSessionForChannel(projectSessionsState, channelId) || null;
+}
+function saveProjectSessionsState() {
+  saveProjectSessions(settings.projectSessionsPath, projectSessionsState);
+}
 let sensitivityMode = SENSITIVITY_MODE_DEFAULT;
 let sensitivityModeExpiresAt = 0;
 function currentBargeInThresholds() {
@@ -829,13 +866,23 @@ async function handleTextAgentMessage(msg, text, { speakResponse = false } = {})
   activeProgressAbortController = progressController;
   activeProgressSignal = progressController.signal;
   activeProgressLastEventAt = Date.now();
-  const plan = { task: true, label: agentAdapter.label, verboseProgress, language: settings.voiceLanguage };
-  const sessionBefore = agentAdapter.readSessionId?.();
-  log('text agent request start', agentAdapter.label, sessionBefore ? 'resume-existing-session' : 'new-session', 'verbose', verboseProgress);
+  const session = resolveProjectSessionForChannel(msg.channelId);
+  const selectedAgentAdapter = adapterForProjectSession(session);
+  const projectContext = projectSessionContextText(session);
+  const plan = {
+    task: true,
+    label: selectedAgentAdapter.label,
+    verboseProgress,
+    language: settings.voiceLanguage,
+    cwd: session?.workdir,
+    projectContext,
+  };
+  const sessionBefore = selectedAgentAdapter.readSessionId?.();
+  log('text agent request start', selectedAgentAdapter.label, sessionBefore ? 'resume-existing-session' : 'new-session', 'verbose', verboseProgress, session ? `project=${session.slug}` : 'project=default');
   try {
-    const result = await agentAdapter.run(text, signal, plan);
+    const result = await selectedAgentAdapter.run(text, signal, plan);
     const answer = result.answer || emptyAgentAnswer(settings.voiceLanguage);
-    const fullAnswerText = `${agentAnswerHeader(settings.voiceLanguage, agentAdapter.label)}\n${answer}`;
+    const fullAnswerText = `${agentAnswerHeader(settings.voiceLanguage, selectedAgentAdapter.label)}\n${answer}`;
     await sendChannelText(msg.channel, fullAnswerText);
     stopProgressSpeech(progressController.signal, 'text-agent-answer-ready');
     if (speakResponse && connection) {
@@ -1164,14 +1211,24 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
         return;
       }
     }
-    const plan = { task: true, label: agentAdapter.label, verboseProgress, language: settings.voiceLanguage };
-    log('Agent plan', plan.label, 'backend', agentAdapter.backend, 'task', plan.task, 'language', plan.language);
+    const session = resolveProjectSessionForChannel(activeVoiceChannelId || settings.transcriptChannelId);
+    const selectedAgentAdapter = adapterForProjectSession(session);
+    const projectContext = projectSessionContextText(session);
+    const plan = {
+      task: true,
+      label: selectedAgentAdapter.label,
+      verboseProgress,
+      language: settings.voiceLanguage,
+      cwd: session?.workdir,
+      projectContext,
+    };
+    log('Agent plan', plan.label, 'backend', selectedAgentAdapter.backend, 'task', plan.task, 'language', plan.language, session ? `project=${session.slug}` : 'project=default');
     const agentStart = Date.now();
     const progressController = new AbortController();
     activeProgressAbortController = progressController;
     activeProgressSignal = progressController.signal;
     activeProgressLastEventAt = Date.now();
-    const agentPromise = agentAdapter.ask(prompt, signal, plan);
+    const agentPromise = selectedAgentAdapter.ask(prompt, signal, plan);
     let done = false;
     // Status announcements share one queue with verbose progress so they never
     // talk over each other. In verbose mode, skip the generic initial prompt;
@@ -1215,13 +1272,13 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
       if (!isAbortError(e)) warn('progress loop failed', e?.stack || e);
     });
     const answer = await agentPromise.finally(() => { done = true; });
-    metricsTurn?.stage('agent', Date.now() - agentStart, { answerChars: String(answer || '').length, backend: agentAdapter.backend });
+    metricsTurn?.stage('agent', Date.now() - agentStart, { answerChars: String(answer || '').length, backend: selectedAgentAdapter.backend });
     void progressLoop;
     if (interruptedTurns.has(turnId) || signal.aborted) { metricsTurn?.finish({ status: 'aborted_after_agent' }); return; }
 
-    log('Agent answer', agentAdapter.label, answer.slice(0, 200));
+    log('Agent answer', selectedAgentAdapter.label, answer.slice(0, 200));
     const spokenAnswer = spokenResultOnly(prompt, answer, settings.voiceLanguage);
-    const fullAnswerText = `${agentAnswerHeader(settings.voiceLanguage, agentAdapter.label)}\n${answer || emptyAgentAnswer(settings.voiceLanguage)}`;
+    const fullAnswerText = `${agentAnswerHeader(settings.voiceLanguage, selectedAgentAdapter.label)}\n${answer || emptyAgentAnswer(settings.voiceLanguage)}`;
     log('send agent answer text', 'chars', fullAnswerText.length);
     const answerTextDelivered = await sendText(fullAnswerText);
     if (!answerTextDelivered) {
@@ -1314,6 +1371,7 @@ async function connectTo(channel) {
   if (connection) {
     try { connection.destroy(); } catch {}
   }
+  activeVoiceChannelId = channel.id;
   connection = joinVoiceChannel({
     channelId: channel.id,
     guildId: channel.guild.id,
@@ -1378,6 +1436,57 @@ async function announceRestartComplete() {
   await speakText(speech, undefined, null, { mirrorText: false });
 }
 
+async function handleProjectSessionCommand(msg, command) {
+  const activeSession = resolveProjectSessionForChannel(msg.channelId) || resolveProjectSessionForChannel(activeVoiceChannelId);
+  if (command.action === 'status') {
+    if (!activeSession) return void msg.reply(`${agentAdapter.label} 기본 세션: ${agentAdapter.readSessionId?.() || '아직 없음'}`);
+    const adapter = adapterForProjectSession(activeSession);
+    return void msg.reply([
+      `프로젝트 세션: ${activeSession.name}`,
+      `작업실: ${activeSession.workdir}`,
+      `Hermes 세션: ${adapter.readSessionId?.() || '아직 없음'}`,
+      `연결 채널: 현재 채널`,
+    ].join('\n'));
+  }
+  if (command.action === 'list') {
+    const sessions = listProjectSessions(projectSessionsState);
+    if (!sessions.length) return void msg.reply('등록된 프로젝트 세션이 없어. `!session new 이름 /프로젝트/경로`로 만들 수 있어.');
+    return void msg.reply(sessions.map(session => `- ${session.name}: ${session.workdir}`).join('\n').slice(0, 1900));
+  }
+  if (command.action === 'reset') {
+    const session = activeSession;
+    const targetFile = session?.sessionFile || settings.agent.sessionFile;
+    try { fs.rmSync(targetFile, { force: true }); } catch {}
+    return void msg.reply(`${session?.name || agentAdapter.label} 세션 초기화했어.`);
+  }
+  if (command.action === 'use') {
+    if (!command.name) return void msg.reply('사용할 세션 이름을 붙여줘. 예: `!session use llm-wiki`');
+    const session = bindProjectSessionToChannel({ state: projectSessionsState, nameOrSlug: command.name, channelId: msg.channelId });
+    if (activeVoiceChannelId) projectSessionsState.channelSessions[activeVoiceChannelId] = session.slug;
+    saveProjectSessionsState();
+    return void msg.reply(`${session.name} 프로젝트 세션을 이 채널에 연결했어. 작업실은 ${session.workdir}이야.`);
+  }
+  if (command.action === 'new') {
+    if (!command.name || !command.workdir) {
+      return void msg.reply('형식: `!session new <이름> <작업실경로> [MCP/프로젝트 설명]`');
+    }
+    if (!fs.existsSync(command.workdir)) return void msg.reply(`작업실 경로가 없어: ${command.workdir}`);
+    const session = createProjectSession({
+      root: ROOT,
+      state: projectSessionsState,
+      name: command.name,
+      workdir: command.workdir,
+      channelId: msg.channelId,
+      transcriptChannelId: msg.channelId,
+      mcpContext: command.mcpContext,
+    });
+    if (activeVoiceChannelId) projectSessionsState.channelSessions[activeVoiceChannelId] = session.slug;
+    saveProjectSessionsState();
+    agentAdaptersBySession.delete(session.slug);
+    return void msg.reply(`${session.name} 프로젝트 세션 만들었어. 작업실은 ${session.workdir}이고, 이 채널 입력은 별도 Hermes 세션 파일로 이어져.`);
+  }
+}
+
 client.once('ready', async () => {
   log(`Logged in as ${client.user.tag} (${client.user.id})`);
   await autoJoin();
@@ -1388,6 +1497,11 @@ client.on('messageCreate', async msg => {
   if (msg.author.bot) return;
   if (!isAllowed(msg.author.id)) return;
   const content = msg.content.trim();
+  const projectSessionCommand = parseProjectSessionCommand(content);
+  if (projectSessionCommand) {
+    await handleProjectSessionCommand(msg, projectSessionCommand);
+    return;
+  }
   if (content === '!ping') return void msg.reply('pong');
   if (content === '!verbose') return void msg.reply(verboseStatusText());
   if (['!verbose on', '!verbose true', '!verbose 1', '!verbose 켜', '!verbose 켜줘'].includes(content.toLowerCase())) {
@@ -1411,11 +1525,8 @@ client.on('messageCreate', async msg => {
     setSensitivityMode('normal', 'discord-command');
     return void msg.reply(sensitivityStatusText());
   }
-  if (content === '!session') return void msg.reply(`${agentAdapter.label} 세션: ${agentAdapter.readSessionId?.() || '아직 없음'}`);
-  if (content === '!reset-session') {
-    try { fs.rmSync(settings.agent.sessionFile, { force: true }); } catch {}
-    return void msg.reply(`${agentAdapter.label} 음성/텍스트 공유 세션 초기화했어.`);
-  }
+  if (content === '!session') return void handleProjectSessionCommand(msg, { action: 'status' });
+  if (content === '!reset-session') return void handleProjectSessionCommand(msg, { action: 'reset' });
   if (content === '!join') {
     const ch = msg.member?.voice?.channel;
     if (!ch) return void msg.reply('먼저 음성 채널에 들어가줘.');
@@ -1425,6 +1536,7 @@ client.on('messageCreate', async msg => {
   if (content === '!leave') {
     try { connection?.destroy(); } catch {}
     connection = null;
+    activeVoiceChannelId = '';
     return void msg.reply('나갈게.');
   }
   if (content.startsWith('!say ')) {

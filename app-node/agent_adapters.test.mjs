@@ -20,6 +20,7 @@ test('buildAgentSettings defaults to Hermes backend and uses VerbalCoding sessio
   assert.equal(settings.label, 'Hermes Agent');
   assert.equal(settings.command, 'hermes chat -Q -q');
   assert.equal(settings.sessionFile, '/project/.verbalcoding-session');
+  assert.equal(settings.cwd, '/project');
   assert.equal(settings.taskTimeoutMs, 0);
 });
 
@@ -54,6 +55,38 @@ test('Hermes adapter resumes and saves Hermes CLI session ids', async () => {
   assert.equal(files.get('/tmp/hermes-session'), 'new-session\n');
   assert.equal(assertAgentAdapterContract(adapter), true);
   assert.equal(adapter.capabilities.supportsSessionResume, true);
+});
+
+test('adapter passes project context prompt and cwd for project sessions', async () => {
+  const calls = [];
+  const adapter = createAgentAdapter({
+    backend: 'hermes',
+    label: 'Hermes Agent · Wiki',
+    command: 'hermes chat -Q -q',
+    sessionFile: '/tmp/wiki-session',
+    cwd: '/tmp/wiki-workdir',
+    taskTimeoutMs: 300000,
+    chatTimeoutMs: 45000,
+  }, {
+    readFileSync: () => '',
+    writeFileSync: () => {},
+    execFileAsync: async (cmd, args, options) => {
+      calls.push({ cmd, args, options });
+      return { stdout: '처리했어.\n', stderr: 'session_id: wiki-session\n' };
+    },
+    log: () => {},
+    warn: () => {},
+  });
+
+  const result = await adapter.run('프로젝트 상태 봐줘', undefined, {
+    language: 'ko',
+    projectContext: 'Project session: Wiki\nWorking directory: /tmp/wiki-workdir\nMCP/project context: wiki graph',
+  });
+
+  assert.equal(result.answer, '처리했어.');
+  assert.equal(calls[0].options.cwd, '/tmp/wiki-workdir');
+  assert.match(calls[0].args.at(-1), /Project session: Wiki/);
+  assert.match(calls[0].args.at(-1), /MCP\/project context: wiki graph/);
 });
 
 test('adapter run returns formal result while ask keeps string compatibility', async () => {

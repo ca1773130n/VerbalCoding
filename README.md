@@ -242,8 +242,11 @@ Runtime logs default to the path selected by your shell command. During local te
 - `!voice-clone capture` — save the next valid Discord voice utterance as the OpenVoice reference sample.
 - `!voice-clone status` / `!voice-clone cancel` — inspect or cancel a pending reference-sample capture.
 - `!ask <prompt>` — send text through the same selected harness adapter as voice.
-- `!session` — show the current adapter session ID when supported.
-- `!reset-session` — clear the adapter session file when supported.
+- `!session` / `!session status` — show the current project or default adapter session ID when supported.
+- `!session new <name> <workdir> [context]` — create a project-scoped Hermes session for the current Discord text channel and the currently connected voice channel. Example: `!session new llm-wiki /Users/neo/Developer/Projects/LLM-Wiki llm-wiki MCP graph`.
+- `!session use <name>` — bind the current Discord channel, and the active voice channel if connected, to an existing project session.
+- `!session list` — list configured project sessions.
+- `!session reset` / `!reset-session` — clear the current project session file, or the default adapter session file if no project session is bound.
 - `!verbose` — show whether detailed progress updates are enabled.
 - `!verbose on` / `!verbose off` — toggle detailed progress updates in text and short spoken prompts. Default is off.
 - `!latency` / `!metrics` — show recent average/p95 latency by pipeline stage.

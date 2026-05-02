@@ -53,6 +53,10 @@ export function voiceBridgePrompt(text, options = {}) {
       );
     }
   }
+  if (options.projectContext) {
+    lines.push(english ? 'Route this turn through the following project/session context:' : '이 턴은 아래 프로젝트/세션 컨텍스트로 처리해라.');
+    lines.push(String(options.projectContext).trim());
+  }
   return lines.concat(['', text]).join('\n');
 }
 
@@ -251,6 +255,7 @@ export function buildAgentSettings({ ROOT, env = process.env } = {}) {
     command,
     sessionFile: selected.sessionFile,
     supportsHermesSession: selected.supportsHermesSession,
+    cwd: env.AGENT_WORKDIR || env.HERMES_WORKDIR || root,
     taskTimeoutMs: Number(env.AGENT_TASK_TIMEOUT_MS || env.HERMES_TASK_TIMEOUT_MS || '0'),
     chatTimeoutMs: Number(env.AGENT_CHAT_TIMEOUT_MS || env.HERMES_CHAT_TIMEOUT_MS || '45000'),
     verboseProgress: ['1', 'true', 'yes', 'on'].includes(String(env.AGENT_VERBOSE_PROGRESS || env.VERBALCODING_VERBOSE_PROGRESS || '0').toLowerCase()),
@@ -447,7 +452,7 @@ export function createAgentAdapter(settings, deps = {}) {
   function buildArgs(text, options = {}) {
     const argv = shellSplit(settings.command);
     const cmd = argv[0];
-    const query = voiceBridgePrompt(text, { verboseProgress: options.verboseProgress, language: options.language });
+    const query = voiceBridgePrompt(text, { verboseProgress: options.verboseProgress, language: options.language, projectContext: options.projectContext });
     let args = argv.slice(1);
     if (settings.backend === 'hermes' && options.verboseProgress) {
       // Hermes quiet mode intentionally suppresses tool previews.  In verbose
@@ -469,8 +474,9 @@ export function createAgentAdapter(settings, deps = {}) {
     const text = typeof request === 'string' ? request : request?.text;
     const verboseProgress = Boolean(plan.verboseProgress ?? settings.verboseProgress);
     const language = plan.language || settings.language;
+    const projectContext = plan.projectContext || settings.projectContext || '';
     emittedProgress.clear();
-    const { cmd, args, sessionId } = buildArgs(text, { verboseProgress, language });
+    const { cmd, args, sessionId } = buildArgs(text, { verboseProgress, language, projectContext });
     const start = Date.now();
     const label = plan.label || settings.label;
     const { args: finalArgs, outputPath } = addCodexOutputCapture(args);
@@ -481,6 +487,7 @@ export function createAgentAdapter(settings, deps = {}) {
         timeout: resolveExecTimeout(plan.task ? settings.taskTimeoutMs : settings.chatTimeoutMs),
         maxBuffer: 4 * 1024 * 1024,
         env: { ...env, PYTHONUNBUFFERED: '1' },
+        cwd: plan.cwd || settings.cwd || process.cwd(),
         signal,
       }, verboseProgress);
       const codexLastMessage = readAndCleanupCodexOutput(outputPath);
