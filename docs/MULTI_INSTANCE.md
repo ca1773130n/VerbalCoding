@@ -22,7 +22,19 @@ instances/
 
 Real `instances/*.env` files are ignored because they may contain Discord tokens. `instances/example.env` is the committed template.
 
-## Minimal instance env
+## Instance setup wizard
+
+Users should not copy and manually edit env files for normal use. Run the wizard instead:
+
+```bash
+npm run vc -- instance setup llm-wiki
+# or through the project setup script:
+npm run setup -- --instance llm-wiki
+```
+
+The wizard prompts for the bot token, voice channel, transcript target, workdir, project context, and isolated runtime paths. It writes `instances/<name>.env` with mode `0600`, backs up an existing file before overwriting it, and prints the next start/status commands.
+
+## Minimal generated instance env
 
 ```env
 INSTANCE_NAME=llm-wiki
@@ -70,23 +82,22 @@ npm run vc -- instance restart llm-wiki
    - Connect
    - Speak
 
-3. Create local env files:
+3. Run the setup wizard for each local instance:
 
 ```bash
-cp instances/example.env instances/verbalcoding.env
-cp instances/example.env instances/llm-wiki.env
-chmod 600 instances/*.env
+npm run vc -- instance setup verbalcoding
+npm run vc -- instance setup llm-wiki
 ```
 
-4. Edit each file with its own token, voice channel, transcript target, workdir, and session file.
+The wizard writes ignored `instances/verbalcoding.env` and `instances/llm-wiki.env` files with mode `0600`; it also backs up an existing instance env before replacing it.
 
-5. Check config:
+4. Check config:
 
 ```bash
 npm run doctor
 ```
 
-6. Start both:
+5. Start both:
 
 ```bash
 npm run vc -- instance start verbalcoding
@@ -94,7 +105,7 @@ npm run vc -- instance start llm-wiki
 npm run vc -- instance status
 ```
 
-7. Verify logs:
+6. Verify logs:
 
 ```bash
 tail -n 50 /tmp/verbalcoding-verbalcoding.log
@@ -108,7 +119,7 @@ Listening in voice channel ... / VerbalCoding
 Listening in voice channel ... / LLM-Wiki
 ```
 
-8. Stop both:
+7. Stop both:
 
 ```bash
 npm run vc -- instance stop verbalcoding

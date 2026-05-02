@@ -4,7 +4,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { applyLanguagePreset, languageStatus, normalizeLanguageKey } from '../app-node/language_config.mjs';
-import { parseKeyValueEnv } from '../app-node/install_config.mjs';
+import {
+  buildInstanceEnvFile,
+  normalizeInstanceAnswers,
+  parseKeyValueEnv,
+  renderInstanceSetupSummary,
+} from '../app-node/install_config.mjs';
 import { checkInstanceConfigs } from '../app-node/instance_doctor.mjs';
 import {
   listInstanceStatuses,
@@ -27,6 +32,7 @@ Usage:
   verbalcoding language status
   verbalcoding restart auto <on|off|status>
   verbalcoding instance list
+  verbalcoding instance setup [name] [--start]
   verbalcoding instance status [name]
   verbalcoding instance start <name>
   verbalcoding instance stop <name>
@@ -95,11 +101,73 @@ function assertInstanceStartIsSafe() {
   }
 }
 
+async function askQuestion(rl, question, fallback = '', options = {}) {
+  const suffixValue = options.fallbackLabel ?? fallback;
+  const suffix = suffixValue ? ` [${suffixValue}]` : '';
+  const answer = (await rl.question(`${question}${suffix}: `)).trim();
+  return answer || fallback;
+}
+
+async function setupInstance(argv) {
+  const { default: readline } = await import('node:readline/promises');
+  const { stdin: input, stdout: output } = await import('node:process');
+  const startAfter = argv.includes('--start');
+  const nonFlagArgs = argv.slice(2).filter(arg => !arg.startsWith('--'));
+  const shared = readEnvFile();
+  const initialName = nonFlagArgs[0] || '';
+  const rl = readline.createInterface({ input, output });
+  try {
+    console.log('VerbalCoding instance setup');
+    console.log('This creates or updates instances/<name>.env; no manual editing is required.');
+    const instanceName = await askQuestion(rl, 'Instance name', initialName || 'llm-wiki');
+    const preview = normalizeInstanceAnswers({ instanceName });
+    const instancePath = path.join(ROOT, 'instances', `${preview.INSTANCE_NAME}.env`);
+    const existing = readEnvFile(instancePath);
+    const defaults = { ...shared, ...existing };
+    const existingToken = defaults.DISCORD_TOKEN || defaults.DISCORD_BOT_TOKEN || '';
+    const values = normalizeInstanceAnswers({
+      instanceName,
+      discordBotToken: await askQuestion(rl, 'Discord bot token for this bot', existingToken, { fallbackLabel: existingToken ? 'keep existing' : '' }),
+      allowedUsers: await askQuestion(rl, 'Allowed Discord user IDs, comma-separated', defaults.DISCORD_ALLOWED_USERS || shared.DISCORD_ALLOWED_USERS || ''),
+      autoJoinVoiceChannels: await askQuestion(rl, 'Voice channel for this instance', defaults.AUTO_JOIN_VOICE_CHANNELS || instanceName),
+      transcriptChannelId: await askQuestion(rl, 'Transcript text channel/thread ID', defaults.TRANSCRIPT_CHANNEL_ID || ''),
+      workdir: await askQuestion(rl, 'Project working directory', defaults.AGENT_CWD || defaults.AGENT_WORKDIR || shared.AGENT_CWD || shared.AGENT_WORKDIR || ROOT),
+      projectContext: await askQuestion(rl, 'Project context prompt', defaults.AGENT_PROJECT_CONTEXT || `Project session: ${instanceName}`),
+      projectSessionsFile: await askQuestion(rl, 'Project sessions file', defaults.PROJECT_SESSIONS_FILE || `config/project-sessions.${preview.INSTANCE_NAME}.json`),
+      bridgeLogPath: await askQuestion(rl, 'Bridge log path', defaults.BRIDGE_LOG_PATH || `/tmp/verbalcoding-${preview.INSTANCE_NAME}.log`),
+      nodeAudioDebugDir: await askQuestion(rl, 'Audio debug directory', defaults.NODE_AUDIO_DEBUG_DIR || `/tmp/verbalcoding-${preview.INSTANCE_NAME}-debug`),
+      hermesSessionFile: await askQuestion(rl, 'Hermes session file', defaults.HERMES_SESSION_FILE || `.agent-sessions/hermes/${preview.INSTANCE_NAME}.session`),
+      agentLabel: await askQuestion(rl, 'Agent label', defaults.AGENT_LABEL || `Hermes Agent · ${instanceName}`),
+    });
+    fs.mkdirSync(path.dirname(instancePath), { recursive: true });
+    if (fs.existsSync(instancePath)) {
+      const backup = `${instancePath}.bak-${Date.now()}`;
+      fs.copyFileSync(instancePath, backup);
+      console.log(`Backed up existing instance env to ${backup}`);
+    }
+    fs.writeFileSync(instancePath, buildInstanceEnvFile(values), { mode: 0o600 });
+    console.log(`Wrote ${instancePath}`);
+    console.log(renderInstanceSetupSummary(values));
+    if (startAfter) {
+      assertInstanceStartIsSafe();
+      const status = startInstance(ROOT, values.INSTANCE_NAME);
+      console.log(`Started ${status.name} pid=${status.pid}`);
+      console.log(`Log: ${status.logPath}`);
+    }
+  } finally {
+    rl.close();
+  }
+}
+
 async function handleInstanceCommand(argv) {
   const action = argv[1] || 'status';
   const name = argv[2];
   if (action === 'list' || (action === 'status' && !name)) {
     printInstanceStatus(listInstanceStatuses(ROOT));
+    return;
+  }
+  if (action === 'setup' || action === 'configure') {
+    await setupInstance(argv);
     return;
   }
   if (action === 'status') {
@@ -132,7 +200,7 @@ async function handleInstanceCommand(argv) {
     return;
   }
   console.error(`Unknown instance command: ${action}`);
-  console.error('Use: verbalcoding instance <list|status|start|stop|restart> [name]');
+  console.error('Use: verbalcoding instance <list|setup|status|start|stop|restart> [name]');
   process.exitCode = 2;
 }
 

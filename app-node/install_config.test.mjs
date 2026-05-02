@@ -3,9 +3,12 @@ import assert from 'node:assert/strict';
 
 import {
   buildEnvFile,
+  buildInstanceEnvFile,
   normalizeInstallAnswers,
+  normalizeInstanceAnswers,
   parseKeyValueEnv,
   renderInstallSummary,
+  renderInstanceSetupSummary,
 } from './install_config.mjs';
 
 test('normalizeInstallAnswers maps supported harnesses to backend env', () => {
@@ -87,4 +90,56 @@ test('renderInstallSummary documents selected harness and next commands', () => 
   assert.match(summary, /\.\/run\.sh/);
   assert.match(summary, /openvoice/);
   assert.match(summary, /!voice-test/);
+});
+
+test('normalizeInstanceAnswers derives isolated per-instance env values', () => {
+  const values = normalizeInstanceAnswers({
+    instanceName: 'LLM Wiki',
+    discordBotToken: 'token-instance',
+    autoJoinVoiceChannels: 'LLM-Wiki',
+    transcriptChannelId: '1497890694730219540',
+    workdir: '/Users/neo/Developer/Projects/LLM-Wiki',
+    projectContext: 'LLM-Wiki graph context',
+    agentLabel: '',
+  });
+
+  assert.equal(values.INSTANCE_NAME, 'llm-wiki');
+  assert.equal(values.DISCORD_TOKEN, 'token-instance');
+  assert.equal(values.AUTO_JOIN_VOICE_CHANNELS, 'LLM-Wiki');
+  assert.equal(values.TRANSCRIPT_CHANNEL_ID, '1497890694730219540');
+  assert.equal(values.PROJECT_SESSIONS_FILE, 'config/project-sessions.llm-wiki.json');
+  assert.equal(values.BRIDGE_LOG_PATH, '/tmp/verbalcoding-llm-wiki.log');
+  assert.equal(values.NODE_AUDIO_DEBUG_DIR, '/tmp/verbalcoding-llm-wiki-debug');
+  assert.equal(values.HERMES_SESSION_FILE, '.agent-sessions/hermes/llm-wiki.session');
+  assert.equal(values.AGENT_LABEL, 'Hermes Agent · LLM Wiki');
+  assert.equal(values.AGENT_CWD, '/Users/neo/Developer/Projects/LLM-Wiki');
+  assert.equal(values.AGENT_PROJECT_CONTEXT, 'LLM-Wiki graph context');
+});
+
+test('buildInstanceEnvFile writes only local per-instance values with token redaction left to callers', () => {
+  const envText = buildInstanceEnvFile(normalizeInstanceAnswers({
+    instanceName: 'verbalcoding',
+    discordBotToken: 'token-vc',
+    autoJoinVoiceChannels: 'VerbalCoding',
+    transcriptChannelId: 'thread-1',
+    allowedUsers: '111,222',
+  }));
+  const parsed = parseKeyValueEnv(envText);
+
+  assert.equal(parsed.INSTANCE_NAME, 'verbalcoding');
+  assert.equal(parsed.DISCORD_TOKEN, 'token-vc');
+  assert.equal(parsed.DISCORD_ALLOWED_USERS, '111,222');
+  assert.equal(parsed.AUTO_JOIN_VOICE_CHANNELS, 'VerbalCoding');
+  assert.equal(parsed.TRANSCRIPT_CHANNEL_ID, 'thread-1');
+  assert.equal(parsed.PROJECT_SESSIONS_FILE, 'config/project-sessions.verbalcoding.json');
+  assert.equal(parsed.AGENT_BACKEND, undefined);
+});
+
+test('renderInstanceSetupSummary points users at CLI commands, not manual editing', () => {
+  const summary = renderInstanceSetupSummary({ INSTANCE_NAME: 'llm-wiki', BRIDGE_LOG_PATH: '/tmp/verbalcoding-llm-wiki.log' });
+
+  assert.match(summary, /instances\/llm-wiki\.env/);
+  assert.match(summary, /npm run vc -- instance start llm-wiki/);
+  assert.match(summary, /npm run vc -- instance status llm-wiki/);
+  assert.match(summary, /npm run doctor/);
 });

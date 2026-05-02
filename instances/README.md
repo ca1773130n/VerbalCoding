@@ -2,7 +2,7 @@
 
 This directory holds local per-instance env files for running multiple VerbalCoding Discord voice bots at the same time.
 
-Copy `example.env` to `instances/<name>.env` and edit it locally. Real instance env files are ignored by git because they may contain Discord bot tokens.
+Use the setup wizard to create or update `instances/<name>.env`; do not copy/edit env files manually for normal use. Real instance env files are ignored by git because they may contain Discord bot tokens.
 
 Rules:
 
@@ -21,6 +21,8 @@ Typical commands:
 
 ```bash
 npm run vc -- instance status
+npm run vc -- instance setup llm-wiki
+npm run setup -- --instance llm-wiki
 npm run vc -- instance start llm-wiki
 npm run vc -- instance stop llm-wiki
 npm run vc -- instance restart llm-wiki

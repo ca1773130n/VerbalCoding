@@ -7,14 +7,25 @@ import { buildEnvFile, normalizeInstallAnswers, renderInstallSummary, SUPPORTED_
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 
-async function ask(question, fallback = '') {
+async function ask(question, fallback = '', options = {}) {
   const rl = globalThis.__rl;
-  const suffix = fallback ? ` [${fallback}]` : '';
+  const suffixValue = options.fallbackLabel ?? fallback;
+  const suffix = suffixValue ? ` [${suffixValue}]` : '';
   const answer = (await rl.question(`${question}${suffix}: `)).trim();
   return answer || fallback;
 }
 
 async function main() {
+  const args = process.argv.slice(2);
+  if (args[0] === 'instance' || args.includes('--instance')) {
+    const { spawnSync } = await import('node:child_process');
+    const pass = args[0] === 'instance'
+      ? args.slice(1)
+      : args.filter(arg => arg !== '--instance');
+    const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'cli.mjs'), 'instance', 'setup', ...pass], { stdio: 'inherit', cwd: ROOT });
+    process.exitCode = result.status ?? 1;
+    return;
+  }
   globalThis.__rl = readline.createInterface({ input, output });
   try {
     console.log('VerbalCoding installer');
@@ -26,7 +37,8 @@ async function main() {
       agentLabel = await ask('Custom harness label', 'Custom Agent');
       agentCommand = await ask('Custom harness command, prompt appended as final argv', 'my-agent run');
     }
-    const discordBotToken = await ask('Discord bot token (DISCORD_BOT_TOKEN)', process.env.DISCORD_BOT_TOKEN || '');
+    const existingDiscordBotToken = process.env.DISCORD_BOT_TOKEN || '';
+    const discordBotToken = await ask('Discord bot token (DISCORD_BOT_TOKEN)', existingDiscordBotToken, { fallbackLabel: existingDiscordBotToken ? 'keep existing' : '' });
     const allowedUsers = await ask('Allowed Discord user IDs, comma-separated', process.env.DISCORD_ALLOWED_USERS || '');
     const autoJoinVoiceChannels = await ask('Auto-join voice channel names', process.env.AUTO_JOIN_VOICE_CHANNELS || '일반,General,general');
     const transcriptChannelId = await ask('Transcript text channel/thread ID', process.env.TRANSCRIPT_CHANNEL_ID || '');

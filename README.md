@@ -101,6 +101,7 @@ npm run vc -- restart auto status # show commit-time voice-bot auto-restart sett
 npm run vc -- restart auto on     # enable commit-time voice-bot auto-restart
 npm run vc -- restart auto off    # disable it; this is the default
 npm run vc -- instance status      # list per-instance bridge configs and process status
+npm run vc -- instance setup NAME  # interactive wizard; writes instances/NAME.env safely
 npm run vc -- instance start NAME  # start ./run.sh instances/NAME.env as a detached process
 npm run vc -- instance stop NAME   # stop a detached instance and remove its pid file
 npm run vc -- doctor              # run the redacted doctor check
