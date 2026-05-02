@@ -1436,22 +1436,53 @@ async function announceRestartComplete() {
   await speakText(speech, undefined, null, { mirrorText: false });
 }
 
+async function findVoiceChannelBySelector(guild, selector) {
+  const wanted = String(selector || '').trim();
+  if (!wanted || !guild) return null;
+  const id = wanted.replace(/^<#(\d+)>$/, '$1');
+  const channels = await guild.channels.fetch();
+  const voiceChannels = [...channels.values()].filter(ch => ch?.isVoiceBased?.());
+  const byId = voiceChannels.find(ch => ch.id === id);
+  if (byId) return byId;
+  const matches = voiceChannels.filter(ch => String(ch.name || '').toLowerCase() === wanted.toLowerCase());
+  if (matches.length === 1) return matches[0];
+  if (matches.length > 1) throw new Error(`같은 이름의 음성 채널이 여러 개야. 채널 ID나 멘션으로 지정해줘: ${wanted}`);
+  throw new Error(`음성 채널을 찾지 못했어: ${wanted}`);
+}
+
+async function voiceChannelLabel(guild, channelId) {
+  if (!channelId || !guild) return '없음';
+  try {
+    const ch = await guild.channels.fetch(channelId);
+    return ch?.name || '지정됨';
+  } catch {
+    return '지정됨';
+  }
+}
+
 async function handleProjectSessionCommand(msg, command) {
   const activeSession = resolveProjectSessionForChannel(msg.channelId) || resolveProjectSessionForChannel(activeVoiceChannelId);
   if (command.action === 'status') {
     if (!activeSession) return void msg.reply(`${agentAdapter.label} 기본 세션: ${agentAdapter.readSessionId?.() || '아직 없음'}`);
     const adapter = adapterForProjectSession(activeSession);
+    const voiceName = await voiceChannelLabel(msg.guild, activeSession.voiceChannelId);
     return void msg.reply([
       `프로젝트 세션: ${activeSession.name}`,
       `작업실: ${activeSession.workdir}`,
+      `음성 채널: ${voiceName}`,
       `Hermes 세션: ${adapter.readSessionId?.() || '아직 없음'}`,
-      `연결 채널: 현재 채널`,
+      `텍스트 채널: 현재 채널`,
     ].join('\n'));
   }
   if (command.action === 'list') {
     const sessions = listProjectSessions(projectSessionsState);
-    if (!sessions.length) return void msg.reply('등록된 프로젝트 세션이 없어. `!session new 이름 /프로젝트/경로`로 만들 수 있어.');
-    return void msg.reply(sessions.map(session => `- ${session.name}: ${session.workdir}`).join('\n').slice(0, 1900));
+    if (!sessions.length) return void msg.reply('등록된 프로젝트 세션이 없어. `!session new 이름 /프로젝트/경로 --voice 음성채널명`으로 만들 수 있어.');
+    const lines = [];
+    for (const session of sessions) {
+      const voiceName = await voiceChannelLabel(msg.guild, session.voiceChannelId);
+      lines.push(`- ${session.name}: ${session.workdir} / voice: ${voiceName}`);
+    }
+    return void msg.reply(lines.join('\n').slice(0, 1900));
   }
   if (command.action === 'reset') {
     const session = activeSession;
@@ -1460,30 +1491,35 @@ async function handleProjectSessionCommand(msg, command) {
     return void msg.reply(`${session?.name || agentAdapter.label} 세션 초기화했어.`);
   }
   if (command.action === 'use') {
-    if (!command.name) return void msg.reply('사용할 세션 이름을 붙여줘. 예: `!session use llm-wiki`');
+    if (!command.name) return void msg.reply('사용할 세션 이름을 붙여줘. 예: `!session use llm-wiki --voice "LLM Wiki"`');
+    const voiceChannel = command.voice ? await findVoiceChannelBySelector(msg.guild, command.voice) : null;
     const session = bindProjectSessionToChannel({ state: projectSessionsState, nameOrSlug: command.name, channelId: msg.channelId });
-    if (activeVoiceChannelId) projectSessionsState.channelSessions[activeVoiceChannelId] = session.slug;
+    if (voiceChannel) {
+      projectSessionsState.channelSessions[voiceChannel.id] = session.slug;
+      session.voiceChannelId = voiceChannel.id;
+    }
     saveProjectSessionsState();
-    return void msg.reply(`${session.name} 프로젝트 세션을 이 채널에 연결했어. 작업실은 ${session.workdir}이야.`);
+    return void msg.reply(`${session.name} 프로젝트 세션을 이 텍스트 채널${voiceChannel ? `과 음성 채널 ${voiceChannel.name}` : ''}에 연결했어. 작업실은 ${session.workdir}이야.`);
   }
   if (command.action === 'new') {
     if (!command.name || !command.workdir) {
-      return void msg.reply('형식: `!session new <이름> <작업실경로> [MCP/프로젝트 설명]`');
+      return void msg.reply('형식: `!session new <이름> <작업실경로> [MCP/프로젝트 설명] --voice <음성채널명>`');
     }
     if (!fs.existsSync(command.workdir)) return void msg.reply(`작업실 경로가 없어: ${command.workdir}`);
+    const voiceChannel = command.voice ? await findVoiceChannelBySelector(msg.guild, command.voice) : null;
     const session = createProjectSession({
       root: ROOT,
       state: projectSessionsState,
       name: command.name,
       workdir: command.workdir,
       channelId: msg.channelId,
+      voiceChannelId: voiceChannel?.id || '',
       transcriptChannelId: msg.channelId,
       mcpContext: command.mcpContext,
     });
-    if (activeVoiceChannelId) projectSessionsState.channelSessions[activeVoiceChannelId] = session.slug;
     saveProjectSessionsState();
     agentAdaptersBySession.delete(session.slug);
-    return void msg.reply(`${session.name} 프로젝트 세션 만들었어. 작업실은 ${session.workdir}이고, 이 채널 입력은 별도 Hermes 세션 파일로 이어져.`);
+    return void msg.reply(`${session.name} 프로젝트 세션 만들었어. 작업실은 ${session.workdir}이고, 이 텍스트 채널${voiceChannel ? `과 음성 채널 ${voiceChannel.name}` : ''} 입력은 별도 Hermes 세션 파일로 이어져.`);
   }
 }
 
@@ -1499,7 +1535,12 @@ client.on('messageCreate', async msg => {
   const content = msg.content.trim();
   const projectSessionCommand = parseProjectSessionCommand(content);
   if (projectSessionCommand) {
-    await handleProjectSessionCommand(msg, projectSessionCommand);
+    try {
+      await handleProjectSessionCommand(msg, projectSessionCommand);
+    } catch (e) {
+      warn('project session command failed', e?.stack || e);
+      await msg.reply(String(e?.message || e).slice(0, 700));
+    }
     return;
   }
   if (content === '!ping') return void msg.reply('pong');

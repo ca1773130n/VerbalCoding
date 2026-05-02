@@ -243,8 +243,8 @@ Runtime logs default to the path selected by your shell command. During local te
 - `!voice-clone status` / `!voice-clone cancel` — inspect or cancel a pending reference-sample capture.
 - `!ask <prompt>` — send text through the same selected harness adapter as voice.
 - `!session` / `!session status` — show the current project or default adapter session ID when supported.
-- `!session new <name> <workdir> [context]` — create a project-scoped Hermes session for the current Discord text channel and the currently connected voice channel. Example: `!session new llm-wiki /Users/neo/Developer/Projects/LLM-Wiki llm-wiki MCP graph`.
-- `!session use <name>` — bind the current Discord channel, and the active voice channel if connected, to an existing project session.
+- `!session new <name> <workdir> [context] --voice <voice-channel>` — create a project-scoped Hermes session for the current Discord text channel and the named voice channel. Example: `!session new llm-wiki /Users/neo/Developer/Projects/LLM-Wiki llm-wiki MCP graph --voice "LLM Wiki"`.
+- `!session use <name> --voice <voice-channel>` — bind the current Discord text channel, and optionally the named voice channel, to an existing project session.
 - `!session list` — list configured project sessions.
 - `!session reset` / `!reset-session` — clear the current project session file, or the default adapter session file if no project session is bound.
 - `!verbose` — show whether detailed progress updates are enabled.
