@@ -471,7 +471,6 @@ async function sendText(text) {
 
 function sendVerboseProgressText(event, signal) {
   if (!verboseProgress || !signal || signal.aborted || activeProgressSignal !== signal) return;
-  if (progressCategory(event, { language: settings.voiceLanguage })?.key === 'agent') return;
   const formatted = formatProgressText(event).replace(/\s+/g, ' ').trim();
   if (!formatted) return;
   const message = formatted.slice(0, 1900);
@@ -760,7 +759,6 @@ function flushProgressSpeechBatch(signal, reason = 'timer') {
 
 function queueVerboseProgressSpeech(event, signal) {
   if (!verboseProgress || !signal || signal.aborted || activeProgressSignal !== signal) return;
-  if (progressCategory(event, { language: settings.voiceLanguage })?.key === 'agent') return;
   const text = String(event || '').replace(/\s+/g, ' ').trim().slice(0, 120);
   if (!text) return;
   if (progressSpeechBatchSignal && progressSpeechBatchSignal !== signal) {

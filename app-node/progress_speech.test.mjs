@@ -21,6 +21,11 @@ test('formatProgressMessage renders intermediate text in the selected English la
   assert.equal(formatProgressMessage('파일 수정 재시작 안내 문구 개선', { language: 'en' }), '✏️ editing files');
 });
 
+test('agent progress events format as visible and speakable status', () => {
+  assert.equal(formatProgressMessage('Hermes Agent 호출 시작'), '🤖 에이전트 처리');
+  assert.equal(summarizeProgressEvents(['Hermes Agent 호출 시작']), '에이전트 처리 중이야.');
+});
+
 test('summarizeProgressEvents batches many raw events with meaningful details', () => {
   const text = summarizeProgressEvents([
     '파일 읽기 app-node/main.mjs',
