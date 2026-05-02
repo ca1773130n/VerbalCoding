@@ -90,7 +90,7 @@ const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 
-function loadDotEnv(file = path.join(ROOT, '.env')) {
+function loadDotEnv(file = path.join(ROOT, '.env'), { override = true } = {}) {
   if (!fs.existsSync(file)) return;
   const text = fs.readFileSync(file, 'utf8');
   for (const raw of text.split(/\r?\n/)) {
@@ -102,8 +102,14 @@ function loadDotEnv(file = path.join(ROOT, '.env')) {
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
       try { value = JSON.parse(value); } catch { value = value.slice(1, -1); }
     }
-    if (key) process.env[key] = value;
+    if (key && (override || !(key in process.env))) process.env[key] = value;
   }
+}
+
+function loadRuntimeEnv() {
+  const instanceEnv = process.env.VERBALCODING_INSTANCE_ENV || '';
+  loadDotEnv(path.join(ROOT, '.env'), { override: !instanceEnv });
+  if (instanceEnv) loadDotEnv(instanceEnv, { override: true });
 }
 
 function loadZshrcExports() {
@@ -125,7 +131,7 @@ function loadZshrcExports() {
 }
 
 loadZshrcExports();
-loadDotEnv();
+loadRuntimeEnv();
 
 const TTS_VOICE_CONFIG_PATH = process.env.TTS_VOICE_CONFIG || path.join(ROOT, 'config', 'tts-voices.json');
 function ensureTtsVoiceConfig() {
@@ -145,7 +151,7 @@ function applyVoiceConfigToProcessEnv(config = ensureTtsVoiceConfig()) {
 function reloadRuntimeLanguageFromEnv() {
   const previousWhisperLanguage = settings?.whisperLanguage;
   const previousVoiceLanguage = settings?.voiceLanguage;
-  loadDotEnv();
+  loadRuntimeEnv();
   settings.whisperLanguage = process.env.WHISPER_CPP_LANGUAGE || process.env.STT_LANGUAGE || settings.whisperLanguage || 'ko';
   settings.voiceLanguage = process.env.VOICE_LANGUAGE || process.env.WHISPER_CPP_LANGUAGE || process.env.STT_LANGUAGE || settings.voiceLanguage || 'ko';
   const changed = previousWhisperLanguage !== undefined && (
@@ -1498,7 +1504,8 @@ async function attachVoiceChannelToTextSession(msg, command) {
   if (command.name) {
     session = bindProjectSessionToChannel({ state: projectSessionsState, nameOrSlug: command.name, channelId: msg.channelId });
   } else {
-    session = resolveProjectSessionForChannel(msg.channelId);
+    session = resolveProjectSessionForChannel(msg.channelId)
+      || resolveProjectSessionForChannel(voiceChannel.id);
     if (!session) {
       const fallbackName = String(msg.channel?.name || `channel-${msg.channelId}`).trim() || `channel-${msg.channelId}`;
       session = createProjectSession({

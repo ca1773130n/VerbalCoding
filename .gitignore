@@ -16,3 +16,9 @@ voice-samples/
 models/*.bin
 /tmp/
 *.log
+
+# VerbalCoding per-instance runtime configs; may contain Discord tokens.
+instances/*.env
+!instances/example.env
+instances/*.local.env
+.run/

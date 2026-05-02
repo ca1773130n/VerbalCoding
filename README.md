@@ -100,6 +100,9 @@ npm run vc -- language auto       # Whisper auto-detect STT + English progress/T
 npm run vc -- restart auto status # show commit-time voice-bot auto-restart setting
 npm run vc -- restart auto on     # enable commit-time voice-bot auto-restart
 npm run vc -- restart auto off    # disable it; this is the default
+npm run vc -- instance status      # list per-instance bridge configs and process status
+npm run vc -- instance start NAME  # start ./run.sh instances/NAME.env as a detached process
+npm run vc -- instance stop NAME   # stop a detached instance and remove its pid file
 npm run vc -- doctor              # run the redacted doctor check
 npm run mcp                       # run the stdio MCP server for Hermes/other MCP clients
 ```
@@ -218,9 +221,19 @@ LATENCY_LOG_PATH="./.logs/latency.jsonl"
 
 ## Run
 
+Single-instance bridge:
+
 ```bash
 cd ~/Developer/Projects/VerbalCoding
 ./run.sh
+```
+
+Per-instance bridge using a local override env:
+
+```bash
+./run.sh instances/llm-wiki.env
+# or
+VERBALCODING_INSTANCE_ENV=instances/llm-wiki.env ./run.sh
 ```
 
 The bot auto-joins the first configured channel name, defaulting to `일반,General,general`.
@@ -244,6 +257,8 @@ Runtime logs default to the path selected by your shell command. During local te
 - `!ask <prompt>` — send text through the same selected harness adapter as voice.
 - `!session` / `!session status` — show the current project or default adapter session ID when supported.
 - `!session new <name> <workdir> [context] --voice <voice-channel>` — create a project-scoped Hermes session for the current Discord text channel and the named voice channel. Example: `!session new llm-wiki /Users/neo/Developer/Projects/LLM-Wiki llm-wiki MCP graph --voice "LLM Wiki"`.
+- `!session attach-voice [sessionName] --voice <voice-channel>` — bind the current text channel/thread to the selected voice channel. If no session name is given and the text channel has no session, the bridge creates an ad-hoc isolated channel session.
+- `!session voice [sessionName] --voice <voice-channel>` — alias for `!session attach-voice`; useful for attaching an existing named project session to a voice channel.
 - `!session use <name> --voice <voice-channel>` — bind the current Discord text channel, and optionally the named voice channel, to an existing project session.
 - `!session list` — list configured project sessions.
 - `!session reset` / `!reset-session` — clear the current project session file, or the default adapter session file if no project session is bound.
@@ -405,7 +420,9 @@ bash -n run.sh scripts/install.sh
 npm run doctor
 ```
 
-`npm run doctor` intentionally redacts secrets and only reports whether required values are configured.
+`npm run doctor` intentionally redacts secrets and only reports whether required values are configured. It also checks `instances/*.env` for duplicate token fingerprints and colliding runtime paths.
+
+For simultaneous project voice rooms, see [`docs/MULTI_INSTANCE.md`](docs/MULTI_INSTANCE.md).
 
 ## Operational notes
 

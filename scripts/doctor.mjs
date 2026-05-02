@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parseKeyValueEnv } from '../app-node/install_config.mjs';
+import { checkInstanceConfigs, formatInstanceDoctor } from '../app-node/instance_doctor.mjs';
 import { autoRestartVoiceBotEnabled } from '../app-node/restart_policy.mjs';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -115,6 +116,14 @@ if (backend === 'custom') {
   const first = String(backendCommand).trim().split(/\s+/)[0];
   ok = check(`${backend} CLI`, first && commandExists(first), first ? (commandExists(first) || `missing ${first}`) : 'missing command') && ok;
 }
+
+console.log('');
+console.log('Instance checks');
+const instanceResult = checkInstanceConfigs(ROOT);
+for (const line of formatInstanceDoctor(instanceResult)) {
+  console.log(line);
+}
+ok = instanceResult.errors.length === 0 && ok;
 
 console.log('');
 if (ok) {

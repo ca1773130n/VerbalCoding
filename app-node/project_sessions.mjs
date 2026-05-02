@@ -121,7 +121,11 @@ export function parseProjectSessionCommand(content) {
   const parsed = parseVoiceOption(tokenParts(rest));
   if (action === 'use' || action === 'bind') return { action: 'use', name: parsed.parts.join(' '), voice: parsed.voice };
   if (action === 'attach-voice' || action === 'voice') {
-    return { action: 'attach-voice', voice: parsed.voice || parsed.parts.join(' ') };
+    return {
+      action: 'attach-voice',
+      name: parsed.voice ? parsed.parts.join(' ') : '',
+      voice: parsed.voice || parsed.parts.join(' '),
+    };
   }
   return {
     action: 'new',

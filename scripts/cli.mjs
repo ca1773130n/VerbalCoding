@@ -5,6 +5,14 @@ import { fileURLToPath } from 'node:url';
 
 import { applyLanguagePreset, languageStatus, normalizeLanguageKey } from '../app-node/language_config.mjs';
 import { parseKeyValueEnv } from '../app-node/install_config.mjs';
+import { checkInstanceConfigs } from '../app-node/instance_doctor.mjs';
+import {
+  listInstanceStatuses,
+  resolveInstanceEnvPath,
+  startInstance,
+  statusForInstance,
+  stopInstance,
+} from '../app-node/instances.mjs';
 import { AUTO_RESTART_ENV_KEY, autoRestartStatusText, normalizeAutoRestartCommand } from '../app-node/restart_policy.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -18,6 +26,11 @@ Usage:
   verbalcoding language <ko|en|auto>
   verbalcoding language status
   verbalcoding restart auto <on|off|status>
+  verbalcoding instance list
+  verbalcoding instance status [name]
+  verbalcoding instance start <name>
+  verbalcoding instance stop <name>
+  verbalcoding instance restart <name>
   verbalcoding doctor
 
 Examples:
@@ -63,6 +76,66 @@ function printLanguageStatus(values) {
   console.log(`TTS voice: ${s.ttsVoice}`);
 }
 
+function printInstanceStatus(statuses) {
+  if (statuses.length === 0) {
+    console.log('No instance env files found in instances/*.env');
+    return;
+  }
+  for (const status of statuses) {
+    const pid = status.pid ?? '-';
+    console.log(`${status.name.padEnd(16)} ${status.status.padEnd(8)} pid=${pid} log=${status.logPath}`);
+  }
+}
+
+function assertInstanceStartIsSafe() {
+  const result = checkInstanceConfigs(ROOT);
+  const duplicateTokenErrors = result.errors.filter(error => error.includes('duplicate Discord token fingerprint'));
+  if (duplicateTokenErrors.length > 0) {
+    throw new Error(`Refusing to start instance because configured instances reuse a Discord token: ${duplicateTokenErrors.join('; ')}`);
+  }
+}
+
+async function handleInstanceCommand(argv) {
+  const action = argv[1] || 'status';
+  const name = argv[2];
+  if (action === 'list' || (action === 'status' && !name)) {
+    printInstanceStatus(listInstanceStatuses(ROOT));
+    return;
+  }
+  if (action === 'status') {
+    const envPath = resolveInstanceEnvPath(ROOT, name);
+    printInstanceStatus([statusForInstance(ROOT, envPath)]);
+    return;
+  }
+  if (action === 'start') {
+    if (!name) throw new Error('Use: verbalcoding instance start <name>');
+    assertInstanceStartIsSafe();
+    const status = startInstance(ROOT, name);
+    console.log(`Started ${status.name} pid=${status.pid}`);
+    console.log(`Log: ${status.logPath}`);
+    return;
+  }
+  if (action === 'stop') {
+    if (!name) throw new Error('Use: verbalcoding instance stop <name>');
+    const result = await stopInstance(ROOT, name);
+    const suffix = result.alreadyStopped ? 'already stopped' : (result.killed ? 'stopped with SIGKILL fallback' : 'stopped');
+    console.log(`${result.name} ${suffix}`);
+    return;
+  }
+  if (action === 'restart') {
+    if (!name) throw new Error('Use: verbalcoding instance restart <name>');
+    assertInstanceStartIsSafe();
+    await stopInstance(ROOT, name);
+    const status = startInstance(ROOT, name);
+    console.log(`Restarted ${status.name} pid=${status.pid}`);
+    console.log(`Log: ${status.logPath}`);
+    return;
+  }
+  console.error(`Unknown instance command: ${action}`);
+  console.error('Use: verbalcoding instance <list|status|start|stop|restart> [name]');
+  process.exitCode = 2;
+}
+
 async function main(argv = process.argv.slice(2)) {
   const [command, subcommand] = argv;
   if (!command || ['help', '-h', '--help'].includes(command)) {
@@ -78,6 +151,10 @@ async function main(argv = process.argv.slice(2)) {
   if (command === 'status') {
     printLanguageStatus(readEnvFile());
     console.log(autoRestartStatusText(readEnvFile()));
+    return;
+  }
+  if (command === 'instance') {
+    await handleInstanceCommand(argv);
     return;
   }
   if (command === 'restart') {

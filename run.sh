@@ -22,6 +22,20 @@ if [ -f .env ]; then
   set +a
 fi
 
+INSTANCE_ENV="${VERBALCODING_INSTANCE_ENV:-${1:-}}"
+if [ -n "$INSTANCE_ENV" ]; then
+  if [ ! -f "$INSTANCE_ENV" ]; then
+    echo "instance env file not found: $INSTANCE_ENV" >&2
+    exit 2
+  fi
+  set -a
+  # shellcheck disable=SC1090
+  source "$INSTANCE_ENV"
+  set +a
+fi
+
+mkdir -p "$NODE_AUDIO_DEBUG_DIR"
+
 if [ "${TTS_BACKEND:-}" = "speechswift" ] && [ "${SPEECHSWIFT_MODE:-cli}" = "server" ]; then
   export SPEECHSWIFT_SERVER_HOST="${SPEECHSWIFT_SERVER_HOST:-127.0.0.1}"
   export SPEECHSWIFT_SERVER_PORT="${SPEECHSWIFT_SERVER_PORT:-18080}"

@@ -56,10 +56,13 @@ test('project session command parser supports explicit voice channel selection',
     action: 'use', name: 'wiki', voice: 'LLM-Voice',
   });
   assert.deepEqual(parseProjectSessionCommand('!session attach-voice --voice "LLM-Wiki"'), {
-    action: 'attach-voice', voice: 'LLM-Wiki',
+    action: 'attach-voice', name: '', voice: 'LLM-Wiki',
   });
   assert.deepEqual(parseProjectSessionCommand('!session voice LLM-Wiki'), {
-    action: 'attach-voice', voice: 'LLM-Wiki',
+    action: 'attach-voice', name: '', voice: 'LLM-Wiki',
+  });
+  assert.deepEqual(parseProjectSessionCommand('!session voice llm-wiki --voice "LLM-Wiki"'), {
+    action: 'attach-voice', name: 'llm-wiki', voice: 'LLM-Wiki',
   });
 });
 

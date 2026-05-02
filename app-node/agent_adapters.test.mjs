@@ -89,6 +89,42 @@ test('adapter passes project context prompt and cwd for project sessions', async
   assert.match(calls[0].args.at(-1), /MCP\/project context: wiki graph/);
 });
 
+test('buildAgentSettings accepts per-instance AGENT_CWD and AGENT_PROJECT_CONTEXT aliases', () => {
+  const settings = buildAgentSettings({ ROOT: '/repo', env: {
+    AGENT_BACKEND: 'hermes',
+    AGENT_CWD: '/repo/llm-wiki',
+    AGENT_PROJECT_CONTEXT: 'Project session: LLM-Wiki',
+  } });
+
+  assert.equal(settings.cwd, '/repo/llm-wiki');
+  assert.equal(settings.projectContext, 'Project session: LLM-Wiki');
+});
+
+test('adapter uses default project context from settings when plan omits it', async () => {
+  const calls = [];
+  const adapter = createAgentAdapter({
+    backend: 'codex',
+    label: 'Codex · Wiki',
+    command: 'codex exec',
+    sessionFile: '/tmp/codex-session',
+    cwd: '/tmp/wiki-workdir',
+    projectContext: 'Project session: LLM-Wiki',
+    taskTimeoutMs: 300000,
+    chatTimeoutMs: 45000,
+  }, {
+    execFileAsync: async (cmd, args, options) => {
+      calls.push({ cmd, args, options });
+      return { stdout: 'done\n', stderr: '' };
+    },
+    log: () => {},
+    warn: () => {},
+  });
+
+  await adapter.run('status?', undefined, { language: 'en' });
+  assert.equal(calls[0].options.cwd, '/tmp/wiki-workdir');
+  assert.match(calls[0].args.at(-1), /Project session: LLM-Wiki/);
+});
+
 test('adapter run returns formal result while ask keeps string compatibility', async () => {
   const adapter = createAgentAdapter({
     backend: 'hermes',
