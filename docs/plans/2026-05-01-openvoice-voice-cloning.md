@@ -191,7 +191,7 @@ Steps:
 1. Add `.env.example` OpenVoice section.
 2. Add doctor checks with clear WARN vs FAIL.
 3. Add README setup commands.
-4. Run: `npm run doctor`.
+4. Run: `vc doctor`.
 
 Expected: Edge mode remains green; OpenVoice mode gives actionable missing-prereq messages.
 
@@ -317,7 +317,7 @@ node --check app-node/main.mjs app-node/tts_backends.mjs app-node/tts_settings.m
 npm test
 bash -n scripts/setup_openvoice.sh
 python3 scripts/openvoice_synth.py --help
-npm run doctor
+vc doctor
 ```
 
 Manual voice check:

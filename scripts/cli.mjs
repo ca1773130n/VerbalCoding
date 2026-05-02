@@ -27,23 +27,23 @@ function usage() {
   return `VerbalCoding CLI
 
 Usage:
-  verbalcoding status
-  verbalcoding language <ko|en|auto>
-  verbalcoding language status
-  verbalcoding restart auto <on|off|status>
-  verbalcoding instance list
-  verbalcoding instance setup [name] [--start]
-  verbalcoding instance status [name]
-  verbalcoding instance start <name>
-  verbalcoding instance stop <name>
-  verbalcoding instance restart <name>
-  verbalcoding doctor
+  vc status
+  vc language <ko|en|auto>
+  vc language status
+  vc restart auto <on|off|status>
+  vc instance list
+  vc instance setup [name] [--start]
+  vc instance status [name]
+  vc instance start <name>
+  vc instance stop <name>
+  vc instance restart <name>
+  vc doctor
 
 Examples:
-  npm run vc -- language en
-  npm run vc -- language ko
-  npm run vc -- language auto
-  npm run vc -- restart auto off
+  vc language en
+  vc language ko
+  vc language auto
+  vc restart auto off
 `;
 }
 

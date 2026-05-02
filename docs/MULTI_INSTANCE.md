@@ -27,9 +27,9 @@ Real `instances/*.env` files are ignored because they may contain Discord tokens
 Users should not copy and manually edit env files for normal use. Run the wizard instead:
 
 ```bash
-npm run vc -- instance setup llm-wiki
+vc instance setup llm-wiki
 # or through the project setup script:
-npm run setup -- --instance llm-wiki
+./scripts/install.sh --instance llm-wiki
 ```
 
 The wizard prompts for the bot token, voice channel, transcript target, workdir, project context, and isolated runtime paths. It writes `instances/<name>.env` with mode `0600`, backs up an existing file before overwriting it, and prints the next start/status commands.
@@ -50,17 +50,17 @@ AGENT_CWD=/Users/neo/Developer/Projects/LLM-Wiki
 AGENT_PROJECT_CONTEXT=Project session: LLM-Wiki
 ```
 
-Give every instance unique values for log/debug/session files. `npm run doctor` checks for duplicate tokens and colliding runtime paths without printing secrets.
+Give every instance unique values for log/debug/session files. `vc doctor` checks for duplicate tokens and colliding runtime paths without printing secrets.
 
 ## Commands
 
 ```bash
-npm run vc -- instance list
-npm run vc -- instance status
-npm run vc -- instance status llm-wiki
-npm run vc -- instance start llm-wiki
-npm run vc -- instance stop llm-wiki
-npm run vc -- instance restart llm-wiki
+vc instance list
+vc instance status
+vc instance status llm-wiki
+vc instance start llm-wiki
+vc instance stop llm-wiki
+vc instance restart llm-wiki
 ```
 
 `start` runs `./run.sh instances/<name>.env` detached and writes `.run/instances/<name>.pid`.
@@ -85,8 +85,8 @@ npm run vc -- instance restart llm-wiki
 3. Run the setup wizard for each local instance:
 
 ```bash
-npm run vc -- instance setup verbalcoding
-npm run vc -- instance setup llm-wiki
+vc instance setup verbalcoding
+vc instance setup llm-wiki
 ```
 
 The wizard writes ignored `instances/verbalcoding.env` and `instances/llm-wiki.env` files with mode `0600`; it also backs up an existing instance env before replacing it.
@@ -94,15 +94,15 @@ The wizard writes ignored `instances/verbalcoding.env` and `instances/llm-wiki.e
 4. Check config:
 
 ```bash
-npm run doctor
+vc doctor
 ```
 
 5. Start both:
 
 ```bash
-npm run vc -- instance start verbalcoding
-npm run vc -- instance start llm-wiki
-npm run vc -- instance status
+vc instance start verbalcoding
+vc instance start llm-wiki
+vc instance status
 ```
 
 6. Verify logs:
@@ -122,8 +122,8 @@ Listening in voice channel ... / LLM-Wiki
 7. Stop both:
 
 ```bash
-npm run vc -- instance stop verbalcoding
-npm run vc -- instance stop llm-wiki
+vc instance stop verbalcoding
+vc instance stop llm-wiki
 ```
 
 ## Short-term single-bot text/voice binding

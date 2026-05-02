@@ -20,11 +20,11 @@ Rules:
 Typical commands:
 
 ```bash
-npm run vc -- instance status
-npm run vc -- instance setup llm-wiki
-npm run setup -- --instance llm-wiki
-npm run vc -- instance start llm-wiki
-npm run vc -- instance stop llm-wiki
-npm run vc -- instance restart llm-wiki
-npm run doctor
+vc instance status
+vc instance setup llm-wiki
+./scripts/install.sh --instance llm-wiki
+vc instance start llm-wiki
+vc instance stop llm-wiki
+vc instance restart llm-wiki
+vc doctor
 ```

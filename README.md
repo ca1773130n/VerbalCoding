@@ -76,16 +76,16 @@ New backends should implement the same contract and keep voice/STT/TTS behavior 
 git clone git@github.com:ca1773130n/VerbalCoding.git
 cd VerbalCoding
 ./scripts/install.sh
-npm run doctor
+vc doctor
 ./run.sh
 ```
 
-The installer asks for Discord token, allowed users, auto-join voice channel names, transcript channel/thread, CLI harness backend, default voice language, TTS settings, and wake-word behavior. It writes `.env` with mode `0600`; `.env` is ignored by git.
+The installer asks for Discord token, allowed users, auto-join voice channel names, transcript channel/thread, CLI harness backend, default voice language, TTS settings, and wake-word behavior. It writes `.env` with mode `0600`; `.env` is ignored by git. It also links the short shell command `vc`, so users can manage instances with `vc instance setup` instead of long npm wrapper commands.
 
-You can also run the installer directly:
+If you installed dependencies manually and only need the shell command, link it from the project root:
 
 ```bash
-npm run setup
+npm link
 ```
 
 ## CLI commands
@@ -93,18 +93,18 @@ npm run setup
 VerbalCoding includes a small project CLI for common operator actions:
 
 ```bash
-npm run vc -- status              # show STT language, progress language, and TTS voice
-npm run vc -- language en         # English STT + English progress/TTS voice
-npm run vc -- language ko         # Korean STT + Korean progress/TTS voice
-npm run vc -- language auto       # Whisper auto-detect STT + English progress/TTS voice
-npm run vc -- restart auto status # show commit-time voice-bot auto-restart setting
-npm run vc -- restart auto on     # enable commit-time voice-bot auto-restart
-npm run vc -- restart auto off    # disable it; this is the default
-npm run vc -- instance status      # list per-instance bridge configs and process status
-npm run vc -- instance setup NAME  # interactive wizard; writes instances/NAME.env safely
-npm run vc -- instance start NAME  # start ./run.sh instances/NAME.env as a detached process
-npm run vc -- instance stop NAME   # stop a detached instance and remove its pid file
-npm run vc -- doctor              # run the redacted doctor check
+vc status              # show STT language, progress language, and TTS voice
+vc language en         # English STT + English progress/TTS voice
+vc language ko         # Korean STT + Korean progress/TTS voice
+vc language auto       # Whisper auto-detect STT + English progress/TTS voice
+vc restart auto status # show commit-time voice-bot auto-restart setting
+vc restart auto on     # enable commit-time voice-bot auto-restart
+vc restart auto off    # disable it; this is the default
+vc instance status      # list per-instance bridge configs and process status
+vc instance setup NAME  # interactive wizard; writes instances/NAME.env safely
+vc instance start NAME  # start ./run.sh instances/NAME.env as a detached process
+vc instance stop NAME   # stop a detached instance and remove its pid file
+vc doctor              # run the redacted doctor check
 npm run mcp                       # run the stdio MCP server for Hermes/other MCP clients
 ```
 
@@ -141,10 +141,11 @@ Exposed MCP tools:
    brew install ffmpeg whisper-cpp
    ```
 
-2. Install Node dependencies:
+2. Install Node dependencies and the `vc` shell command:
 
    ```bash
    npm install
+   npm link
    ```
 
 3. Download the default local STT model:
@@ -155,18 +156,16 @@ Exposed MCP tools:
      https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin
    ```
 
-4. Create local config:
+4. Create local config with the setup wizard:
 
    ```bash
-   cp .env.example .env
-   chmod 600 .env
-   # Edit .env, or run ./scripts/install.sh
+   ./scripts/install.sh
    ```
 
 5. Verify prerequisites without printing secrets:
 
    ```bash
-   npm run doctor
+   vc doctor
    ```
 
 6. Start the bridge:
@@ -418,10 +417,10 @@ node --check app-node/main.mjs
 npm test
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/ -q
 bash -n run.sh scripts/install.sh
-npm run doctor
+vc doctor
 ```
 
-`npm run doctor` intentionally redacts secrets and only reports whether required values are configured. It also checks `instances/*.env` for duplicate token fingerprints and colliding runtime paths.
+`vc doctor` intentionally redacts secrets and only reports whether required values are configured. It also checks `instances/*.env` for duplicate token fingerprints and colliding runtime paths.
 
 For simultaneous project voice rooms, see [`docs/MULTI_INSTANCE.md`](docs/MULTI_INSTANCE.md).
 

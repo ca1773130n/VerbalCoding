@@ -135,11 +135,12 @@ test('buildInstanceEnvFile writes only local per-instance values with token reda
   assert.equal(parsed.AGENT_BACKEND, undefined);
 });
 
-test('renderInstanceSetupSummary points users at CLI commands, not manual editing', () => {
+test('renderInstanceSetupSummary points users at installed vc commands, not npm script wrappers or manual editing', () => {
   const summary = renderInstanceSetupSummary({ INSTANCE_NAME: 'llm-wiki', BRIDGE_LOG_PATH: '/tmp/verbalcoding-llm-wiki.log' });
 
   assert.match(summary, /instances\/llm-wiki\.env/);
-  assert.match(summary, /npm run vc -- instance start llm-wiki/);
-  assert.match(summary, /npm run vc -- instance status llm-wiki/);
-  assert.match(summary, /npm run doctor/);
+  assert.match(summary, /vc instance start llm-wiki/);
+  assert.match(summary, /vc instance status llm-wiki/);
+  assert.match(summary, /vc doctor/);
+  assert.doesNotMatch(summary, /npm run vc/);
 });

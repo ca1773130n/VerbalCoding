@@ -211,9 +211,9 @@ Expected: pass.
 Support:
 
 ```bash
-npm run vc -- instance list
-npm run vc -- instance status
-npm run vc -- instance status llm-wiki
+vc instance list
+vc instance status
+vc instance status llm-wiki
 ```
 
 **Step 2: Implement status behavior**
@@ -237,7 +237,7 @@ verbalcoding    stopped pid=- log=/tmp/verbalcoding-verbalcoding.log
 Run:
 
 ```bash
-npm run vc -- instance status
+vc instance status
 ```
 
 Expected: lists configured instance env files; no crash when none exist.
@@ -255,9 +255,9 @@ Expected: lists configured instance env files; no crash when none exist.
 **Step 1: Add commands**
 
 ```bash
-npm run vc -- instance start llm-wiki
-npm run vc -- instance stop llm-wiki
-npm run vc -- instance restart llm-wiki
+vc instance start llm-wiki
+vc instance stop llm-wiki
+vc instance restart llm-wiki
 ```
 
 **Step 2: Implement start**
@@ -289,9 +289,9 @@ Stop command should:
 With a non-secret local instance env:
 
 ```bash
-npm run vc -- instance start llm-wiki
-npm run vc -- instance status llm-wiki
-npm run vc -- instance stop llm-wiki
+vc instance start llm-wiki
+vc instance status llm-wiki
+vc instance stop llm-wiki
 ```
 
 Expected: starts, reports running, stops cleanly.
@@ -320,7 +320,7 @@ Expected: starts, reports running, stops cleanly.
 Run:
 
 ```bash
-npm run doctor
+vc doctor
 ```
 
 Expected: no secret values printed; duplicate-token scenarios produce a clear error.
@@ -377,14 +377,14 @@ Behavior:
 1. Start both:
 
 ```bash
-npm run vc -- instance start verbalcoding
-npm run vc -- instance start llm-wiki
+vc instance start verbalcoding
+vc instance start llm-wiki
 ```
 
 2. Verify processes:
 
 ```bash
-npm run vc -- instance status
+vc instance status
 ```
 
 Expected: both running, distinct pids.
@@ -412,8 +412,8 @@ Expected:
 5. Stop both:
 
 ```bash
-npm run vc -- instance stop verbalcoding
-npm run vc -- instance stop llm-wiki
+vc instance stop verbalcoding
+vc instance stop llm-wiki
 ```
 
 Expected: both stop cleanly and do not leave orphan `node app-node/main.mjs` processes.

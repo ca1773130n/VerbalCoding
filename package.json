@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "bin": {
+    "vc": "scripts/cli.mjs",
     "verbalcoding": "scripts/cli.mjs",
     "verbalcoding-mcp": "scripts/mcp-server.mjs"
   },

@@ -11,10 +11,10 @@ cd "$TMPDIR/VerbalCoding"
 npm install
 cp .env.example .env
 chmod 600 .env
-npm run doctor || true
+vc doctor || true
 ```
 
-`npm run doctor` should print missing secrets/model/CLI items as `✗` without exposing secret values. After filling `.env` and downloading the model, it should pass.
+`vc doctor` should print missing secrets/model/CLI items as `✗` without exposing secret values. After filling `.env` and downloading the model, it should pass.
 
 ## Full setup
 
@@ -24,7 +24,7 @@ mkdir -p models
 curl -L -o models/ggml-small-q5_1.bin \
   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin
 ./scripts/install.sh
-npm run doctor
+vc doctor
 ./run.sh
 ```
 
@@ -40,7 +40,7 @@ OpenVoice voice cloning is optional. Keep `TTS_BACKEND=edge` for a fresh install
 python3 scripts/openvoice_smoke.py
 ```
 
-Then set `TTS_BACKEND=openvoice`, run `npm run doctor`, and test `!voice-test <text>` in Discord.
+Then set `TTS_BACKEND=openvoice`, run `vc doctor`, and test `!voice-test <text>` in Discord.
 
 ## Expected runtime signals
 
