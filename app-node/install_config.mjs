@@ -11,6 +11,8 @@ export const SUPPORTED_HARNESSES = [
   'custom',
 ];
 
+export const DEFAULT_DISCORD_BOT_PERMISSIONS = 277028604928;
+
 function clean(value, fallback = '') {
   const v = value == null ? '' : String(value).trim();
   return v || fallback;
@@ -67,6 +69,23 @@ export function normalizeInstallAnswers(input = {}) {
 
 function quoteEnv(value) {
   return JSON.stringify(String(value ?? ''));
+}
+
+export function buildDiscordBotInviteUrl(input = {}) {
+  const clientId = clean(input.clientId || input.DISCORD_CLIENT_ID || input.applicationId || input.APPLICATION_ID);
+  if (!clientId) throw new Error('Discord application/client ID is required.');
+  if (!/^\d{15,25}$/.test(clientId)) throw new Error('Discord application/client ID must be a numeric snowflake.');
+  const permissions = clean(input.permissions || input.DISCORD_BOT_PERMISSIONS, String(DEFAULT_DISCORD_BOT_PERMISSIONS));
+  const url = new URL('https://discord.com/oauth2/authorize');
+  url.searchParams.set('client_id', clientId);
+  url.searchParams.set('permissions', permissions);
+  url.searchParams.set('scope', 'bot applications.commands');
+  const guildId = clean(input.guildId || input.DISCORD_GUILD_ID);
+  if (guildId) {
+    url.searchParams.set('guild_id', guildId);
+    url.searchParams.set('disable_guild_select', 'true');
+  }
+  return url.toString();
 }
 
 export function slugifyInstanceName(name) {
@@ -138,6 +157,7 @@ export function normalizeInstanceAnswers(input = {}) {
   const out = {
     INSTANCE_NAME: instanceName,
     DISCORD_TOKEN: clean(input.discordBotToken || input.DISCORD_TOKEN || input.DISCORD_BOT_TOKEN),
+    DISCORD_CLIENT_ID: clean(input.discordClientId || input.DISCORD_CLIENT_ID || input.applicationId || input.APPLICATION_ID),
     DISCORD_ALLOWED_USERS: clean(input.allowedUsers || input.DISCORD_ALLOWED_USERS),
     AUTO_JOIN_VOICE_CHANNELS: clean(input.autoJoinVoiceChannels || input.AUTO_JOIN_VOICE_CHANNELS, displayName),
     TRANSCRIPT_CHANNEL_ID: clean(input.transcriptChannelId || input.TRANSCRIPT_CHANNEL_ID),
@@ -156,6 +176,7 @@ export function buildInstanceEnvFile(values = {}) {
   const ordered = [
     'INSTANCE_NAME',
     'DISCORD_TOKEN',
+    'DISCORD_CLIENT_ID',
     'DISCORD_ALLOWED_USERS',
     'AUTO_JOIN_VOICE_CHANNELS',
     'TRANSCRIPT_CHANNEL_ID',
@@ -180,9 +201,11 @@ export function buildInstanceEnvFile(values = {}) {
 
 export function renderInstanceSetupSummary(values = {}) {
   const name = values.INSTANCE_NAME || 'example';
+  const inviteUrl = values.DISCORD_CLIENT_ID ? buildDiscordBotInviteUrl({ clientId: values.DISCORD_CLIENT_ID }) : '';
   return [
     `Configured VerbalCoding instance: ${name}`,
     `Env file: instances/${name}.env`,
+    ...(inviteUrl ? ['', 'Discord bot invite URL:', `  ${inviteUrl}`] : ['', 'Discord bot invite URL: run `vc bot invite <client-id>` after creating the Discord application.']),
     '',
     'Next commands:',
     '  vc doctor',

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { applyLanguagePreset, languageStatus, normalizeLanguageKey } from '../app-node/language_config.mjs';
 import {
   buildInstanceEnvFile,
+  buildDiscordBotInviteUrl,
   normalizeInstanceAnswers,
   parseKeyValueEnv,
   renderInstanceSetupSummary,
@@ -31,6 +32,7 @@ Usage:
   vc language <ko|en|auto>
   vc language status
   vc restart auto <on|off|status>
+  vc bot invite <client-id> [--guild <guild-id>]
   vc instance list
   vc instance setup [name] [--start]
   vc instance status [name]
@@ -44,6 +46,7 @@ Examples:
   vc language ko
   vc language auto
   vc restart auto off
+  vc bot invite 123456789012345678
 `;
 }
 
@@ -128,6 +131,7 @@ async function setupInstance(argv) {
     const values = normalizeInstanceAnswers({
       instanceName,
       discordBotToken: await askQuestion(rl, 'Discord bot token for this bot', existingToken, { fallbackLabel: existingToken ? 'keep existing' : '' }),
+      discordClientId: await askQuestion(rl, 'Discord application/client ID for invite URL', defaults.DISCORD_CLIENT_ID || ''),
       allowedUsers: await askQuestion(rl, 'Allowed Discord user IDs, comma-separated', defaults.DISCORD_ALLOWED_USERS || shared.DISCORD_ALLOWED_USERS || ''),
       autoJoinVoiceChannels: await askQuestion(rl, 'Voice channel for this instance', defaults.AUTO_JOIN_VOICE_CHANNELS || instanceName),
       transcriptChannelId: await askQuestion(rl, 'Transcript text channel/thread ID', defaults.TRANSCRIPT_CHANNEL_ID || ''),
@@ -157,6 +161,26 @@ async function setupInstance(argv) {
   } finally {
     rl.close();
   }
+}
+
+function handleBotCommand(argv) {
+  const action = argv[1] || 'invite';
+  if (action !== 'invite') {
+    console.error(`Unknown bot command: ${action}`);
+    console.error('Use: vc bot invite <client-id> [--guild <guild-id>]');
+    process.exitCode = 2;
+    return;
+  }
+  const clientId = argv[2];
+  const guildIndex = argv.indexOf('--guild');
+  const guildId = guildIndex >= 0 ? argv[guildIndex + 1] : '';
+  if (!clientId || clientId.startsWith('--')) {
+    console.error('Use: vc bot invite <client-id> [--guild <guild-id>]');
+    process.exitCode = 2;
+    return;
+  }
+  console.log('Discord bot invite URL:');
+  console.log(buildDiscordBotInviteUrl({ clientId, guildId }));
 }
 
 async function handleInstanceCommand(argv) {
@@ -223,6 +247,10 @@ async function main(argv = process.argv.slice(2)) {
   }
   if (command === 'instance') {
     await handleInstanceCommand(argv);
+    return;
+  }
+  if (command === 'bot') {
+    handleBotCommand(argv);
     return;
   }
   if (command === 'restart') {

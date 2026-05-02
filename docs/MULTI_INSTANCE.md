@@ -32,13 +32,23 @@ vc instance setup llm-wiki
 ./scripts/install.sh --instance llm-wiki
 ```
 
-The wizard prompts for the bot token, voice channel, transcript target, workdir, project context, and isolated runtime paths. It writes `instances/<name>.env` with mode `0600`, backs up an existing file before overwriting it, and prints the next start/status commands.
+The wizard prompts for the bot token, Discord Application/Client ID, voice channel, transcript target, workdir, project context, and isolated runtime paths. It writes `instances/<name>.env` with mode `0600`, backs up an existing file before overwriting it, and prints the next start/status commands.
+
+If you enter the Discord Application/Client ID during setup, the summary also prints the invite URL for that bot. You can generate the same URL any time with:
+
+```bash
+vc bot invite <client-id>
+vc bot invite <client-id> --guild <guild-id>
+```
+
+Discord still requires one Developer Portal application/bot per simultaneous voice room, but this avoids manually building OAuth URLs or permission integers.
 
 ## Minimal generated instance env
 
 ```env
 INSTANCE_NAME=llm-wiki
-DISCORD_TOKEN=replace-with-this-bot-token
+DISCORD_TOKEN=replace-with-bot-token
+DISCORD_CLIENT_ID=1497879755394125924
 AUTO_JOIN_VOICE_CHANNELS=LLM-Wiki
 TRANSCRIPT_CHANNEL_ID=1497890694730219540
 PROJECT_SESSIONS_FILE=config/project-sessions.llm-wiki.json
@@ -81,6 +91,8 @@ vc instance restart llm-wiki
    - Use Application Commands
    - Connect
    - Speak
+
+   Use `vc bot invite <client-id>` after creating each Discord application to print the exact invite URL with those permissions.
 
 3. Run the setup wizard for each local instance:
 

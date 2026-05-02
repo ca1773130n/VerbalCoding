@@ -8,7 +8,7 @@ Rules:
 
 - Use a distinct Discord application/bot token for every running instance.
 - Do not reuse the same token in two running instances; Discord voice is effectively one active voice connection per bot per guild.
-- Invite each bot to the server with text and voice permissions.
+- Invite each bot to the server with text and voice permissions. After creating the application in Discord, run `vc bot invite <client-id>` to print the correct invite URL.
 - `AUTO_JOIN_VOICE_CHANNELS` should usually contain exactly one voice channel name per instance.
 - `TRANSCRIPT_CHANNEL_ID` may be a text channel ID or a thread ID.
 - Give each instance isolated values for:
@@ -21,6 +21,7 @@ Typical commands:
 
 ```bash
 vc instance status
+vc bot invite 123456789012345678
 vc instance setup llm-wiki
 ./scripts/install.sh --instance llm-wiki
 vc instance start llm-wiki

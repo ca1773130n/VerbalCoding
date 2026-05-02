@@ -100,6 +100,7 @@ vc language auto       # Whisper auto-detect STT + English progress/TTS voice
 vc restart auto status # show commit-time voice-bot auto-restart setting
 vc restart auto on     # enable commit-time voice-bot auto-restart
 vc restart auto off    # disable it; this is the default
+vc bot invite CLIENT_ID # print a Discord invite URL with required bot permissions
 vc instance status      # list per-instance bridge configs and process status
 vc instance setup NAME  # interactive wizard; writes instances/NAME.env safely
 vc instance start NAME  # start ./run.sh instances/NAME.env as a detached process
@@ -109,6 +110,18 @@ npm run mcp                       # run the stdio MCP server for Hermes/other MC
 ```
 
 Language changes update `.env`; restart the bridge with `./run.sh` or the running process manager for them to take effect.
+
+## Discord bot invite helper
+
+Discord does not let you clone one bot token into multiple independent bot accounts. For simultaneous always-on voice rooms, create one Discord application/bot per room in the Developer Portal, copy its Application/Client ID, then let VerbalCoding generate the invite URL:
+
+```bash
+vc bot invite 123456789012345678
+# or pin the invite to one server:
+vc bot invite 123456789012345678 --guild 987654321098765432
+```
+
+The generated URL requests the `bot` and `applications.commands` scopes plus the text/voice permissions VerbalCoding needs. `vc instance setup NAME` also asks for the Application/Client ID and prints the same invite URL in its summary.
 
 ## MCP server
 
