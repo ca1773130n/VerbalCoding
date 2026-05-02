@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { formatRestartCompleteNotice, formatRestartShutdownNotice } from './restart_notice.mjs';
+import { cleanRestartDetail, formatRestartCompleteNotice, formatRestartShutdownNotice } from './restart_notice.mjs';
 
 test('restart complete notice follows English TTS voice so Edge can synthesize it', () => {
   const notice = formatRestartCompleteNotice('English speech detection fixed.', 'en-US-GuyNeural');
@@ -18,5 +18,20 @@ test('shutdown restart notice follows English TTS voice', () => {
   assert.equal(
     formatRestartShutdownNotice('English speech detection fixed.', 'en-US-GuyNeural'),
     'I applied this change: English speech detection fixed. Restarting now. Voice may cut out briefly.',
+  );
+});
+
+test('restart detail strips restart boilerplate before formatting', () => {
+  assert.equal(
+    cleanRestartDetail('에이전트 안내 고쳤어. 이제 재시작할게. 잠깐 음성이 끊길 수 있어.', 'ko-KR-InJoonNeural'),
+    '에이전트 안내 고쳤어.',
+  );
+  assert.equal(
+    formatRestartShutdownNotice('에이전트 안내 고쳤어. 이제 재시작할게. 잠깐 음성이 끊길 수 있어.', 'ko-KR-InJoonNeural'),
+    '방금 한 작업은 에이전트 안내 고쳤어. 이제 재시작할게. 잠깐 음성이 끊길 수 있어.',
+  );
+  assert.equal(
+    formatRestartCompleteNotice('에이전트 안내 고쳤어. 이제 재시작할게. 잠깐 음성이 끊길 수 있어.', 'ko-KR-InJoonNeural').speech,
+    '재시작 완료. 다시 온라인이야. 에이전트 안내 고쳤어.',
   );
 });
