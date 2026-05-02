@@ -43,10 +43,11 @@ import {
 } from './tts_voice_config.mjs';
 import { createBridgeLogger, createTransientErrorReporter, isTransientNetworkError } from './bridge_logger.mjs';
 import { createBridgeState } from './bridge_state.mjs';
-import { sendDiscordText } from './discord_text.mjs';
+import { sendDiscordText, splitDiscordMessage } from './discord_text.mjs';
 import { progressTtsCacheFileName } from './progress_cache.mjs';
 import { shouldPassWhisperLanguage, voiceLanguageCommandFromTranscript, languagePreset } from './language_config.mjs';
 import { formatRestartCompleteNotice, formatRestartShutdownNotice } from './restart_notice.mjs';
+import { shouldRouteDiscordTextToAgent } from './text_routing.mjs';
 import {
   agentAnswerHeader,
   emptyAgentAnswer,
@@ -469,6 +470,13 @@ async function sendText(text) {
   });
 }
 
+async function sendChannelText(channel, text) {
+  const body = String(text || '');
+  const chunks = splitDiscordMessage(body);
+  for (const chunk of chunks) await channel.send(chunk);
+  return true;
+}
+
 function sendVerboseProgressText(event, signal) {
   if (!verboseProgress || !signal || signal.aborted || activeProgressSignal !== signal) return;
   const formatted = formatProgressText(event).replace(/\s+/g, ' ').trim();
@@ -805,6 +813,48 @@ function stopProgressSpeech(signal, reason = 'final-answer') {
     log('stop progress speech before final answer', reason);
     try { player.stop(true); } catch (e) { warn('stop progress speech failed', e?.stack || e); }
     speaking = false;
+  }
+}
+
+async function handleTextAgentMessage(msg, text, { speakResponse = false } = {}) {
+  if (processing) {
+    await msg.reply('지금 이전 작업을 처리 중이야. 끝나면 다시 보내줘.');
+    return;
+  }
+  processing = true;
+  const controller = new AbortController();
+  currentAbortController = controller;
+  const signal = controller.signal;
+  const progressController = new AbortController();
+  activeProgressAbortController = progressController;
+  activeProgressSignal = progressController.signal;
+  activeProgressLastEventAt = Date.now();
+  const plan = { task: true, label: agentAdapter.label, verboseProgress, language: settings.voiceLanguage };
+  const sessionBefore = agentAdapter.readSessionId?.();
+  log('text agent request start', agentAdapter.label, sessionBefore ? 'resume-existing-session' : 'new-session', 'verbose', verboseProgress);
+  try {
+    const result = await agentAdapter.run(text, signal, plan);
+    const answer = result.answer || emptyAgentAnswer(settings.voiceLanguage);
+    const fullAnswerText = `${agentAnswerHeader(settings.voiceLanguage, agentAdapter.label)}\n${answer}`;
+    await sendChannelText(msg.channel, fullAnswerText);
+    stopProgressSpeech(progressController.signal, 'text-agent-answer-ready');
+    if (speakResponse && connection) {
+      const spokenAnswer = spokenResultOnly(text, answer, settings.voiceLanguage);
+      await speakText(spokenAnswer, signal, null, { mirrorText: false });
+    }
+  } catch (e) {
+    if (isAbortError(e)) return;
+    warn('text agent request failed', e?.stack || e);
+    await sendChannelText(msg.channel, formatVoiceErrorMessage(settings.voiceLanguage, String(e?.message || e).slice(0, 800)));
+  } finally {
+    if (activeProgressAbortController && activeProgressAbortController.signal === progressController.signal && !activeProgressAbortController.signal.aborted) {
+      try { activeProgressAbortController.abort(); } catch (e) { warn('abort text progress speech failed', e?.stack || e); }
+    }
+    if (activeProgressSignal === progressController.signal) activeProgressSignal = null;
+    if (activeProgressAbortController?.signal === progressController.signal) activeProgressAbortController = null;
+    clearProgressSpeechBatch(progressController.signal);
+    if (currentAbortController === controller) currentAbortController = null;
+    processing = false;
   }
 }
 
@@ -1415,13 +1465,15 @@ client.on('messageCreate', async msg => {
   if (content.startsWith('!ask ')) {
     const text = content.slice(5).trim();
     if (!text) return void msg.reply('물어볼 내용을 붙여줘.');
-    await msg.channel.send(`텍스트 입력을 음성 세션과 같은 ${agentAdapter.label} 세션으로 보낼게.`);
-    const plan = { task: true, label: agentAdapter.label, verboseProgress, language: settings.voiceLanguage };
-    const answer = await agentAdapter.ask(text, undefined, plan);
-    await msg.channel.send(answer.slice(0, 1900));
-    if (connection) {
-      await speakText(answer, undefined, null, { mirrorText: false });
-    }
+    await handleTextAgentMessage(msg, text, { speakResponse: true });
+    return;
+  }
+  if (shouldRouteDiscordTextToAgent({
+    content,
+    channelId: msg.channelId,
+    transcriptChannelId: settings.transcriptChannelId,
+  })) {
+    await handleTextAgentMessage(msg, content, { speakResponse: false });
     return;
   }
 });
