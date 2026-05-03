@@ -42,3 +42,28 @@ export function profileExists(name, deps = {}) {
   const dir = hermesProfileDir(name, deps);
   return fsDep.existsSync(path.join(dir, 'config.yaml'));
 }
+
+import { execFile as nodeRunner } from 'node:child_process';
+import { promisify } from 'node:util';
+
+export class HermesCliMissing extends Error {
+  constructor() {
+    super('hermes CLI not found on PATH; install Hermes (>= 0.6.0) and re-run `vc instance setup`');
+    this.name = 'HermesCliMissing';
+  }
+}
+
+function resolveRunner(deps = {}) {
+  const raw = deps.execFile || nodeRunner;
+  return promisify(raw);
+}
+
+export async function assertHermesAvailable(deps = {}) {
+  const run = resolveRunner(deps);
+  try {
+    await run('hermes', ['--version'], { timeout: 5000 });
+  } catch (err) {
+    if (err && err.code === 'ENOENT') throw new HermesCliMissing();
+    throw err;
+  }
+}

@@ -54,3 +54,27 @@ test('profileExists returns true when config.yaml present', () => {
   const deps = { homedir: () => home };
   assert.equal(profileExists('llm-wiki', deps), true);
 });
+
+import { assertHermesAvailable, HermesCliMissing } from './hermes_profiles.mjs';
+
+function fakeRunnerOk() {
+  return (cmd, args, opts, cb) => cb(null, { stdout: 'hermes 0.6.1\n', stderr: '' });
+}
+
+function fakeRunnerEnoent() {
+  return (cmd, args, opts, cb) => {
+    const err = Object.assign(new Error('not found'), { code: 'ENOENT' });
+    cb(err);
+  };
+}
+
+test('assertHermesAvailable resolves when hermes --version succeeds', async () => {
+  await assertHermesAvailable({ execFile: fakeRunnerOk() });
+});
+
+test('assertHermesAvailable throws HermesCliMissing on ENOENT', async () => {
+  await assert.rejects(
+    () => assertHermesAvailable({ execFile: fakeRunnerEnoent() }),
+    HermesCliMissing,
+  );
+});
