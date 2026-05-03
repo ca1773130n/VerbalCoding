@@ -13,6 +13,7 @@ import {
 } from '../app-node/install_config.mjs';
 import { ensureHermesProfile, validateProfileName } from '../app-node/hermes_profiles.mjs';
 import { checkInstanceConfigs } from '../app-node/instance_doctor.mjs';
+import { healInstanceProfileFromEnv } from '../app-node/instance_profile_lifecycle.mjs';
 import {
   listInstanceStatuses,
   resolveInstanceEnvPath,
@@ -225,6 +226,15 @@ async function handleInstanceCommand(argv) {
   }
   if (action === 'start') {
     if (!name) throw new Error('Use: verbalcoding instance start <name>');
+    const envPath = resolveInstanceEnvPath(ROOT, name);
+    const instanceEnv = fs.existsSync(envPath) ? parseKeyValueEnv(fs.readFileSync(envPath, 'utf8')) : {};
+    try {
+      await healInstanceProfileFromEnv(name, instanceEnv);
+    } catch (err) {
+      console.error(`Hermes profile self-heal failed: ${err.message}`);
+      process.exitCode = 2;
+      return;
+    }
     assertInstanceStartIsSafe();
     const status = startInstance(ROOT, name);
     console.log(`Started ${status.name} pid=${status.pid}`);
