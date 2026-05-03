@@ -160,6 +160,35 @@ test('buildInstanceEnvFile writes only local per-instance values with token reda
   assert.equal(parsed.AGENT_BACKEND, undefined);
 });
 
+test('normalizeInstanceAnswers surfaces HERMES_HOME when provided', () => {
+  const out = normalizeInstanceAnswers({
+    instanceName: 'llm-wiki',
+    discordBotToken: 'token',
+    autoJoinVoiceChannels: 'LLM-Wiki',
+    transcriptChannelId: '123',
+    workdir: '/projects/llm-wiki',
+    projectContext: 'LLM-Wiki agent',
+    hermesHome: '/Users/neo/.hermes/profiles/llm-wiki',
+  });
+  assert.equal(out.HERMES_HOME, '/Users/neo/.hermes/profiles/llm-wiki');
+});
+
+test('buildInstanceEnvFile emits HERMES_HOME after HERMES_SESSION_FILE', () => {
+  const text = buildInstanceEnvFile({
+    INSTANCE_NAME: 'llm-wiki',
+    DISCORD_TOKEN: 'token',
+    HERMES_SESSION_FILE: '.agent-sessions/hermes/llm-wiki.session',
+    HERMES_HOME: '/Users/neo/.hermes/profiles/llm-wiki',
+    AGENT_LABEL: 'Hermes · llm-wiki',
+    AGENT_CWD: '/projects/llm-wiki',
+  });
+  const lines = text.split('\n');
+  const sessionIdx = lines.findIndex(l => l.startsWith('HERMES_SESSION_FILE='));
+  const homeIdx = lines.findIndex(l => l.startsWith('HERMES_HOME='));
+  assert.ok(sessionIdx >= 0 && homeIdx === sessionIdx + 1, `expected HERMES_HOME directly after HERMES_SESSION_FILE; got lines:\n${text}`);
+  assert.match(text, /HERMES_HOME="\/Users\/neo\/\.hermes\/profiles\/llm-wiki"/);
+});
+
 test('renderInstanceSetupSummary points users at installed vc commands, not npm script wrappers or manual editing', () => {
   const summary = renderInstanceSetupSummary({ INSTANCE_NAME: 'llm-wiki', DISCORD_CLIENT_ID: '1497879755394125924', BRIDGE_LOG_PATH: '/tmp/verbalcoding-llm-wiki.log' });
 
