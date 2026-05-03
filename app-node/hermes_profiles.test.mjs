@@ -120,7 +120,10 @@ test('ensureHermesProfile creates a missing profile', async () => {
   assert.equal(result.dir, dir);
   assert.equal(result.name, 'llm-wiki');
   assert.equal(fs.existsSync(path.join(dir, 'SOUL.md')), true);
-  assert.equal(fs.readFileSync(path.join(dir, 'SOUL.md'), 'utf8'), 'LLM-Wiki backend agent');
+  const soul = fs.readFileSync(path.join(dir, 'SOUL.md'), 'utf8');
+  assert.match(soul, /<!-- vc:project-context:start -->/);
+  assert.match(soul, /LLM-Wiki backend agent/);
+  assert.match(soul, /<!-- vc:project-context:end -->/);
   const setCall = runner.calls.find(c => c.args[0] === 'config' && c.args[1] === 'set');
   assert.equal(setCall.opts.env.HERMES_HOME, dir);
 });
@@ -199,4 +202,75 @@ test('ensureHermesProfile falls back to plain create when clone fails', async ()
   assert.equal(plainCreateAttempted, true);
   assert.equal(result.created, true);
   assert.match(result.warnings[0], /clone-from default failed/);
+});
+
+import { applyProjectContextToSoul, VC_SOUL_MARKER_START, VC_SOUL_MARKER_END } from './hermes_profiles.mjs';
+
+test('applyProjectContextToSoul appends a marker block to existing SOUL.md', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'vc-soul-'));
+  const soulPath = path.join(tmp, 'SOUL.md');
+  const persona = 'You are Hermes Agent, an intelligent AI assistant.';
+  fs.writeFileSync(soulPath, persona);
+  applyProjectContextToSoul(soulPath, 'LLM-Wiki backend agent for the wiki repo.');
+  const out = fs.readFileSync(soulPath, 'utf8');
+  assert.ok(out.startsWith(persona), 'cloned persona must be preserved');
+  assert.match(out, new RegExp(VC_SOUL_MARKER_START));
+  assert.match(out, /## Project context/);
+  assert.match(out, /LLM-Wiki backend agent for the wiki repo\./);
+  assert.match(out, new RegExp(VC_SOUL_MARKER_END));
+});
+
+test('applyProjectContextToSoul updates an existing marker block in place (idempotent)', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'vc-soul-'));
+  const soulPath = path.join(tmp, 'SOUL.md');
+  fs.writeFileSync(soulPath, 'Persona text.');
+  applyProjectContextToSoul(soulPath, 'first context');
+  applyProjectContextToSoul(soulPath, 'second context');
+  const out = fs.readFileSync(soulPath, 'utf8');
+  const startCount = (out.match(/<!-- vc:project-context:start -->/g) || []).length;
+  const endCount = (out.match(/<!-- vc:project-context:end -->/g) || []).length;
+  assert.equal(startCount, 1, 'must not duplicate marker block on re-apply');
+  assert.equal(endCount, 1);
+  assert.match(out, /second context/);
+  assert.doesNotMatch(out, /first context/);
+});
+
+test('applyProjectContextToSoul writes a fresh SOUL.md when none exists', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'vc-soul-'));
+  const soulPath = path.join(tmp, 'SOUL.md');
+  applyProjectContextToSoul(soulPath, 'fresh project context');
+  const out = fs.readFileSync(soulPath, 'utf8');
+  assert.match(out, /fresh project context/);
+  assert.match(out, new RegExp(VC_SOUL_MARKER_START));
+  assert.match(out, new RegExp(VC_SOUL_MARKER_END));
+});
+
+test('applyProjectContextToSoul is a no-op when projectContext is empty', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'vc-soul-'));
+  const soulPath = path.join(tmp, 'SOUL.md');
+  fs.writeFileSync(soulPath, 'persona');
+  applyProjectContextToSoul(soulPath, '   ');
+  assert.equal(fs.readFileSync(soulPath, 'utf8'), 'persona');
+});
+
+test('ensureHermesProfile refreshes SOUL.md on reuse with new projectContext', async () => {
+  const home = tempHome();
+  const dir = path.join(home, '.hermes', 'profiles', 'llm-wiki');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'config.yaml'), 'terminal:\n  cwd: /workdir/llm-wiki\n');
+  fs.writeFileSync(path.join(dir, 'SOUL.md'), 'persona\n\n<!-- vc:project-context:start -->\n## Project context\n\nold context\n<!-- vc:project-context:end -->\n');
+
+  const runner = recordingRunner({
+    'hermes config get terminal.cwd': cb => cb(null, { stdout: '/workdir/llm-wiki\n', stderr: '' }),
+  });
+  await ensureHermesProfile({
+    name: 'llm-wiki',
+    workdir: '/workdir/llm-wiki',
+    projectContext: 'fresh context',
+    deps: { execFile: runner, homedir: () => home, fs },
+  });
+  const soul = fs.readFileSync(path.join(dir, 'SOUL.md'), 'utf8');
+  assert.match(soul, /fresh context/);
+  assert.doesNotMatch(soul, /old context/);
+  assert.equal((soul.match(/<!-- vc:project-context:start -->/g) || []).length, 1);
 });

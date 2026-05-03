@@ -110,6 +110,7 @@ export async function ensureHermesProfile({ name, workdir, projectContext, clone
     if (actualCwd && actualCwd !== workdir) {
       throw new ProfileBoundElsewhere(name, workdir, actualCwd);
     }
+    if (projectContext) applyProjectContextToSoul(path.join(dir, 'SOUL.md'), String(projectContext), fsDep);
     return { created: false, dir, name, configPath: path.join(dir, 'config.yaml'), updatedConfig: false, warnings };
   }
 
@@ -133,9 +134,31 @@ export async function ensureHermesProfile({ name, workdir, projectContext, clone
   }
 
   const soulPath = path.join(dir, 'SOUL.md');
-  if (projectContext && !fsDep.existsSync(soulPath)) {
-    fsDep.writeFileSync(soulPath, String(projectContext));
-  }
+  if (projectContext) applyProjectContextToSoul(soulPath, String(projectContext), fsDep);
 
   return { created: true, dir, name, configPath: path.join(dir, 'config.yaml'), updatedConfig: true, warnings };
+}
+
+export const VC_SOUL_MARKER_START = '<!-- vc:project-context:start -->';
+export const VC_SOUL_MARKER_END = '<!-- vc:project-context:end -->';
+
+export function applyProjectContextToSoul(soulPath, projectContext, fsDep = fs) {
+  const trimmed = String(projectContext || '').trim();
+  if (!trimmed) return;
+  const block = `${VC_SOUL_MARKER_START}\n## Project context\n\n${trimmed}\n${VC_SOUL_MARKER_END}`;
+  let body;
+  if (fsDep.existsSync(soulPath)) {
+    const existing = fsDep.readFileSync(soulPath, 'utf8');
+    const re = new RegExp(`${escapeRegExp(VC_SOUL_MARKER_START)}[\\s\\S]*?${escapeRegExp(VC_SOUL_MARKER_END)}`);
+    body = re.test(existing)
+      ? existing.replace(re, block)
+      : `${existing.replace(/\s*$/, '')}\n\n${block}\n`;
+  } else {
+    body = `${block}\n`;
+  }
+  fsDep.writeFileSync(soulPath, body);
+}
+
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
