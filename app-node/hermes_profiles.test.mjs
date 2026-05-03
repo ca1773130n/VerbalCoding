@@ -164,3 +164,39 @@ test('ensureHermesProfile throws ProfileBoundElsewhere on cwd mismatch', async (
     { name: 'ProfileBoundElsewhere', expected: '/workdir/llm-wiki', actual: '/elsewhere' },
   );
 });
+
+test('ensureHermesProfile falls back to plain create when clone fails', async () => {
+  const home = tempHome();
+  const dir = path.join(home, '.hermes', 'profiles', 'fresh-app');
+  let cloneAttempted = false;
+  let plainCreateAttempted = false;
+
+  const runner = recordingRunner({
+    'hermes --version': cb => cb(null, { stdout: 'hermes 0.6.1\n', stderr: '' }),
+    'hermes profile create fresh-app --clone-from default': cb => {
+      cloneAttempted = true;
+      cb(Object.assign(new Error('no default profile'), { stderr: 'no default profile' }));
+    },
+    'hermes profile create fresh-app': cb => {
+      plainCreateAttempted = true;
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, 'config.yaml'), 'terminal:\n  cwd: ""\n');
+      cb(null, { stdout: '', stderr: '' });
+    },
+    'hermes config set terminal.cwd /workdir/fresh-app': cb => {
+      fs.writeFileSync(path.join(dir, 'config.yaml'), 'terminal:\n  cwd: /workdir/fresh-app\n');
+      cb(null, { stdout: '', stderr: '' });
+    },
+  });
+
+  const result = await ensureHermesProfile({
+    name: 'fresh-app',
+    workdir: '/workdir/fresh-app',
+    projectContext: '',
+    deps: { execFile: runner, homedir: () => home, fs },
+  });
+  assert.equal(cloneAttempted, true);
+  assert.equal(plainCreateAttempted, true);
+  assert.equal(result.created, true);
+  assert.match(result.warnings[0], /clone-from default failed/);
+});
