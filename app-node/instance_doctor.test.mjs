@@ -65,3 +65,41 @@ test('checkInstanceConfigs treats omitted runtime paths as effective default col
   assert(result.errors.some(e => e.includes('NODE_AUDIO_DEBUG_DIR collision')));
   assert(result.warnings.some(e => e.includes('HERMES_SESSION_FILE collision')));
 });
+
+test('checkInstanceConfigs warns when HERMES_HOME points at a missing profile', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vc-doctor-'));
+  const instancesDir = path.join(root, 'instances');
+  fs.mkdirSync(instancesDir, { recursive: true });
+  fs.writeFileSync(path.join(instancesDir, 'llm-wiki.env'), [
+    'DISCORD_TOKEN="t"',
+    'AUTO_JOIN_VOICE_CHANNELS="LLM-Wiki"',
+    'TRANSCRIPT_CHANNEL_ID="1"',
+    'AGENT_CWD="/projects/llm-wiki"',
+    'HERMES_HOME="/nonexistent/.hermes/profiles/llm-wiki"',
+    '',
+  ].join('\n'));
+  const result = checkInstanceConfigs(root, { instancesDir });
+  assert.ok(result.warnings.some(w => /HERMES_HOME points at .* missing/.test(w)));
+});
+
+test('checkInstanceConfigs errors when profile terminal.cwd differs from AGENT_CWD', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vc-doctor-'));
+  const instancesDir = path.join(root, 'instances');
+  const profileDir = path.join(root, '.hermes', 'profiles', 'llm-wiki');
+  fs.mkdirSync(instancesDir, { recursive: true });
+  fs.mkdirSync(profileDir, { recursive: true });
+  fs.writeFileSync(path.join(profileDir, 'config.yaml'), 'terminal:\n  cwd: /elsewhere\n');
+  fs.writeFileSync(path.join(instancesDir, 'llm-wiki.env'), [
+    'DISCORD_TOKEN="t"',
+    'AUTO_JOIN_VOICE_CHANNELS="LLM-Wiki"',
+    'TRANSCRIPT_CHANNEL_ID="1"',
+    'AGENT_CWD="/projects/llm-wiki"',
+    `HERMES_HOME="${profileDir}"`,
+    '',
+  ].join('\n'));
+  const result = checkInstanceConfigs(root, {
+    instancesDir,
+    readTerminalCwd: () => '/elsewhere',
+  });
+  assert.ok(result.errors.some(e => /terminal\.cwd .* does not match AGENT_CWD/.test(e)));
+});

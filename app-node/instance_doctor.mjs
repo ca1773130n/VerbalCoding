@@ -1,10 +1,21 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import path from 'node:path';
 
 import { listInstanceEnvFiles, instanceNameFromEnvPath, readInstanceEnv } from './instances.mjs';
 
 export function tokenFingerprint(token) {
   return crypto.createHash('sha256').update(String(token)).digest('hex').slice(0, 12);
+}
+
+function readProfileTerminalCwdFromConfig(dir, fsDep = fs) {
+  try {
+    const text = fsDep.readFileSync(path.join(dir, 'config.yaml'), 'utf8');
+    const m = text.match(/^\s*cwd:\s*"?([^"\n]+)"?\s*$/m);
+    return m ? m[1].trim() : '';
+  } catch {
+    return '';
+  }
 }
 
 function effectiveInstanceValue(root, instance, key) {
@@ -81,6 +92,21 @@ export function checkInstanceConfigs(root, options = {}) {
   }
   const { issues: sessionWarnings } = addCollisionIssues({ root, instances, key: 'HERMES_SESSION_FILE', messagePrefix: 'instance' });
   warnings.push(...sessionWarnings);
+
+  const readTerminalCwd = options.readTerminalCwd || (dir => readProfileTerminalCwdFromConfig(dir));
+  for (const instance of instances) {
+    const home = String(instance.env.HERMES_HOME || '').trim();
+    if (!home) continue;
+    if (!fs.existsSync(path.join(home, 'config.yaml'))) {
+      warnings.push(`${instance.name}: HERMES_HOME points at ${home} which is missing; vc instance start will create it`);
+      continue;
+    }
+    const profileCwd = readTerminalCwd(home);
+    const agentCwd = String(instance.env.AGENT_CWD || '').trim();
+    if (profileCwd && agentCwd && profileCwd !== agentCwd) {
+      errors.push(`${instance.name}: profile terminal.cwd (${profileCwd}) does not match AGENT_CWD (${agentCwd}); re-run vc instance setup to reconcile`);
+    }
+  }
 
   return { errors, warnings, instances: instances.map(({ name, envPath }) => ({ name, envPath })) };
 }
