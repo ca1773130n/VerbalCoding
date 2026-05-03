@@ -11,6 +11,7 @@ import {
   parseKeyValueEnv,
   renderInstanceSetupSummary,
 } from '../app-node/install_config.mjs';
+import { ensureHermesProfile, validateProfileName } from '../app-node/hermes_profiles.mjs';
 import { checkInstanceConfigs } from '../app-node/instance_doctor.mjs';
 import {
   listInstanceStatuses,
@@ -142,6 +143,30 @@ async function setupInstance(argv) {
       hermesSessionFile: await askQuestion(rl, 'Hermes session file', defaults.HERMES_SESSION_FILE || `.agent-sessions/hermes/${preview.INSTANCE_NAME}.session`),
       agentLabel: await askQuestion(rl, 'Agent label', defaults.AGENT_LABEL || `Hermes Agent · ${instanceName}`),
     });
+    try {
+      validateProfileName(values.INSTANCE_NAME);
+    } catch (err) {
+      console.error(`Instance name ${JSON.stringify(values.INSTANCE_NAME)} cannot be used as a Hermes profile name.`);
+      console.error('Pick a name matching ^[a-z0-9][a-z0-9_-]{0,63}$ (e.g. llm-wiki, acme).');
+      process.exitCode = 2;
+      return;
+    }
+
+    let profileResult;
+    try {
+      profileResult = await ensureHermesProfile({
+        name: values.INSTANCE_NAME,
+        workdir: values.AGENT_CWD || ROOT,
+        projectContext: values.AGENT_PROJECT_CONTEXT || '',
+      });
+    } catch (err) {
+      console.error(`Hermes profile setup failed: ${err.message}`);
+      process.exitCode = 2;
+      return;
+    }
+    values.HERMES_HOME = profileResult.dir;
+    for (const w of profileResult.warnings || []) console.warn(`warning: ${w}`);
+    console.log(`Hermes profile: ${profileResult.name} at ${profileResult.dir} (${profileResult.created ? 'created' : 'reused'})`);
     fs.mkdirSync(path.dirname(instancePath), { recursive: true });
     if (fs.existsSync(instancePath)) {
       const backup = `${instancePath}.bak-${Date.now()}`;
