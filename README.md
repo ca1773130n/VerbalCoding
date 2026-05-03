@@ -102,8 +102,8 @@ vc restart auto on     # enable commit-time voice-bot auto-restart
 vc restart auto off    # disable it; this is the default
 vc bot invite CLIENT_ID # print a Discord invite URL with required bot permissions
 vc instance status      # list per-instance bridge configs and process status
-vc instance setup NAME  # interactive wizard; writes instances/NAME.env safely
-vc instance start NAME  # start ./run.sh instances/NAME.env as a detached process
+vc instance setup NAME  # interactive wizard; writes instances/NAME.env and creates ~/.hermes/profiles/NAME
+vc instance start NAME  # start ./run.sh instances/NAME.env as a detached process (self-heals missing Hermes profile)
 vc instance stop NAME   # stop a detached instance and remove its pid file
 vc doctor              # run the redacted doctor check
 npm run mcp                       # run the stdio MCP server for Hermes/other MCP clients
@@ -437,15 +437,17 @@ vc doctor
 
 For simultaneous project voice rooms, see [`docs/MULTI_INSTANCE.md`](docs/MULTI_INSTANCE.md).
 
-Each vc instance is bound 1:1 to an isolated Hermes profile under
-`~/.hermes/profiles/<name>`, so per-project memory, skills, and SOUL.md stay
-separate.
+## Multi-instance & Hermes profile isolation
+
+Each vc instance is bound 1:1 to an isolated Hermes profile under `~/.hermes/profiles/<name>`. `vc instance setup <name>` clones your default Hermes home (carrying API keys and model selection), sets the new profile's `terminal.cwd` to the instance workdir, seeds `<profile>/SOUL.md` from the wizard's project-context answer, and writes `HERMES_HOME=...` into `instances/<name>.env`. Memory, MEMORY.md, learned skills, and SOUL.md therefore stay separate per project; sessions and memory start fresh while shared credentials carry over.
+
+`vc instance start <name>` self-heals: if `HERMES_HOME` points at a profile dir that no longer exists, it is recreated before launch. `vc doctor` warns when an instance's `HERMES_HOME` points at a missing dir and errors when the profile's `terminal.cwd` does not match `AGENT_CWD`. Instance names must match `^[a-z0-9][a-z0-9_-]{0,63}$`, since Hermes uses the name as a directory and config key.
 
 ## Operational notes
 
 - Bot needs Discord privileged Message Content intent enabled for text commands.
 - Bot needs voice channel connect/speak permissions.
-- For Hermes Agent, configure/authenticate Hermes normally (`hermes setup`, `hermes login`, etc.).
+- For Hermes Agent, configure/authenticate Hermes normally (`hermes setup`, `hermes login`, etc.) on your default profile; per-instance profiles are cloned from it, so each instance inherits the auth without re-running setup.
 - For Claude Code, Codex, Gemini, OpenCode, OpenClaw, install and authenticate those CLIs separately.
 - If a CLI emits diff/code output on timeout or signal failure, the bridge avoids reading it aloud and sends detailed text instead.
 - If the bot is restarted during debugging, old background sessions may emit delayed `exit code 143` or watch-pattern notifications; verify the current running process before treating those as failures.

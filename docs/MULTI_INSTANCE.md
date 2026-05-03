@@ -74,12 +74,13 @@ PROJECT_SESSIONS_FILE=config/project-sessions.llm-wiki.json
 BRIDGE_LOG_PATH=/tmp/verbalcoding-llm-wiki.log
 NODE_AUDIO_DEBUG_DIR=/tmp/verbalcoding-llm-wiki-debug
 HERMES_SESSION_FILE=.agent-sessions/hermes/llm-wiki.session
+HERMES_HOME=/Users/neo/.hermes/profiles/llm-wiki
 AGENT_LABEL=Hermes Agent · LLM-Wiki
 AGENT_CWD=/Users/neo/Developer/Projects/LLM-Wiki
 AGENT_PROJECT_CONTEXT=Project session: LLM-Wiki
 ```
 
-Give every instance unique values for log/debug/session files. `vc doctor` checks for duplicate tokens and colliding runtime paths without printing secrets.
+Give every instance unique values for log/debug/session files. `HERMES_HOME` and the matching `~/.hermes/profiles/<name>` directory are created automatically by `vc instance setup`. `vc doctor` checks for duplicate tokens, colliding runtime paths, missing profile directories, and `terminal.cwd` mismatches between profile and instance — all without printing secrets.
 
 ## Commands
 
@@ -120,7 +121,7 @@ vc instance setup verbalcoding
 vc instance setup llm-wiki
 ```
 
-The wizard writes ignored `instances/verbalcoding.env` and `instances/llm-wiki.env` files with mode `0600`; it also backs up an existing instance env before replacing it.
+The wizard writes ignored `instances/verbalcoding.env` and `instances/llm-wiki.env` files with mode `0600`; it also backs up an existing instance env before replacing it. Each run also creates `~/.hermes/profiles/<name>` cloned from your default Hermes home, so the two instances start with the same auth/model but accumulate independent memory and skills as they learn each project.
 
 4. Check config:
 
