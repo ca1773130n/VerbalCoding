@@ -13,3 +13,32 @@ export function validateProfileName(name) {
   }
   return name;
 }
+
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+function defaultDeps(deps = {}) {
+  return {
+    homedir: deps.homedir || os.homedir,
+    fs: deps.fs || fs,
+    env: deps.env || process.env,
+  };
+}
+
+export function hermesProfilesRoot(deps = {}) {
+  const { homedir, env } = defaultDeps(deps);
+  if (env && env.HERMES_PROFILES_ROOT) return env.HERMES_PROFILES_ROOT;
+  return path.join(homedir(), '.hermes', 'profiles');
+}
+
+export function hermesProfileDir(name, deps = {}) {
+  validateProfileName(name);
+  return path.join(hermesProfilesRoot(deps), name);
+}
+
+export function profileExists(name, deps = {}) {
+  const { fs: fsDep } = defaultDeps(deps);
+  const dir = hermesProfileDir(name, deps);
+  return fsDep.existsSync(path.join(dir, 'config.yaml'));
+}

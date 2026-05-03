@@ -14,3 +14,43 @@ test('validateProfileName rejects invalid names', () => {
     assert.throws(() => validateProfileName(name), InvalidProfileName, `expected ${JSON.stringify(name)} to throw`);
   }
 });
+
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+import { hermesProfilesRoot, hermesProfileDir, profileExists } from './hermes_profiles.mjs';
+
+function tempHome() {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'vc-hermes-home-'));
+}
+
+test('hermesProfilesRoot resolves under HOME', () => {
+  const home = '/tmp/fake-home';
+  assert.equal(hermesProfilesRoot({ homedir: () => home }), '/tmp/fake-home/.hermes/profiles');
+});
+
+test('hermesProfileDir joins root and validated name', () => {
+  const deps = { homedir: () => '/tmp/fake-home' };
+  assert.equal(hermesProfileDir('llm-wiki', deps), '/tmp/fake-home/.hermes/profiles/llm-wiki');
+});
+
+test('hermesProfileDir throws on invalid name', () => {
+  const deps = { homedir: () => '/tmp/fake-home' };
+  assert.throws(() => hermesProfileDir('Bad Name', deps), { name: 'InvalidProfileName' });
+});
+
+test('profileExists returns false when config.yaml missing', () => {
+  const home = tempHome();
+  const deps = { homedir: () => home };
+  assert.equal(profileExists('llm-wiki', deps), false);
+});
+
+test('profileExists returns true when config.yaml present', () => {
+  const home = tempHome();
+  const dir = path.join(home, '.hermes', 'profiles', 'llm-wiki');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'config.yaml'), 'terminal:\n  cwd: /tmp\n');
+  const deps = { homedir: () => home };
+  assert.equal(profileExists('llm-wiki', deps), true);
+});
