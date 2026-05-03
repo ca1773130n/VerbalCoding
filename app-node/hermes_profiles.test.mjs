@@ -124,3 +124,43 @@ test('ensureHermesProfile creates a missing profile', async () => {
   const setCall = runner.calls.find(c => c.args[0] === 'config' && c.args[1] === 'set');
   assert.equal(setCall.opts.env.HERMES_HOME, dir);
 });
+
+test('ensureHermesProfile reuses an existing profile with matching cwd', async () => {
+  const home = tempHome();
+  const dir = path.join(home, '.hermes', 'profiles', 'llm-wiki');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'config.yaml'), 'terminal:\n  cwd: /workdir/llm-wiki\n');
+
+  const runner = recordingRunner({
+    'hermes config get terminal.cwd': cb => cb(null, { stdout: '/workdir/llm-wiki\n', stderr: '' }),
+  });
+  const result = await ensureHermesProfile({
+    name: 'llm-wiki',
+    workdir: '/workdir/llm-wiki',
+    projectContext: 'unused',
+    deps: { execFile: runner, homedir: () => home, fs },
+  });
+  assert.equal(result.created, false);
+  assert.equal(result.updatedConfig, false);
+  assert.equal(runner.calls.some(c => c.args[0] === 'profile' && c.args[1] === 'create'), false);
+});
+
+test('ensureHermesProfile throws ProfileBoundElsewhere on cwd mismatch', async () => {
+  const home = tempHome();
+  const dir = path.join(home, '.hermes', 'profiles', 'llm-wiki');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'config.yaml'), 'terminal:\n  cwd: /elsewhere\n');
+
+  const runner = recordingRunner({
+    'hermes config get terminal.cwd': cb => cb(null, { stdout: '/elsewhere\n', stderr: '' }),
+  });
+  await assert.rejects(
+    () => ensureHermesProfile({
+      name: 'llm-wiki',
+      workdir: '/workdir/llm-wiki',
+      projectContext: '',
+      deps: { execFile: runner, homedir: () => home, fs },
+    }),
+    { name: 'ProfileBoundElsewhere', expected: '/workdir/llm-wiki', actual: '/elsewhere' },
+  );
+});
