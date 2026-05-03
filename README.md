@@ -437,6 +437,10 @@ vc doctor
 
 For simultaneous project voice rooms, see [`docs/MULTI_INSTANCE.md`](docs/MULTI_INSTANCE.md).
 
+Each vc instance is bound 1:1 to an isolated Hermes profile under
+`~/.hermes/profiles/<name>`, so per-project memory, skills, and SOUL.md stay
+separate.
+
 ## Operational notes
 
 - Bot needs Discord privileged Message Content intent enabled for text commands.

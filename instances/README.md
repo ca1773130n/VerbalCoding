@@ -16,6 +16,7 @@ Rules:
   - `BRIDGE_LOG_PATH`
   - `NODE_AUDIO_DEBUG_DIR`
   - `HERMES_SESSION_FILE`
+  - `HERMES_HOME` (set automatically by `vc instance setup`)
 
 Typical commands:
 

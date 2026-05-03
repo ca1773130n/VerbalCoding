@@ -43,6 +43,25 @@ vc bot invite <client-id> --guild <guild-id>
 
 Discord still requires one Developer Portal application/bot per simultaneous voice room, but this avoids manually building OAuth URLs or permission integers.
 
+### Hermes profile isolation
+
+Each instance gets its own Hermes home at `~/.hermes/profiles/<name>` so that
+memory, MEMORY.md, SOUL.md, and learned skills do not leak across projects.
+
+`vc instance setup <name>` automatically:
+
+- runs `hermes profile create <name> --clone-from default` (carries API keys
+  and model from your current `~/.hermes`; sessions and memory start fresh),
+- sets the new profile's `terminal.cwd` to the instance workdir,
+- seeds `<profile>/SOUL.md` from the wizard's project-context answer,
+- writes `HERMES_HOME=...` into `instances/<name>.env`.
+
+`vc instance start <name>` self-heals: if the env points at a Hermes profile
+dir that no longer exists, the start command recreates it before launching.
+
+Instance names must match `^[a-z0-9][a-z0-9_-]{0,63}$` because Hermes uses the
+name as a directory and config key.
+
 ## Minimal generated instance env
 
 ```env
