@@ -67,3 +67,75 @@ export async function assertHermesAvailable(deps = {}) {
     throw err;
   }
 }
+
+async function runHermes(run, args, { extraEnv } = {}) {
+  const env = { ...process.env, ...(extraEnv || {}) };
+  return run('hermes', args, { env, timeout: 60000 });
+}
+
+export class ProfileBoundElsewhere extends Error {
+  constructor(name, expected, actual) {
+    super(`Hermes profile ${name} already binds terminal.cwd to ${actual}; expected ${expected}. Pick a different instance name or rebind with hermes config set terminal.cwd in that profile.`);
+    this.name = 'ProfileBoundElsewhere';
+    this.expected = expected;
+    this.actual = actual;
+  }
+}
+
+export class ProfileConfigFailed extends Error {
+  constructor(stderr) {
+    super(`hermes config set terminal.cwd failed: ${stderr}`);
+    this.name = 'ProfileConfigFailed';
+  }
+}
+
+async function readTerminalCwd(run, dir) {
+  try {
+    const out = await run('hermes', ['config', 'get', 'terminal.cwd'], { env: { ...process.env, HERMES_HOME: dir }, timeout: 10000 });
+    return String(out.stdout || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+export async function ensureHermesProfile({ name, workdir, projectContext, cloneFrom = 'default', deps = {} } = {}) {
+  validateProfileName(name);
+  const { fs: fsDep, homedir, env } = defaultDeps(deps);
+  const run = resolveRunner(deps);
+  const dir = hermesProfileDir(name, { homedir, env });
+  const warnings = [];
+
+  if (profileExists(name, { homedir, env, fs: fsDep })) {
+    const actualCwd = await readTerminalCwd(run, dir);
+    if (actualCwd && actualCwd !== workdir) {
+      throw new ProfileBoundElsewhere(name, workdir, actualCwd);
+    }
+    return { created: false, dir, name, configPath: path.join(dir, 'config.yaml'), updatedConfig: false, warnings };
+  }
+
+  await assertHermesAvailable({ execFile: run });
+
+  try {
+    await runHermes(run, ['profile', 'create', name, '--clone-from', cloneFrom]);
+  } catch (err) {
+    if (cloneFrom === 'default') {
+      warnings.push(`hermes profile create --clone-from default failed (${err.message || err.code}); retrying without clone`);
+      await runHermes(run, ['profile', 'create', name]);
+    } else {
+      throw err;
+    }
+  }
+
+  try {
+    await runHermes(run, ['config', 'set', 'terminal.cwd', workdir], { extraEnv: { HERMES_HOME: dir } });
+  } catch (err) {
+    throw new ProfileConfigFailed(String(err.stderr || err.message || err.code));
+  }
+
+  const soulPath = path.join(dir, 'SOUL.md');
+  if (projectContext && !fsDep.existsSync(soulPath)) {
+    fsDep.writeFileSync(soulPath, String(projectContext));
+  }
+
+  return { created: true, dir, name, configPath: path.join(dir, 'config.yaml'), updatedConfig: true, warnings };
+}

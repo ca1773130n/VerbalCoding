@@ -78,3 +78,49 @@ test('assertHermesAvailable throws HermesCliMissing on ENOENT', async () => {
     HermesCliMissing,
   );
 });
+
+import { ensureHermesProfile } from './hermes_profiles.mjs';
+
+function recordingRunner(handlers = {}) {
+  const calls = [];
+  const fn = (cmd, args, opts, cb) => {
+    calls.push({ cmd, args, opts: opts || {} });
+    const key = `${cmd} ${args.join(' ')}`;
+    const handler = handlers[key];
+    if (handler) return handler(cb);
+    cb(null, { stdout: '', stderr: '' });
+  };
+  fn.calls = calls;
+  return fn;
+}
+
+test('ensureHermesProfile creates a missing profile', async () => {
+  const home = tempHome();
+  const dir = path.join(home, '.hermes', 'profiles', 'llm-wiki');
+  const runner = recordingRunner({
+    'hermes --version': cb => cb(null, { stdout: 'hermes 0.6.1\n', stderr: '' }),
+    'hermes profile create llm-wiki --clone-from default': cb => {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, 'config.yaml'), 'terminal:\n  cwd: /tmp/old\n');
+      cb(null, { stdout: '', stderr: '' });
+    },
+    'hermes config set terminal.cwd /workdir/llm-wiki': cb => {
+      fs.writeFileSync(path.join(dir, 'config.yaml'), 'terminal:\n  cwd: /workdir/llm-wiki\n');
+      cb(null, { stdout: '', stderr: '' });
+    },
+    'hermes config get terminal.cwd': cb => cb(null, { stdout: '/workdir/llm-wiki\n', stderr: '' }),
+  });
+  const result = await ensureHermesProfile({
+    name: 'llm-wiki',
+    workdir: '/workdir/llm-wiki',
+    projectContext: 'LLM-Wiki backend agent',
+    deps: { execFile: runner, homedir: () => home, fs },
+  });
+  assert.equal(result.created, true);
+  assert.equal(result.dir, dir);
+  assert.equal(result.name, 'llm-wiki');
+  assert.equal(fs.existsSync(path.join(dir, 'SOUL.md')), true);
+  assert.equal(fs.readFileSync(path.join(dir, 'SOUL.md'), 'utf8'), 'LLM-Wiki backend agent');
+  const setCall = runner.calls.find(c => c.args[0] === 'config' && c.args[1] === 'set');
+  assert.equal(setCall.opts.env.HERMES_HOME, dir);
+});
