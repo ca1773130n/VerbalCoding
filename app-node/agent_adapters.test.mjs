@@ -426,3 +426,13 @@ test('signal failure with patch-like output returns a concise interruption messa
   assert.equal(answer, interruptedAgentMessage('Hermes Agent', true));
   assert.doesNotMatch(answer, /@@|review diff|old|new/);
 });
+
+test('hermes adapter spawn carries HERMES_HOME from instance env into child env', async () => {
+  const { buildHermesSpawnOptions } = await import('./agent_adapters.mjs');
+  const opts = buildHermesSpawnOptions({
+    parentEnv: { PATH: '/usr/bin', HERMES_HOME: '/parent/.hermes' },
+    instanceEnv: { HERMES_HOME: '/Users/neo/.hermes/profiles/llm-wiki' },
+  });
+  assert.equal(opts.env.HERMES_HOME, '/Users/neo/.hermes/profiles/llm-wiki');
+  assert.equal(opts.env.PATH, '/usr/bin');
+});

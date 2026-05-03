@@ -192,6 +192,12 @@ export function resolveExecTimeout(value) {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
+export function buildHermesSpawnOptions({ parentEnv = process.env, instanceEnv = {} } = {}) {
+  const env = { ...parentEnv };
+  if (instanceEnv.HERMES_HOME) env.HERMES_HOME = instanceEnv.HERMES_HOME;
+  return { env };
+}
+
 export function buildAgentSettings({ ROOT, env = process.env } = {}) {
   const root = ROOT || process.cwd();
   const backend = String(env.AGENT_BACKEND || env.AGENT_PROVIDER || 'hermes').trim().toLowerCase();
@@ -484,10 +490,11 @@ export function createAgentAdapter(settings, deps = {}) {
     log('Agent CLI start', label, cmd, finalArgs.slice(0, -1).join(' '), sessionId ? `resume=${sessionId}` : 'new-session', 'verbose', verboseProgress);
     if (verboseProgress) onProgress(agentProgressEvent(label, 'start', language));
     try {
+      const { env: hermesEnv } = buildHermesSpawnOptions({ instanceEnv: env });
       const { stdout, stderr } = await execWithOptionalProgress(cmd, finalArgs, {
         timeout: resolveExecTimeout(plan.task ? settings.taskTimeoutMs : settings.chatTimeoutMs),
         maxBuffer: 4 * 1024 * 1024,
-        env: { ...env, PYTHONUNBUFFERED: '1' },
+        env: { ...hermesEnv, PYTHONUNBUFFERED: '1' },
         cwd: plan.cwd || settings.cwd || process.cwd(),
         signal,
       }, verboseProgress);
