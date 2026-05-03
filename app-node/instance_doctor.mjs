@@ -11,8 +11,20 @@ export function tokenFingerprint(token) {
 function readProfileTerminalCwdFromConfig(dir, fsDep = fs) {
   try {
     const text = fsDep.readFileSync(path.join(dir, 'config.yaml'), 'utf8');
-    const m = text.match(/^\s*cwd:\s*"?([^"\n]+)"?\s*$/m);
-    return m ? m[1].trim() : '';
+    const lines = text.split(/\r?\n/);
+    let inTerminal = false;
+    for (const line of lines) {
+      if (/^terminal:\s*$/.test(line)) {
+        inTerminal = true;
+        continue;
+      }
+      if (inTerminal) {
+        if (/^\S/.test(line)) break;
+        const m = line.match(/^\s+cwd:\s*"?([^"\n]+?)"?\s*$/);
+        if (m) return m[1].trim();
+      }
+    }
+    return '';
   } catch {
     return '';
   }

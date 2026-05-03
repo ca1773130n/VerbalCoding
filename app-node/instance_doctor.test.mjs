@@ -103,3 +103,26 @@ test('checkInstanceConfigs errors when profile terminal.cwd differs from AGENT_C
   });
   assert.ok(result.errors.some(e => /terminal\.cwd .* does not match AGENT_CWD/.test(e)));
 });
+
+test('checkInstanceConfigs reads only terminal.cwd, ignoring sibling cwd keys', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vc-doctor-'));
+  const instancesDir = path.join(root, 'instances');
+  const profileDir = path.join(root, '.hermes', 'profiles', 'llm-wiki');
+  fs.mkdirSync(instancesDir, { recursive: true });
+  fs.mkdirSync(profileDir, { recursive: true });
+  // git.cwd appears BEFORE terminal.cwd; old regex would match git.cwd.
+  fs.writeFileSync(path.join(profileDir, 'config.yaml'),
+    'git:\n  cwd: /elsewhere\n' +
+    'terminal:\n  cwd: /projects/llm-wiki\n');
+  fs.writeFileSync(path.join(instancesDir, 'llm-wiki.env'), [
+    'DISCORD_TOKEN="t"',
+    'AUTO_JOIN_VOICE_CHANNELS="LLM-Wiki"',
+    'TRANSCRIPT_CHANNEL_ID="1"',
+    'AGENT_CWD="/projects/llm-wiki"',
+    `HERMES_HOME="${profileDir}"`,
+    '',
+  ].join('\n'));
+  const result = checkInstanceConfigs(root, { instancesDir });
+  assert.equal(result.errors.filter(e => /terminal\.cwd/.test(e)).length, 0,
+    `expected no terminal.cwd errors but got: ${result.errors.join(' | ')}`);
+});
