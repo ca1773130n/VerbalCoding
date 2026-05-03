@@ -15,19 +15,36 @@ export TTS_RATE="${TTS_RATE:-+10%}"
 export TTS_MAX_CHARS="${TTS_MAX_CHARS:-495}"
 export HERMES_TASK_TIMEOUT_MS="${HERMES_TASK_TIMEOUT_MS:-0}"
 export HERMES_CHAT_TIMEOUT_MS="${HERMES_CHAT_TIMEOUT_MS:-45000}"
+
+INSTANCE_ENV="${VERBALCODING_INSTANCE_ENV:-${1:-}}"
+if [ -n "$INSTANCE_ENV" ] && [ ! -f "$INSTANCE_ENV" ]; then
+  echo "instance env file not found: $INSTANCE_ENV" >&2
+  exit 2
+fi
+
+# In instance mode, the launcher passes isolated runtime defaults in the
+# process environment. Source the shared .env for non-secret/common defaults,
+# but do not let it replace the instance launcher defaults or token.
+LAUNCH_BRIDGE_LOG_PATH="${BRIDGE_LOG_PATH:-}"
+LAUNCH_NODE_AUDIO_DEBUG_DIR="${NODE_AUDIO_DEBUG_DIR:-}"
+LAUNCH_PROJECT_SESSIONS_FILE="${PROJECT_SESSIONS_FILE:-}"
+LAUNCH_HERMES_SESSION_FILE="${HERMES_SESSION_FILE:-}"
+LAUNCH_VERBALCODING_INSTANCE_NAME="${VERBALCODING_INSTANCE_NAME:-}"
+LAUNCH_VERBALCODING_INSTANCE_ENV="${VERBALCODING_INSTANCE_ENV:-}"
 if [ -f .env ]; then
   set -a
   # shellcheck disable=SC1091
   source ./.env
   set +a
 fi
-
-INSTANCE_ENV="${VERBALCODING_INSTANCE_ENV:-${1:-}}"
 if [ -n "$INSTANCE_ENV" ]; then
-  if [ ! -f "$INSTANCE_ENV" ]; then
-    echo "instance env file not found: $INSTANCE_ENV" >&2
-    exit 2
-  fi
+  [ -n "$LAUNCH_BRIDGE_LOG_PATH" ] && export BRIDGE_LOG_PATH="$LAUNCH_BRIDGE_LOG_PATH"
+  [ -n "$LAUNCH_NODE_AUDIO_DEBUG_DIR" ] && export NODE_AUDIO_DEBUG_DIR="$LAUNCH_NODE_AUDIO_DEBUG_DIR"
+  [ -n "$LAUNCH_PROJECT_SESSIONS_FILE" ] && export PROJECT_SESSIONS_FILE="$LAUNCH_PROJECT_SESSIONS_FILE"
+  [ -n "$LAUNCH_HERMES_SESSION_FILE" ] && export HERMES_SESSION_FILE="$LAUNCH_HERMES_SESSION_FILE"
+  [ -n "$LAUNCH_VERBALCODING_INSTANCE_NAME" ] && export VERBALCODING_INSTANCE_NAME="$LAUNCH_VERBALCODING_INSTANCE_NAME"
+  [ -n "$LAUNCH_VERBALCODING_INSTANCE_ENV" ] && export VERBALCODING_INSTANCE_ENV="$LAUNCH_VERBALCODING_INSTANCE_ENV"
+  unset DISCORD_BOT_TOKEN DISCORD_TOKEN
   set -a
   # shellcheck disable=SC1090
   source "$INSTANCE_ENV"

@@ -98,9 +98,8 @@ function printInstanceStatus(statuses) {
 
 function assertInstanceStartIsSafe() {
   const result = checkInstanceConfigs(ROOT);
-  const duplicateTokenErrors = result.errors.filter(error => error.includes('duplicate Discord token fingerprint'));
-  if (duplicateTokenErrors.length > 0) {
-    throw new Error(`Refusing to start instance because configured instances reuse a Discord token: ${duplicateTokenErrors.join('; ')}`);
+  if (result.errors.length > 0) {
+    throw new Error(`Refusing to start instance because instance configuration checks failed: ${result.errors.join('; ')}`);
   }
 }
 
