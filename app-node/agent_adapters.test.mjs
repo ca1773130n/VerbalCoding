@@ -391,6 +391,23 @@ test('extractVerboseProgressEvents summarizes tool activity without leaking raw 
   ]);
 });
 
+test('extractVerboseProgressEvents localizes implicit tool activity to English', () => {
+  const events = extractVerboseProgressEvents([
+    'Calling tool functions.web_search with query secret token abcdef',
+    'tool_use: terminal command="npm test"',
+    'Calling tool functions.skill_view with name discord-voice-hermes-bridge',
+    '  ┊ 📖           read_file  0.5s',
+    '  ┊ 🔎           web_search  1.2s',
+  ].join('\n'), { language: 'en' });
+
+  assert.deepEqual(events, [
+    'searching web',
+    'running terminal commands',
+    'loading skills',
+    'using file tool read_file',
+  ]);
+});
+
 test('resolveExecTimeout disables timeout for zero or invalid task timeout values', () => {
   assert.equal(resolveExecTimeout(0), undefined);
   assert.equal(resolveExecTimeout(-1), undefined);

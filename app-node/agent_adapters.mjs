@@ -102,9 +102,15 @@ function compactProgressText(text) {
     .slice(0, 140);
 }
 
-export function extractVerboseProgressEvents(text) {
+export function extractVerboseProgressEvents(text, { language = 'ko' } = {}) {
   const events = [];
   const seen = new Set();
+  const english = /^en/i.test(String(language || ''));
+  const labels = english ? {
+    web: 'searching web', skill: 'loading skills', read: 'reading files', edit: 'editing files', terminal: 'running terminal commands', tool: 'using tools',
+  } : {
+    web: '웹 검색 실행', skill: '스킬 사용', read: '파일 읽기', edit: '파일 수정', terminal: '터미널 명령 실행', tool: '툴 사용',
+  };
   function add(event) {
     const cleaned = compactProgressText(event);
     if (!cleaned || seen.has(cleaned)) return;
@@ -117,26 +123,27 @@ export function extractVerboseProgressEvents(text) {
     const explicit = /^VERBALCODING_PROGRESS\s*:\s*(.+)$/i.exec(line);
     if (explicit) { add(explicit[1]); continue; }
     const hermesPreview = /┊\s*(?:[^\s]+\s+)?(?:\$\s*)?([a-zA-Z_][\w-]*)\b/.exec(line);
-    if (hermesPreview) { add(toolProgressLabel(hermesPreview[1])); continue; }
+    if (hermesPreview) { add(toolProgressLabel(hermesPreview[1], { language })); continue; }
     const lower = line.toLowerCase();
-    if (/web_search|browser_search|web search|search web|functions\.web_search/.test(lower)) add('웹 검색 실행');
-    else if (/skill_view|skills_list|skill_manage|functions\.skill_|스킬 사용|스킬 확인/.test(lower)) add('스킬 사용');
-    else if (/read_file|functions\.read_file|reading file|file read|파일 읽/.test(lower)) add('파일 읽기');
-    else if (/write_file|patch|functions\.patch|editing file|파일 수정|파일 쓰/.test(lower)) add('파일 수정');
-    else if (/terminal|execute_code|shell|command=|npm test|pytest|터미널|명령 실행/.test(lower)) add('터미널 명령 실행');
-    else if (/tool_use|calling tool|functions\./.test(lower)) add('툴 사용');
+    if (/web_search|browser_search|web search|search web|functions\.web_search/.test(lower)) add(labels.web);
+    else if (/skill_view|skills_list|skill_manage|functions\.skill_|스킬 사용|스킬 확인/.test(lower)) add(labels.skill);
+    else if (/read_file|functions\.read_file|reading file|file read|파일 읽/.test(lower)) add(labels.read);
+    else if (/write_file|patch|functions\.patch|editing file|파일 수정|파일 쓰/.test(lower)) add(labels.edit);
+    else if (/terminal|execute_code|shell|command=|npm test|pytest|터미널|명령 실행/.test(lower)) add(labels.terminal);
+    else if (/tool_use|calling tool|functions\./.test(lower)) add(labels.tool);
   }
   return events;
 }
 
-function toolProgressLabel(name) {
+function toolProgressLabel(name, { language = 'ko' } = {}) {
   const tool = String(name || '').trim();
-  if (/^(web_search|web_extract|browser_)/.test(tool)) return '웹 검색 실행';
-  if (/^(read_file|search_files)$/.test(tool)) return `파일 도구 사용 ${tool}`;
-  if (/^(write_file|patch)$/.test(tool)) return `파일 수정 도구 사용 ${tool}`;
-  if (/^(terminal|execute_code|process)$/.test(tool)) return `터미널 도구 사용 ${tool}`;
-  if (/^(skill_view|skills_list|skill_manage)$/.test(tool)) return `스킬 도구 사용 ${tool}`;
-  return `툴 사용 ${tool}`;
+  const english = /^en/i.test(String(language || ''));
+  if (/^(web_search|web_extract|browser_)/.test(tool)) return english ? 'searching web' : '웹 검색 실행';
+  if (/^(read_file|search_files)$/.test(tool)) return english ? `using file tool ${tool}` : `파일 도구 사용 ${tool}`;
+  if (/^(write_file|patch)$/.test(tool)) return english ? `editing files with ${tool}` : `파일 수정 도구 사용 ${tool}`;
+  if (/^(terminal|execute_code|process)$/.test(tool)) return english ? `running terminal tool ${tool}` : `터미널 도구 사용 ${tool}`;
+  if (/^(skill_view|skills_list|skill_manage)$/.test(tool)) return english ? `loading skills with ${tool}` : `스킬 도구 사용 ${tool}`;
+  return english ? `using tool ${tool}` : `툴 사용 ${tool}`;
 }
 
 export function isPatchLikeOutput(text) {
@@ -288,11 +295,12 @@ export function createAgentAdapter(settings, deps = {}) {
   const spawnProcess = deps.spawn;
   const onProgress = deps.onProgress || (() => {});
   const emittedProgress = new Set();
+  let activeProgressLanguage = settings.language;
   const capabilities = agentAdapterCapabilities(settings);
 
   function emitVerboseProgress(text) {
     if (!text) return;
-    for (const event of extractVerboseProgressEvents(text)) {
+    for (const event of extractVerboseProgressEvents(text, { language: activeProgressLanguage })) {
       if (emittedProgress.has(event)) continue;
       emittedProgress.add(event);
       try { onProgress(event); } catch (e) { warn('verbose progress callback failed', e?.stack || e); }
@@ -481,6 +489,7 @@ export function createAgentAdapter(settings, deps = {}) {
     const text = typeof request === 'string' ? request : request?.text;
     const verboseProgress = Boolean(plan.verboseProgress ?? settings.verboseProgress);
     const language = plan.language || settings.language;
+    activeProgressLanguage = language;
     const projectContext = plan.projectContext || settings.projectContext || '';
     emittedProgress.clear();
     const { cmd, args, sessionId } = buildArgs(text, { verboseProgress, language, projectContext });
