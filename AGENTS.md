@@ -16,5 +16,3 @@ Run the Node test suite before reporting code changes as complete:
 ```bash
 npm test
 ```
-
-If changing the legacy Python helpers under `app/` or Python scripts, also run the relevant pytest tests when the Python environment is available.

@@ -34,7 +34,6 @@ Run from the repo root:
 ```bash
 node --check app-node/main.mjs
 npm test
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/ -q
 bash -n run.sh scripts/install.sh
 vc doctor
 ```

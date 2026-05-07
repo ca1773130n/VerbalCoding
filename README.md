@@ -428,7 +428,6 @@ prints a compact recent summary using the latest 200 records: count, avg, p95, m
 ```bash
 node --check app-node/main.mjs
 npm test
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/ -q
 bash -n run.sh scripts/install.sh
 vc doctor
 ```
