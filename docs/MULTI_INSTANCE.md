@@ -65,19 +65,19 @@ name as a directory and config key.
 ## Minimal generated instance env
 
 ```env
-INSTANCE_NAME=llm-wiki
+INSTANCE_NAME=my-project
 DISCORD_TOKEN=replace-with-bot-token
-DISCORD_CLIENT_ID=1497879755394125924
-AUTO_JOIN_VOICE_CHANNELS=LLM-Wiki
-TRANSCRIPT_CHANNEL_ID=1497890694730219540
-PROJECT_SESSIONS_FILE=config/project-sessions.llm-wiki.json
-BRIDGE_LOG_PATH=/tmp/verbalcoding-llm-wiki.log
-NODE_AUDIO_DEBUG_DIR=/tmp/verbalcoding-llm-wiki-debug
-HERMES_SESSION_FILE=.agent-sessions/hermes/llm-wiki.session
-HERMES_HOME=/Users/neo/.hermes/profiles/llm-wiki
-AGENT_LABEL=Hermes Agent · LLM-Wiki
-AGENT_CWD=/Users/neo/Developer/Projects/LLM-Wiki
-AGENT_PROJECT_CONTEXT=Project session: LLM-Wiki
+DISCORD_CLIENT_ID=123456789012345678
+AUTO_JOIN_VOICE_CHANNELS=Project Room
+TRANSCRIPT_CHANNEL_ID=123456789012345678
+PROJECT_SESSIONS_FILE=config/project-sessions.my-project.json
+BRIDGE_LOG_PATH=/tmp/verbalcoding-my-project.log
+NODE_AUDIO_DEBUG_DIR=/tmp/verbalcoding-my-project-debug
+HERMES_SESSION_FILE=.agent-sessions/hermes/my-project.session
+HERMES_HOME=/home/you/.hermes/profiles/my-project
+AGENT_LABEL=VerbalCoding · My Project
+AGENT_CWD=/path/to/my-project
+AGENT_PROJECT_CONTEXT=Project session: My Project
 ```
 
 Give every instance unique values for log/debug/session files. `HERMES_HOME` and the matching `~/.hermes/profiles/<name>` directory are created automatically by `vc instance setup`. `vc doctor` checks for duplicate tokens, colliding runtime paths, missing profile directories, and `terminal.cwd` mismatches between profile and instance — all without printing secrets.
@@ -87,10 +87,10 @@ Give every instance unique values for log/debug/session files. `HERMES_HOME` and
 ```bash
 vc instance list
 vc instance status
-vc instance status llm-wiki
-vc instance start llm-wiki
-vc instance stop llm-wiki
-vc instance restart llm-wiki
+vc instance status my-project
+vc instance start my-project
+vc instance stop my-project
+vc instance restart my-project
 ```
 
 `start` runs `./run.sh instances/<name>.env` detached and writes `.run/instances/<name>.pid`.

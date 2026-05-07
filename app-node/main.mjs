@@ -166,7 +166,7 @@ const settings = {
   token: process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN,
   allowedUsers: new Set((process.env.DISCORD_ALLOWED_USERS || '').split(/[;,]/).map(s => s.trim()).filter(Boolean)),
   autoJoinVoiceChannels: (process.env.AUTO_JOIN_VOICE_CHANNELS || '일반,General,general').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
-  transcriptChannelId: (process.env.TRANSCRIPT_CHANNEL_ID || '1497890694730219540').trim(),
+  transcriptChannelId: (process.env.TRANSCRIPT_CHANNEL_ID || '123456789012345678').trim(),
   whisperBin: process.env.WHISPER_CPP_BIN || 'whisper-cli',
   whisperModel: process.env.WHISPER_CPP_MODEL || path.join(ROOT, 'models', 'ggml-small-q5_1.bin'),
   whisperLanguage: process.env.WHISPER_CPP_LANGUAGE || process.env.STT_LANGUAGE || 'ko',

@@ -133,7 +133,7 @@ Hermes config example:
 mcp_servers:
   verbalcoding:
     command: "node"
-    args: ["/Users/neo/Developer/Projects/VerbalCoding/scripts/mcp-server.mjs"]
+    args: ["/path/to/VerbalCoding/scripts/mcp-server.mjs"]
     timeout: 120
     connect_timeout: 30
 ```
@@ -193,7 +193,7 @@ Exposed MCP tools:
 DISCORD_BOT_TOKEN="***"
 DISCORD_ALLOWED_USERS="123456789012345678"
 AUTO_JOIN_VOICE_CHANNELS="일반,General,general"
-TRANSCRIPT_CHANNEL_ID="1497890694730219540"
+TRANSCRIPT_CHANNEL_ID="123456789012345678"
 
 AGENT_BACKEND="hermes"
 # AGENT_BACKEND="opencode"
@@ -269,7 +269,7 @@ Runtime logs default to the path selected by your shell command. During local te
 - `!voice-clone status` / `!voice-clone cancel` — inspect or cancel a pending reference-sample capture.
 - `!ask <prompt>` — send text through the same selected harness adapter as voice.
 - `!session` / `!session status` — show the current project or default adapter session ID when supported.
-- `!session new <name> <workdir> [context] --voice <voice-channel>` — create a project-scoped Hermes session for the current Discord text channel and the named voice channel. Example: `!session new llm-wiki /Users/neo/Developer/Projects/LLM-Wiki llm-wiki MCP graph --voice "LLM Wiki"`.
+- `!session new <name> <workdir> [context] --voice <voice-channel>` — create a project-scoped Hermes session for the current Discord text channel and the named voice channel. Example: `!session new my-project /path/to/my-project "project context" --voice "Project Room"`.
 - `!session attach-voice [sessionName] --voice <voice-channel>` — bind the current text channel/thread to the selected voice channel. If no session name is given and the text channel has no session, the bridge creates an ad-hoc isolated channel session.
 - `!session voice [sessionName] --voice <voice-channel>` — alias for `!session attach-voice`; useful for attaching an existing named project session to a voice channel.
 - `!session use <name> --voice <voice-channel>` — bind the current Discord text channel, and optionally the named voice channel, to an existing project session.

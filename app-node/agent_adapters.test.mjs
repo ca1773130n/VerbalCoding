@@ -448,8 +448,8 @@ test('hermes adapter spawn carries HERMES_HOME from instance env into child env'
   const { buildHermesSpawnOptions } = await import('./agent_adapters.mjs');
   const opts = buildHermesSpawnOptions({
     parentEnv: { PATH: '/usr/bin', HERMES_HOME: '/parent/.hermes' },
-    instanceEnv: { HERMES_HOME: '/Users/neo/.hermes/profiles/llm-wiki' },
+    instanceEnv: { HERMES_HOME: '/home/you/.hermes/profiles/my-project' },
   });
-  assert.equal(opts.env.HERMES_HOME, '/Users/neo/.hermes/profiles/llm-wiki');
+  assert.equal(opts.env.HERMES_HOME, '/home/you/.hermes/profiles/my-project');
   assert.equal(opts.env.PATH, '/usr/bin');
 });

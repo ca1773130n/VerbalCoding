@@ -79,7 +79,7 @@ def load_settings() -> Settings:
         for name in os.getenv("AUTO_JOIN_VOICE_CHANNELS", "일반,General,general").split(",")
         if name.strip()
     )
-    transcript_channel_raw = os.getenv("TRANSCRIPT_CHANNEL_ID", "1497890694730219540").strip()
+    transcript_channel_raw = os.getenv("TRANSCRIPT_CHANNEL_ID", "123456789012345678").strip()
     transcript_channel_id = int(transcript_channel_raw) if transcript_channel_raw else None
     default_whisper_cpp_model = str(Path(__file__).resolve().parent.parent / "models" / "ggml-small-q5_1.bin")
     stt_engine = os.getenv("STT_ENGINE", "whisper_cpp")

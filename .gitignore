@@ -22,3 +22,19 @@ instances/*.env
 !instances/example.env
 instances/*.local.env
 .run/
+
+# Local AI/editor harness output and generated research graph.
+.llm-wiki/
+.harness-sync/
+.avante/
+.claude/
+.codecompanion/
+.codex/
+.continue/
+.cursor/
+.gemini/
+.roo/
+.zed/
+
+# Local project/session runtime state; examples/templates should use distinct names.
+config/project-sessions*.json

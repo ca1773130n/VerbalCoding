@@ -1,60 +1,20 @@
-<!-- Managed by HarnessSync -->
-# Rules synced from Claude Code
+# Repository Guidelines
 
-# [Project rules from CLAUDE.md]
+VerbalCoding is a Discord voice bridge for coding agents. The active runtime is the Node implementation under `app-node/`, launched through `run.sh` or the `vc` CLI.
 
-# LLM-Wiki Harness: verbalcoding_wiki
+## Development
 
-This project has a compiled LLM-Wiki research graph. Treat markdown pages as a human-readable projection; the graph JSON is authoritative.
+- Prefer user-facing `vc ...` commands over `npm run vc -- ...` in docs and examples.
+- Keep local secrets in `.env` or `instances/*.env`; do not commit real Discord tokens, channel IDs, session files, voice samples, model weights, virtualenvs, logs, or cache output.
+- Update source files rather than generated/runtime artifacts.
+- Keep examples public-safe: use placeholders for local paths, user IDs, Discord IDs, and tokens.
 
-## Artifacts
+## Verification
 
-- `.llm-wiki/graph.json` — authoritative typed ResearchGraph
-- `.llm-wiki/markdown_projection/` — Obsidian/VS Code markdown projection
-- `.llm-wiki/obsidian_vault/` — generated Obsidian vault
-- `.llm-wiki/temporal_facts.jsonl` — temporal/provenance fact projection
-- `.llm-wiki/graphiti_episodes.jsonl` — Graphiti-compatible episode export
-- `.llm-wiki/cognee_bundle/` — Cognee JSONL bundle
+Run the Node test suite before reporting code changes as complete:
 
-## MCP server
-
-Use the local MCP server to query the graph:
-
-```text
-command: python3
-args: ["-m", "llm_wiki.mcp_server", "--graph", "/Users/neo/Developer/Projects/VerbalCoding/.llm-wiki/graph.json"]
+```bash
+npm test
 ```
 
-Expected MCP tools: `schema`, `graph_summary`, `search_nodes`, `node_context`, `search_facts`, `timeline`.
-
-## Graph summary
-
-- Nodes: 243
-- Edges: 371
-
-## Representative nodes
-
-- **Agent** (`CodeClass`) — /Users/neo/Developer/Projects/VerbalCoding/app/agent.py
-- **DiscordAudio** (`CodeClass`) — /Users/neo/Developer/Projects/VerbalCoding/app/audio_discord.py
-- **FasterWhisperSTT** (`CodeClass`) — /Users/neo/Developer/Projects/VerbalCoding/app/stt.py
-- **HermesClient** (`CodeClass`) — /Users/neo/Developer/Projects/VerbalCoding/app/hermes.py
-- **Settings** (`CodeClass`) — /Users/neo/Developer/Projects/VerbalCoding/app/config.py
-- **SpeakerManager** (`CodeClass`) — /Users/neo/Developer/Projects/VerbalCoding/app/speaker.py
-- **STT** (`CodeClass`) — /Users/neo/Developer/Projects/VerbalCoding/app/stt.py
-- **TTS** (`CodeClass`) — /Users/neo/Developer/Projects/VerbalCoding/app/tts.py
-- **UtteranceBuffer** (`CodeClass`) — /Users/neo/Developer/Projects/VerbalCoding/app/agent.py
-- **VAD** (`CodeClass`) — /Users/neo/Developer/Projects/VerbalCoding/app/vad.py
-- **VoiceSink** (`CodeClass`) — /Users/neo/Developer/Projects/VerbalCoding/app/audio_discord.py
-- **WakeWord** (`CodeClass`) — /Users/neo/Developer/Projects/VerbalCoding/app/wakeword.py
-
-## Agent instructions
-
-- Prefer MCP graph queries before grep-style rediscovery.
-- Preserve the controlled ontology; do not invent node or edge types outside the LLM-Wiki schema.
-- Keep markdown projection generated; update sources and re-run project compile instead of hand-editing generated pages.
-- When adding code, run the project tests before reporting success.
-
-
----
-*Last synced by HarnessSync: 2026-04-27 22:02:27 UTC*
-<!-- End HarnessSync managed content -->
+If changing the legacy Python helpers under `app/` or Python scripts, also run the relevant pytest tests when the Python environment is available.

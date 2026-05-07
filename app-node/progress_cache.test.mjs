@@ -9,7 +9,7 @@ test('progressTtsCacheFileName includes full text even when backend key prefix i
     'server',
     'http://127.0.0.1:18080',
     'cosyvoice',
-    '/Users/neo/Developer/Projects/VerbalCoding/voice-samples/user-reference.wav',
+    '/path/to/VerbalCoding/voice-samples/user-reference.wav',
     'korean',
     'aufklarer/CosyVoice3-0.5B-MLX-4bit',
   ];

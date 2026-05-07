@@ -14,21 +14,21 @@ import {
 } from './install_config.mjs';
 
 test('buildDiscordBotInviteUrl creates bot invite with voice and text permissions', () => {
-  const url = buildDiscordBotInviteUrl({ clientId: '1497879755394125924' });
+  const url = buildDiscordBotInviteUrl({ clientId: '123456789012345678' });
   const parsed = new URL(url);
 
   assert.equal(parsed.origin, 'https://discord.com');
   assert.equal(parsed.pathname, '/oauth2/authorize');
-  assert.equal(parsed.searchParams.get('client_id'), '1497879755394125924');
+  assert.equal(parsed.searchParams.get('client_id'), '123456789012345678');
   assert.equal(parsed.searchParams.get('scope'), 'bot applications.commands');
   assert.equal(parsed.searchParams.get('permissions'), String(DEFAULT_DISCORD_BOT_PERMISSIONS));
 });
 
 test('buildDiscordBotInviteUrl can pin a guild and disables guild selection', () => {
-  const url = buildDiscordBotInviteUrl({ clientId: '1497879755394125924', guildId: '1497880000000000000' });
+  const url = buildDiscordBotInviteUrl({ clientId: '123456789012345678', guildId: '987654321098765432' });
   const parsed = new URL(url);
 
-  assert.equal(parsed.searchParams.get('guild_id'), '1497880000000000000');
+  assert.equal(parsed.searchParams.get('guild_id'), '987654321098765432');
   assert.equal(parsed.searchParams.get('disable_guild_select'), 'true');
 });
 
@@ -117,25 +117,25 @@ test('normalizeInstanceAnswers derives isolated per-instance env values', () => 
   const values = normalizeInstanceAnswers({
     instanceName: 'LLM Wiki',
     discordBotToken: 'token-instance',
-    discordClientId: '1497879755394125924',
+    discordClientId: '123456789012345678',
     autoJoinVoiceChannels: 'LLM-Wiki',
-    transcriptChannelId: '1497890694730219540',
-    workdir: '/Users/neo/Developer/Projects/LLM-Wiki',
+    transcriptChannelId: '123456789012345678',
+    workdir: '/path/to/my-project',
     projectContext: 'LLM-Wiki graph context',
     agentLabel: '',
   });
 
   assert.equal(values.INSTANCE_NAME, 'llm-wiki');
   assert.equal(values.DISCORD_TOKEN, 'token-instance');
-  assert.equal(values.DISCORD_CLIENT_ID, '1497879755394125924');
+  assert.equal(values.DISCORD_CLIENT_ID, '123456789012345678');
   assert.equal(values.AUTO_JOIN_VOICE_CHANNELS, 'LLM-Wiki');
-  assert.equal(values.TRANSCRIPT_CHANNEL_ID, '1497890694730219540');
+  assert.equal(values.TRANSCRIPT_CHANNEL_ID, '123456789012345678');
   assert.equal(values.PROJECT_SESSIONS_FILE, 'config/project-sessions.llm-wiki.json');
   assert.equal(values.BRIDGE_LOG_PATH, '/tmp/verbalcoding-llm-wiki.log');
   assert.equal(values.NODE_AUDIO_DEBUG_DIR, '/tmp/verbalcoding-llm-wiki-debug');
   assert.equal(values.HERMES_SESSION_FILE, '.agent-sessions/hermes/llm-wiki.session');
   assert.equal(values.AGENT_LABEL, 'Hermes Agent · LLM Wiki');
-  assert.equal(values.AGENT_CWD, '/Users/neo/Developer/Projects/LLM-Wiki');
+  assert.equal(values.AGENT_CWD, '/path/to/my-project');
   assert.equal(values.AGENT_PROJECT_CONTEXT, 'LLM-Wiki graph context');
 });
 
@@ -146,13 +146,13 @@ test('buildInstanceEnvFile writes only local per-instance values with token reda
     autoJoinVoiceChannels: 'VerbalCoding',
     transcriptChannelId: 'thread-1',
     allowedUsers: '111,222',
-    discordClientId: '1497879755394125924',
+    discordClientId: '123456789012345678',
   }));
   const parsed = parseKeyValueEnv(envText);
 
   assert.equal(parsed.INSTANCE_NAME, 'verbalcoding');
   assert.equal(parsed.DISCORD_TOKEN, 'token-vc');
-  assert.equal(parsed.DISCORD_CLIENT_ID, '1497879755394125924');
+  assert.equal(parsed.DISCORD_CLIENT_ID, '123456789012345678');
   assert.equal(parsed.DISCORD_ALLOWED_USERS, '111,222');
   assert.equal(parsed.AUTO_JOIN_VOICE_CHANNELS, 'VerbalCoding');
   assert.equal(parsed.TRANSCRIPT_CHANNEL_ID, 'thread-1');
@@ -168,9 +168,9 @@ test('normalizeInstanceAnswers surfaces HERMES_HOME when provided', () => {
     transcriptChannelId: '123',
     workdir: '/projects/llm-wiki',
     projectContext: 'LLM-Wiki agent',
-    hermesHome: '/Users/neo/.hermes/profiles/llm-wiki',
+    hermesHome: '/home/you/.hermes/profiles/my-project',
   });
-  assert.equal(out.HERMES_HOME, '/Users/neo/.hermes/profiles/llm-wiki');
+  assert.equal(out.HERMES_HOME, '/home/you/.hermes/profiles/my-project');
 });
 
 test('buildInstanceEnvFile emits HERMES_HOME after HERMES_SESSION_FILE', () => {
@@ -178,7 +178,7 @@ test('buildInstanceEnvFile emits HERMES_HOME after HERMES_SESSION_FILE', () => {
     INSTANCE_NAME: 'llm-wiki',
     DISCORD_TOKEN: 'token',
     HERMES_SESSION_FILE: '.agent-sessions/hermes/llm-wiki.session',
-    HERMES_HOME: '/Users/neo/.hermes/profiles/llm-wiki',
+    HERMES_HOME: '/home/you/.hermes/profiles/my-project',
     AGENT_LABEL: 'Hermes · llm-wiki',
     AGENT_CWD: '/projects/llm-wiki',
   });
@@ -186,17 +186,17 @@ test('buildInstanceEnvFile emits HERMES_HOME after HERMES_SESSION_FILE', () => {
   const sessionIdx = lines.findIndex(l => l.startsWith('HERMES_SESSION_FILE='));
   const homeIdx = lines.findIndex(l => l.startsWith('HERMES_HOME='));
   assert.ok(sessionIdx >= 0 && homeIdx === sessionIdx + 1, `expected HERMES_HOME directly after HERMES_SESSION_FILE; got lines:\n${text}`);
-  assert.match(text, /HERMES_HOME="\/Users\/neo\/\.hermes\/profiles\/llm-wiki"/);
+  assert.match(text, /HERMES_HOME="\/home\/you\/\.hermes\/profiles\/my-project"/);
 });
 
 test('renderInstanceSetupSummary points users at installed vc commands, not npm script wrappers or manual editing', () => {
-  const summary = renderInstanceSetupSummary({ INSTANCE_NAME: 'llm-wiki', DISCORD_CLIENT_ID: '1497879755394125924', BRIDGE_LOG_PATH: '/tmp/verbalcoding-llm-wiki.log' });
+  const summary = renderInstanceSetupSummary({ INSTANCE_NAME: 'llm-wiki', DISCORD_CLIENT_ID: '123456789012345678', BRIDGE_LOG_PATH: '/tmp/verbalcoding-llm-wiki.log' });
 
   assert.match(summary, /instances\/llm-wiki\.env/);
   assert.match(summary, /vc instance start llm-wiki/);
   assert.match(summary, /vc instance status llm-wiki/);
   assert.match(summary, /vc doctor/);
   assert.match(summary, /Discord bot invite URL:/);
-  assert.match(summary, /client_id=1497879755394125924/);
+  assert.match(summary, /client_id=123456789012345678/);
   assert.doesNotMatch(summary, /npm run vc/);
 });
