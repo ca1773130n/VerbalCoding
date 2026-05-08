@@ -11,7 +11,7 @@ VerbalCoding is a Discord voice bridge for controlling CLI-based coding agents b
 - Edge TTS playback with Korean default voice.
 - Generic CLI harness adapter layer:
   - Hermes Agent
-  - Claude Code / Claude CLI
+  - Claude Code
   - Codex CLI
   - Gemini CLI
   - OpenCode

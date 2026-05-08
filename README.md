@@ -56,13 +56,13 @@ Need a clean install walkthrough? Start with [Fresh Install](docs/FRESH_INSTALL.
 
 ```mermaid
 flowchart LR
-  A[Discord voice] --> B[@discordjs/voice]
+  A[Discord voice] --> B["@discordjs/voice"]
   B --> C[PCM cleanup + gates]
-  C --> D[whisper.cpp STT]
-  D --> E[CLI agent adapter]
-  E --> F[Concise answer]
-  F --> G[Chunked TTS]
-  G --> H[Discord playback]
+  C --> D["whisper.cpp STT"]
+  D --> E["CLI agent adapter"]
+  E --> F["Concise answer"]
+  F --> G["Chunked TTS"]
+  G --> H["Discord playback"]
 ```
 
 ## Supported Agent Backends
@@ -70,7 +70,7 @@ flowchart LR
 | Backend | Default command | Session support |
 |---|---:|---|
 | Hermes Agent | `hermes chat -Q -q` | Resume, verbose progress, cancellation, final-answer recovery |
-| Claude Code / Claude CLI | `claude -p` | CLI session file support through adapter defaults |
+| Claude Code | `claude -p` | CLI session file support through adapter defaults |
 | Codex CLI | `codex exec` | CLI session file support through adapter defaults |
 | Gemini CLI | `gemini -p` | CLI session file support through adapter defaults |
 | OpenCode | `opencode run` | CLI session file support through adapter defaults |
