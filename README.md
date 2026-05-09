@@ -43,12 +43,14 @@ VerbalCoding turns a Discord voice channel into a hands-free control surface for
 ## Quick Start
 
 ```bash
-git clone git@github.com:ca1773130n/VerbalCoding.git
+git clone https://github.com/ca1773130n/VerbalCoding.git
 cd VerbalCoding
-./scripts/install.sh
+./scripts/install.sh --yes
 vc doctor
 ./run.sh
 ```
+
+`./scripts/install.sh --yes` bootstraps local prerequisites where possible: Node/npm dependencies, `ffmpeg`, `whisper-cli`, the default whisper.cpp model, a local `.venv-tts` Edge TTS helper, and the short `vc` shell command. It supports macOS/Homebrew plus common Linux package managers (`apt`, `dnf`, `pacman`); rerun with `--no-wizard` for dependency-only setup or `--skip-system` if you want to install OS packages yourself.
 
 Need a clean install walkthrough? Start with [Fresh Install](docs/FRESH_INSTALL.md).
 
@@ -110,12 +112,13 @@ In Discord:
 
 | Layer | Default |
 |---|---|
-| Runtime | Node.js 20+, npm |
-| Audio | `ffmpeg` |
-| STT | `whisper.cpp` / `whisper-cli` |
+| Runtime | Node.js 20+, npm; install script can install via Homebrew/apt/dnf/pacman |
+| Audio | `ffmpeg`; install script can install it |
+| STT | `whisper.cpp` / `whisper-cli`; install script uses Homebrew on macOS or local Linux build fallback |
+| TTS | Edge TTS CLI; install script creates `.venv-tts` if needed |
 | Discord | Bot token, Message Content intent, voice permissions |
 | Agent | At least one authenticated CLI harness, Hermes Agent by default |
-| Platform focus | macOS / Apple Silicon currently gets the most testing |
+| Platform focus | macOS / Apple Silicon most tested; Linux bootstrap is best-effort and documented |
 
 ## Contributing
 

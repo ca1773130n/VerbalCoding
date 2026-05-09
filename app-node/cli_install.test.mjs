@@ -18,9 +18,24 @@ test('package exposes a short vc shell command', () => {
 test('installer shell script links the vc command during setup', () => {
   const script = fs.readFileSync(path.join(ROOT, 'scripts', 'install.sh'), 'utf8');
 
+  assert.match(script, /bootstrap_prereqs\.sh/);
+  assert.match(script, /--no-wizard/);
+  assert.match(script, /VERBALCODING_SKIP_BOOTSTRAP/);
   assert.match(script, /npm link/);
   assert.match(script, /Installed shell CLI: vc/);
   assert.match(script, /VERBALCODING_SKIP_CLI_LINK/);
+});
+
+test('bootstrap script installs cross-platform prerequisites and local model helpers', () => {
+  const script = fs.readFileSync(path.join(ROOT, 'scripts', 'bootstrap_prereqs.sh'), 'utf8');
+
+  assert.match(script, /brew install/);
+  assert.match(script, /apt-get install/);
+  assert.match(script, /dnf install/);
+  assert.match(script, /pacman -Sy/);
+  assert.match(script, /git clone --depth 1 https:\/\/github\.com\/ggml-org\/whisper\.cpp\.git/);
+  assert.match(script, /ggml-small-q5_1\.bin/);
+  assert.match(script, /\.venv-tts/);
 });
 
 test('healInstanceProfileFromEnv ensures profile when HERMES_HOME is set', async () => {

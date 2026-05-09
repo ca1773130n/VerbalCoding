@@ -11,7 +11,9 @@ node_modules/
 .verbalcoding-session
 .venv-openvoice/
 .venv-supertonic/
+.venv-tts/
 vendor/OpenVoice/
+vendor/whisper.cpp/
 voice-samples/
 models/*.bin
 /tmp/

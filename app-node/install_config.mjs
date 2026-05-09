@@ -32,6 +32,7 @@ export function normalizeInstallAnswers(input = {}) {
     TTS_BACKEND: ['edge', 'openvoice', 'speechswift', 'supertonic'].includes(clean(input.ttsBackend || input.TTS_BACKEND, 'edge').toLowerCase())
       ? clean(input.ttsBackend || input.TTS_BACKEND, 'edge').toLowerCase()
       : 'edge',
+    EDGE_TTS_COMMAND: clean(input.edgeTtsCommand || input.EDGE_TTS_COMMAND || input.TTS_EDGE_COMMAND, 'edge-tts'),
     VOICE_LANGUAGE: clean(input.voiceLanguage || input.VOICE_LANGUAGE, preset.voiceLanguage),
     WHISPER_CPP_LANGUAGE: clean(input.whisperLanguage || input.WHISPER_CPP_LANGUAGE || input.STT_LANGUAGE, preset.sttLanguage),
     STT_LANGUAGE: clean(input.sttLanguage || input.STT_LANGUAGE || input.WHISPER_CPP_LANGUAGE, preset.sttLanguage),
@@ -110,6 +111,7 @@ export function buildEnvFile(values = {}) {
     'WHISPER_CPP_LANGUAGE',
     'STT_LANGUAGE',
     'TTS_BACKEND',
+    'EDGE_TTS_COMMAND',
     'TTS_VOICE',
     'TTS_RATE',
     'TTS_MAX_CHARS',

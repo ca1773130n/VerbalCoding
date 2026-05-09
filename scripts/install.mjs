@@ -44,6 +44,7 @@ async function main() {
     const transcriptChannelId = await ask('Transcript text channel/thread ID', process.env.TRANSCRIPT_CHANNEL_ID || '');
     const language = await ask('Default voice language: ko/en/auto', process.env.VOICE_LANGUAGE || process.env.WHISPER_CPP_LANGUAGE || process.env.STT_LANGUAGE || 'ko');
     const ttsBackend = await ask('TTS backend: edge/openvoice/speechswift/supertonic', process.env.TTS_BACKEND || 'edge');
+    const edgeTtsCommand = await ask('Edge TTS command', process.env.EDGE_TTS_COMMAND || process.env.TTS_EDGE_COMMAND || 'edge-tts');
     const ttsVoice = await ask('TTS voice', process.env.TTS_VOICE || 'ko-KR-SunHiNeural');
     const ttsRate = await ask('TTS rate', process.env.TTS_RATE || '+10%');
     const ttsVolume = await ask('TTS playback volume', process.env.TTS_VOLUME || '1.0');
@@ -70,6 +71,7 @@ async function main() {
       transcriptChannelId,
       language,
       ttsBackend,
+      edgeTtsCommand,
       ttsVoice,
       ttsRate,
       ttsVolume,

@@ -2,13 +2,30 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-if ! command -v node >/dev/null 2>&1; then
-  echo "node is required. Install Node.js first." >&2
-  exit 1
+RUN_WIZARD=1
+BOOTSTRAP_ARGS=()
+INSTALL_ARGS=()
+for arg in "$@"; do
+  case "$arg" in
+    --no-wizard) RUN_WIZARD=0 ;;
+    --skip-bootstrap) export VERBALCODING_SKIP_BOOTSTRAP=1 ;;
+    --yes|--skip-system|--skip-model|--skip-edge-tts) BOOTSTRAP_ARGS+=("$arg") ;;
+    *) INSTALL_ARGS+=("$arg") ;;
+  esac
+done
+
+if [ "${VERBALCODING_SKIP_BOOTSTRAP:-0}" != "1" ]; then
+  ./scripts/bootstrap_prereqs.sh "${BOOTSTRAP_ARGS[@]}"
+elif [ ! -d node_modules ]; then
+  if ! command -v node >/dev/null 2>&1; then
+    echo "node is required. Install Node.js first, or rerun without VERBALCODING_SKIP_BOOTSTRAP=1." >&2
+    exit 1
+  fi
+  npm install
 fi
 
-if [ ! -d node_modules ]; then
-  npm install
+if [ -x "./.venv-tts/bin/edge-tts" ] && ! command -v edge-tts >/dev/null 2>&1; then
+  export EDGE_TTS_COMMAND="$(pwd)/.venv-tts/bin/edge-tts"
 fi
 
 if [ "${VERBALCODING_SKIP_CLI_LINK:-0}" != "1" ]; then
@@ -20,4 +37,8 @@ if [ "${VERBALCODING_SKIP_CLI_LINK:-0}" != "1" ]; then
   fi
 fi
 
-node scripts/install.mjs "$@"
+if [ "$RUN_WIZARD" = "1" ]; then
+  node scripts/install.mjs "${INSTALL_ARGS[@]}"
+else
+  echo "Skipped interactive .env wizard. Run ./scripts/install.sh later or copy .env.example to .env."
+fi

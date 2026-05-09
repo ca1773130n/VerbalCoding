@@ -51,6 +51,7 @@ test('normalizeInstallAnswers maps supported harnesses to backend env', () => {
   assert.equal(answers.AUTO_JOIN_VOICE_CHANNELS, '일반,General');
   assert.equal(answers.TRANSCRIPT_CHANNEL_ID, '333');
   assert.equal(answers.TTS_BACKEND, 'edge');
+  assert.equal(answers.EDGE_TTS_COMMAND, 'edge-tts');
   assert.equal(answers.VOICE_LANGUAGE, 'en');
   assert.equal(answers.WHISPER_CPP_LANGUAGE, 'en');
   assert.equal(answers.STT_LANGUAGE, 'en');
@@ -74,6 +75,7 @@ test('buildEnvFile writes configurable CLI harness and Discord settings without 
     WHISPER_CPP_LANGUAGE: 'auto',
     STT_LANGUAGE: 'auto',
     TTS_BACKEND: 'supertonic',
+    EDGE_TTS_COMMAND: './.venv-tts/bin/edge-tts',
     SUPERTONIC_VOICE: 'M4',
     SUPERTONIC_STEPS: '3',
     DISCORD_BOT_TOKEN: 'token-abc',
@@ -92,6 +94,7 @@ test('buildEnvFile writes configurable CLI harness and Discord settings without 
   assert.equal(parsed.AGENT_LABEL, 'My Harness');
   assert.equal(parsed.AGENT_COMMAND, 'my-harness run --json');
   assert.equal(parsed.TTS_BACKEND, 'supertonic');
+  assert.equal(parsed.EDGE_TTS_COMMAND, './.venv-tts/bin/edge-tts');
   assert.equal(parsed.VOICE_LANGUAGE, 'auto');
   assert.equal(parsed.WHISPER_CPP_LANGUAGE, 'auto');
   assert.equal(parsed.STT_LANGUAGE, 'auto');

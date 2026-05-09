@@ -1,54 +1,158 @@
-# Fresh install test
+# Fresh install
 
-Use this to verify VerbalCoding can be set up from a clean clone without relying on local build artifacts.
+This guide is for a clean public GitHub clone. It avoids local-only assumptions and uses the installer to bootstrap as much as possible.
 
-## Clean clone smoke test
+## 1. Clone
 
 ```bash
-TMPDIR=$(mktemp -d)
-git clone git@github.com:ca1773130n/VerbalCoding.git "$TMPDIR/VerbalCoding"
-cd "$TMPDIR/VerbalCoding"
-npm install
-cp .env.example .env
-chmod 600 .env
-vc doctor || true
+git clone https://github.com/ca1773130n/VerbalCoding.git
+cd VerbalCoding
 ```
 
-`vc doctor` should print missing secrets/model/CLI items as `✗` without exposing secret values. After filling `.env` and downloading the model, it should pass.
+## 2. Bootstrap dependencies and run the setup wizard
 
-## Full setup
+Recommended:
 
 ```bash
-brew install ffmpeg whisper-cpp
-mkdir -p models
-curl -L -o models/ggml-small-q5_1.bin \
-  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin
-./scripts/install.sh
+./scripts/install.sh --yes
+```
+
+What this does:
+
+- installs npm dependencies when `node_modules/` is missing,
+- installs the short `vc` shell command with `npm link`,
+- installs `ffmpeg`, Node/npm, and `whisper-cli` when supported by the OS package manager,
+- downloads `models/ggml-small-q5_1.bin`,
+- creates `.venv-tts` and installs `edge-tts` when `edge-tts` is not already on `PATH`,
+- runs the interactive `.env` wizard.
+
+Supported system bootstrap paths:
+
+| OS | System dependency path |
+|---|---|
+| macOS | Homebrew: `brew install node ffmpeg whisper-cpp` as needed |
+| Debian/Ubuntu | `apt-get` for Node/npm, ffmpeg, Python, build tools; local whisper.cpp build fallback |
+| Fedora/RHEL | `dnf` for Node/npm, ffmpeg, Python, build tools; local whisper.cpp build fallback |
+| Arch | `pacman` for Node/npm, ffmpeg, Python, build tools; local whisper.cpp build fallback |
+
+Useful installer variants:
+
+```bash
+./scripts/install.sh --yes --no-wizard       # dependency/bootstrap only
+./scripts/install.sh --skip-system           # do not install OS packages
+./scripts/install.sh --skip-model            # do not download the default STT model
+./scripts/install.sh --skip-edge-tts         # do not create .venv-tts
+VERBALCODING_SKIP_CLI_LINK=1 ./scripts/install.sh --yes
+```
+
+If your OS is unsupported, install these manually before rerunning:
+
+- Node.js 20+ and npm
+- ffmpeg
+- Python 3 with venv/pip
+- whisper.cpp `whisper-cli`
+- one authenticated CLI agent backend, Hermes Agent by default
+
+## 3. Discord application setup
+
+1. Create a Discord application and bot in the Discord Developer Portal.
+2. Enable the Message Content privileged intent.
+3. Copy the bot token into the installer prompt or `.env` as `DISCORD_BOT_TOKEN`.
+4. Generate an invite URL:
+
+```bash
+vc bot invite <discord-client-id>
+# or pin it to one server:
+vc bot invite <discord-client-id> --guild <guild-id>
+```
+
+The invite includes bot and slash-command scopes plus text/voice permissions used by VerbalCoding.
+
+## 4. Verify
+
+```bash
 vc doctor
+```
+
+`vc doctor` is redacted: it reports missing tokens/commands/models without printing secret values. Fix every `✗` item, then rerun it.
+
+Expected success includes:
+
+```text
+✓ Node.js
+✓ npm
+✓ ffmpeg
+✓ whisper-cli
+✓ whisper.cpp model
+✓ Discord bot token configured — [REDACTED]
+✓ edge-tts
+✓ hermes CLI
+Doctor passed. Run ./run.sh to start VerbalCoding.
+```
+
+If the installer created a local Edge TTS helper, `.env` should contain an `EDGE_TTS_COMMAND` path pointing at `.venv-tts/bin/edge-tts`.
+
+## 5. Run the single default bot
+
+```bash
 ./run.sh
 ```
 
-## Optional OpenVoice setup
+Successful startup logs include:
 
-OpenVoice voice cloning is optional. Keep `TTS_BACKEND=edge` for a fresh install. To enable it later:
+```text
+Logged in as <bot-name>
+Listening in voice channel <server> / <channel>
+```
+
+In Discord:
+
+```text
+!ping
+!join
+!ask say hello briefly
+!verbose on
+```
+
+Then speak in the configured voice channel. You should see STT text, progress text when verbose mode is on, a final text answer, and hear TTS playback.
+
+## 6. Project-per-room setup
+
+For one permanent bot per project voice room, create one Discord application per project, then:
+
+```bash
+vc instance setup my-project
+vc bot invite <that-project-client-id>
+vc instance start my-project
+vc instance status my-project
+```
+
+Each instance writes an ignored `instances/<name>.env` with its own token, voice channel, transcript target, log path, Hermes session file, and optional Hermes profile.
+
+## 7. Optional OpenVoice setup
+
+OpenVoice voice cloning is optional. Keep `TTS_BACKEND=edge` for a fresh public install. To enable OpenVoice later:
 
 ```bash
 ./scripts/setup_openvoice.sh
 # Download OpenVoice V2 checkpoints into vendor/OpenVoice/checkpoints_v2/
-# Either add a permitted local sample at voice-samples/user-reference.wav,
+# Add a permitted local sample at voice-samples/user-reference.wav,
 # or run the bot, say "목소리 샘플 녹음 시작해", then speak 10-30 seconds.
 python3 scripts/openvoice_smoke.py
 ```
 
 Then set `TTS_BACKEND=openvoice`, run `vc doctor`, and test `!voice-test <text>` in Discord.
 
-## Expected runtime signals
+## 8. Clean clone smoke test for maintainers
 
-Successful startup logs include:
-
-```text
-Logged in as Hermes#6718
-Listening in voice channel <server> / <channel>
+```bash
+TMPDIR=$(mktemp -d)
+git clone https://github.com/ca1773130n/VerbalCoding.git "$TMPDIR/VerbalCoding"
+cd "$TMPDIR/VerbalCoding"
+./scripts/install.sh --yes --no-wizard
+cp .env.example .env
+chmod 600 .env
+vc doctor || true
 ```
 
-A `bash: ... tcsetattr: Inappropriate ioctl for device` line can appear when running under Hermes background process tracking. It is non-fatal if login and voice listening succeeded.
+The expected failure at this point is missing local secrets or unauthenticated agent CLI, not leaked tokens or missing install scripts.

@@ -2,7 +2,7 @@
 
 ## Current release candidate
 
-VerbalCoding is a Discord voice bridge for controlling CLI-based coding agents by voice. It is currently private and optimized for macOS / Apple Silicon with Korean speech input.
+VerbalCoding is a Discord voice bridge for controlling CLI-based coding agents by voice. It is public-release oriented, with macOS / Apple Silicon as the most tested path and best-effort Linux bootstrap support for common package managers.
 
 ### Included
 
@@ -21,7 +21,7 @@ VerbalCoding is a Discord voice bridge for controlling CLI-based coding agents b
 - Long-answer TTS chunking and responsive barge-in.
 - Diff/code/log guardrails so large technical output is not read aloud.
 - Normal and conservative sensitivity modes for indoor vs. noisy/outdoor use.
-- Setup wizard, `.env.example`, and `vc doctor` prerequisite checker.
+- Setup wizard, `.env.example`, `vc doctor` prerequisite checker, and `./scripts/install.sh --yes` bootstrap for OS packages, npm dependencies, Edge TTS helper, and the default whisper.cpp model.
 - Optional verbose progress mode for text-only middle-step updates during long agent work.
 - Always-on JSONL latency metrics plus `!latency` / `!metrics` summary for pipeline optimization.
 - Lower default utterance idle wait (`UTTERANCE_IDLE_MS=2000`) so STT starts about 0.6s sooner after speech ends.
@@ -32,10 +32,13 @@ VerbalCoding is a Discord voice bridge for controlling CLI-based coding agents b
 Run from the repo root:
 
 ```bash
-node --check app-node/main.mjs
+./scripts/install.sh --yes --no-wizard
+node --check app-node/main.mjs app-node/agent_adapters.mjs app-node/install_config.mjs scripts/install.mjs
 npm test
-bash -n run.sh scripts/install.sh
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/ -q
+bash -n run.sh scripts/install.sh scripts/bootstrap_prereqs.sh
 vc doctor
+git diff --check
 ```
 
 Manual smoke test:
@@ -47,13 +50,14 @@ Manual smoke test:
 5. In Discord voice, say a short Korean request.
 6. Verify STT transcript, agent response, TTS playback, and barge-in behavior.
 
-### Known local requirements
+### Known requirements
 
-- macOS with Homebrew.
-- `ffmpeg` installed.
-- `whisper-cpp` installed.
-- Default model at `models/ggml-small-q5_1.bin`.
-- Discord bot token in `.env`, `~/.zshrc`, or runtime env.
+- macOS with Homebrew, or Linux with `apt`, `dnf`, or `pacman` for best-effort bootstrap.
+- `ffmpeg`; installer attempts to install it.
+- `whisper-cli`; installer uses Homebrew on macOS or local `vendor/whisper.cpp` build fallback on Linux.
+- Default model at `models/ggml-small-q5_1.bin`; installer downloads it unless `--skip-model` is used.
+- Edge TTS CLI on `PATH` or local `.venv-tts/bin/edge-tts`; installer creates the local helper when needed.
+- Discord bot token in `.env`, `instances/<name>.env`, `~/.zshrc`, or runtime env.
 - Selected CLI harness installed and authenticated.
 
 ### Not for public release yet
@@ -63,5 +67,5 @@ Before public release, consider adding:
 - GitHub Actions CI.
 - Demo video / GIF.
 - Discord bot setup screenshots.
-- More platform-specific install notes for Linux.
+- Broader Linux validation on real distributions beyond script-level checks.
 - Security review of all logging paths.
