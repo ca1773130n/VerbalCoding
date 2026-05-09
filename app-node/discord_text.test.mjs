@@ -8,6 +8,20 @@ test('splitDiscordMessage chunks long text for Discord', () => {
   assert.deepEqual(chunks.map(c => c.length), [1900, 1900, 201]);
 });
 
+test('sendDiscordText returns false without fetching when transcript channel id is missing', async () => {
+  const warnings = [];
+  let fetched = false;
+  const delivered = await sendDiscordText({
+    channelId: '',
+    text: 'restart complete',
+    client: { channels: { fetch: async () => { fetched = true; } } },
+    warn: (...args) => warnings.push(args.join(' ')),
+  });
+  assert.equal(delivered, false);
+  assert.equal(fetched, false);
+  assert.match(warnings.join('\n'), /missing transcript channel id/);
+});
+
 test('sendDiscordText returns false when target is not text based', async () => {
   const warnings = [];
   const delivered = await sendDiscordText({

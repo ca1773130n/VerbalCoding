@@ -166,7 +166,7 @@ const settings = {
   token: process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN,
   allowedUsers: new Set((process.env.DISCORD_ALLOWED_USERS || '').split(/[;,]/).map(s => s.trim()).filter(Boolean)),
   autoJoinVoiceChannels: (process.env.AUTO_JOIN_VOICE_CHANNELS || '일반,General,general').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
-  transcriptChannelId: (process.env.TRANSCRIPT_CHANNEL_ID || '123456789012345678').trim(),
+  transcriptChannelId: (process.env.TRANSCRIPT_CHANNEL_ID || '').trim(),
   whisperBin: process.env.WHISPER_CPP_BIN || 'whisper-cli',
   whisperModel: process.env.WHISPER_CPP_MODEL || path.join(ROOT, 'models', 'ggml-small-q5_1.bin'),
   whisperLanguage: process.env.WHISPER_CPP_LANGUAGE || process.env.STT_LANGUAGE || 'ko',
@@ -1402,26 +1402,32 @@ async function connectTo(channel) {
     selfDeaf: false,
     selfMute: false,
   });
-  connection.subscribe(player);
-  connection.on('error', e => warn('voice connection error', e?.stack || e));
-  connection.on('stateChange', async (oldState, newState) => {
+  const voiceConnection = connection;
+  voiceConnection.subscribe(player);
+  voiceConnection.on('error', e => warn('voice connection error', e?.stack || e));
+  voiceConnection.on('stateChange', async (oldState, newState) => {
     log('voice connection state', oldState.status, '->', newState.status);
+    if (connection !== voiceConnection) {
+      log('ignore stale voice connection state', oldState.status, '->', newState.status);
+      return;
+    }
     if (newState.status === VoiceConnectionStatus.Disconnected) {
       try {
         await Promise.race([
-          entersState(connection, VoiceConnectionStatus.Signalling, 5000),
-          entersState(connection, VoiceConnectionStatus.Connecting, 5000),
+          entersState(voiceConnection, VoiceConnectionStatus.Signalling, 5000),
+          entersState(voiceConnection, VoiceConnectionStatus.Connecting, 5000),
         ]);
       } catch (e) {
+        if (connection !== voiceConnection) return;
         warn('voice connection disconnected; reconnecting to channel', channel.guild.name, channel.name, e?.message || e);
-        try { connection?.destroy(); } catch {}
+        try { voiceConnection.destroy(); } catch {}
         connection = null;
         setTimeout(() => connectTo(channel).catch(err => warn('voice reconnect failed', err?.stack || err)), 1500);
       }
     }
   });
-  await entersState(connection, VoiceConnectionStatus.Ready, 30000);
-  connection.receiver.speaking.on('start', userId => subscribeUser(connection.receiver, userId));
+  await entersState(voiceConnection, VoiceConnectionStatus.Ready, 30000);
+  voiceConnection.receiver.speaking.on('start', userId => subscribeUser(voiceConnection.receiver, userId));
   log(`Listening in voice channel ${channel.guild.name} / ${channel.name}`);
 }
 
