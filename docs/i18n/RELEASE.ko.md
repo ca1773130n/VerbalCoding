@@ -24,7 +24,7 @@ VerbalCoding은 음성으로 CLI 기반 코딩 에이전트를 제어하기 위�
 - 설정 마법사, `.env.example`, `vc doctor` prerequisite checker, OS 패키지/npm 의존성/Edge TTS helper/기본 whisper.cpp 모델을 준비하는 `./scripts/install.sh --yes` 부트스트랩.
 - 긴 에이전트 작업 중 텍스트 전용 중간 단계 업데이트를 위한 선택적 verbose progress mode.
 - 파이프라인 최적화를 위한 JSONL latency metrics와 `!latency` / `!metrics` 요약.
-- 낮아진 기본 utterance idle wait (`UTTERANCE_IDLE_MS=2000`)로 사용자가 말한 뒤 STT가 약 0.6초 더 빨리 시작.
+- 더 여유 있는 utterance idle wait (`UTTERANCE_IDLE_MS=4500`)로 자연스러운 중간 멈춤이 있는 긴 지시가 앞부분 prompt와 무시되는 processing-time speech로 쪼개지지 않도록 개선.
 - 멀티 인스턴스 Hermes 프로필 격리: `vc instance setup <name>`이 자동으로 Hermes 프로필을 `~/.hermes/profiles/<name>`에 clone하고, instance workdir을 설정하고, SOUL.md를 초기화하고, instance env에 `HERMES_HOME`을 기록합니다. `vc instance start`는 누락된 profile을 self-heal하고, `vc doctor`는 profile-dir 존재와 `terminal.cwd` 일관성을 검사합니다.
 - npm 공개 패키지: `npm install -g verbalcoding`, `vc setup --yes`, `vc start` 경로 지원.
 

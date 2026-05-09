@@ -57,7 +57,7 @@ export function normalizeInstallAnswers(input = {}) {
     OPENVOICE_PROGRESS: input.openvoiceProgress === true || input.OPENVOICE_PROGRESS === '1' ? '1' : '0',
     REQUIRE_WAKE_WORD: input.requireWakeWord === true || input.REQUIRE_WAKE_WORD === '1' ? '1' : '0',
     MIN_UTTERANCE_SECONDS: clean(input.minUtteranceSeconds || input.MIN_UTTERANCE_SECONDS, '1.0'),
-    UTTERANCE_IDLE_MS: clean(input.utteranceIdleMs || input.UTTERANCE_IDLE_MS, '2000'),
+    UTTERANCE_IDLE_MS: clean(input.utteranceIdleMs || input.UTTERANCE_IDLE_MS, '4500'),
     HERMES_TASK_TIMEOUT_MS: clean(input.taskTimeoutMs || input.HERMES_TASK_TIMEOUT_MS, '0'),
     HERMES_CHAT_TIMEOUT_MS: clean(input.chatTimeoutMs || input.HERMES_CHAT_TIMEOUT_MS, '45000'),
     AGENT_VERBOSE_PROGRESS: input.verboseProgress === true || input.AGENT_VERBOSE_PROGRESS === '1' ? '1' : '0',

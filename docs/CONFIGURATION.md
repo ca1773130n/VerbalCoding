@@ -37,7 +37,7 @@ AGENT_COMMAND="my-harness run --non-interactive"
 AGENT_TASK_TIMEOUT_MS=0
 AGENT_CHAT_TIMEOUT_MS=45000
 AGENT_VERBOSE_PROGRESS=0
-UTTERANCE_IDLE_MS=2000
+UTTERANCE_IDLE_MS=4500
 LATENCY_LOG_PATH=./.logs/latency.jsonl
 ```
 
@@ -74,7 +74,7 @@ TTS_VOLUME="1.0"
 
 REQUIRE_WAKE_WORD="0"
 MIN_UTTERANCE_SECONDS="1.0"
-UTTERANCE_IDLE_MS="2000"
+UTTERANCE_IDLE_MS="4500"
 HERMES_TASK_TIMEOUT_MS="0"
 HERMES_CHAT_TIMEOUT_MS="45000"
 AGENT_VERBOSE_PROGRESS="0"
@@ -111,6 +111,24 @@ TTS_VOICE_CONFIG="config/tts-voices.json"
 ```
 
 For OpenVoice, SpeechSwift, or Supertonic, keep the backend-specific voice/reference settings in the sections below; the same voice catalog file can still track the active voice type.
+
+Backend-specific voice options:
+
+| Backend | Settings | Voice choices |
+|---|---|---|
+| Edge | `TTS_VOICE_TYPE`, `TTS_VOICE` | Built-in types above, plus any voice returned by `edge-tts --list-voices` |
+| Supertonic | `SUPERTONIC_VOICE`, `SUPERTONIC_LANGUAGE` | `M1`–`M5`, `F1`–`F5`; language `ko`, `en`, `es`, `pt`, `fr` |
+| OpenVoice | `OPENVOICE_REF_AUDIO`, `OPENVOICE_STYLE`, `OPENVOICE_LANGUAGE` | User-provided permitted reference WAV; style defaults to `default` |
+| SpeechSwift / CosyVoice | `SPEECHSWIFT_REF_AUDIO`, `SPEECHSWIFT_ENGINE`, `SPEECHSWIFT_SPEAKER`, `SPEECHSWIFT_MODEL_ID` | Reference-sample voices for CosyVoice, or backend-supported speaker/model IDs |
+
+## Utterance Segmentation
+
+`UTTERANCE_IDLE_MS` controls how long the bridge waits after a speech segment before it decides the user is done and starts STT. The default is `4500` ms to preserve longer spoken instructions with natural pauses. Lower values feel faster for short commands but can split long dictation; higher values are safer for thoughtful speech.
+
+```bash
+UTTERANCE_IDLE_MS="4500"  # balanced default
+UTTERANCE_IDLE_MS="6000"  # safer for long dictation with pauses
+```
 
 ## MCP Server
 

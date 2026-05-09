@@ -25,7 +25,7 @@ VerbalCoding is a Discord voice bridge for controlling CLI-based coding agents b
 - npm package install path: `npm install -g verbalcoding`, `vc setup --yes`, and `vc start`.
 - Optional verbose progress mode for text-only middle-step updates during long agent work.
 - Always-on JSONL latency metrics plus `!latency` / `!metrics` summary for pipeline optimization.
-- Lower default utterance idle wait (`UTTERANCE_IDLE_MS=2000`) so STT starts about 0.6s sooner after speech ends.
+- More patient utterance idle wait (`UTTERANCE_IDLE_MS=4500`) so long spoken instructions with natural pauses are not split into a partial prompt plus ignored processing-time speech.
 - Multi-instance Hermes profile isolation: `vc instance setup <name>` auto-clones a Hermes profile to `~/.hermes/profiles/<name>` with the instance workdir, seeds SOUL.md, and writes `HERMES_HOME` into the instance env so per-project memory and skills stay separate; `vc instance start` self-heals a missing profile, and `vc doctor` checks profile-dir presence and `terminal.cwd` consistency.
 
 ### Pre-release checklist

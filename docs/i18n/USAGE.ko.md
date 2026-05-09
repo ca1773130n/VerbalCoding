@@ -96,6 +96,27 @@ switch speaker to English
 
 영구 수동 설정이 필요하면 `.env`에 `TTS_BACKEND=edge`, `TTS_VOICE_TYPE=<voice-type>`, 필요 시 `TTS_VOICE=<edge-voice>`를 설정하세요. 더 많은 커스텀 목소리 카탈로그는 `config/tts-voices.json`에서 관리할 수 있습니다.
 
+백엔드별 목소리 설정:
+
+| 백엔드 | 목소리 설정 | 자주 쓰는 선택지 |
+|---|---|---|
+| Edge | `TTS_VOICE_TYPE`, `TTS_VOICE` | `korean_male`, `korean_female`, `korean_multilingual_male`, `english_male`, `english_female`; `edge-tts --list-voices`의 모든 Edge voice |
+| Supertonic | `SUPERTONIC_VOICE` | `M1`–`M5`, `F1`–`F5`; `SUPERTONIC_LANGUAGE=ko|en|es|pt|fr` |
+| OpenVoice | `OPENVOICE_REF_AUDIO`, `OPENVOICE_STYLE` | 사용 허가가 있는 reference WAV와 `default` 같은 style |
+| SpeechSwift / CosyVoice | `SPEECHSWIFT_REF_AUDIO`, `SPEECHSWIFT_ENGINE`, `SPEECHSWIFT_SPEAKER` | CosyVoice reference WAV 또는 백엔드가 지원하는 speaker/model 값 |
+
+Supertonic과 로컬 clone 백엔드는 위 env를 바꾼 뒤 `!voice-test <text>`로 바로 들어보세요. 현재 음성 명령 기반 전환은 기본 Edge-style voice type에 매핑되어 있고, 더 풍부한 백엔드 카탈로그는 `config/tts-voices.json`에 추가할 수 있습니다.
+
+## 긴 발화와 중간 멈춤
+
+VerbalCoding은 말을 STT로 보내기 전에 idle window를 기다립니다. 기본값 `UTTERANCE_IDLE_MS=4500`은 일부러 조금 여유 있게 잡혀 있습니다. 긴 지시 중 자연스러운 멈춤을 문장 끝으로 오해해 앞부분만 에이전트에 보내고, 뒷부분을 processing 중 끼어들기로 처리하는 문제를 줄이기 위해서입니다.
+
+짧은 명령 반응을 더 빠르게 하고 싶다면 `.env`에서 낮추고, 긴 한국어 dictation이 여전히 잘리면 더 올리세요.
+
+```bash
+UTTERANCE_IDLE_MS="6000"
+```
+
 ## 자세한 진행 모드
 
 자세한 진행은 기본적으로 꺼져 있습니다. `.env`에 `AGENT_VERBOSE_PROGRESS=1`을 설정하거나 Discord에서 `!verbose on`, 또는 음성으로 “상세 진행 켜”라고 말해 켤 수 있습니다.

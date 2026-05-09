@@ -88,6 +88,27 @@ Built-in Edge voice types:
 
 For persistent manual config, set `TTS_BACKEND=edge`, `TTS_VOICE_TYPE=<voice-type>`, and optionally `TTS_VOICE=<edge-voice>` in `.env`, or edit `config/tts-voices.json` for custom voice catalogs.
 
+Backend-specific voice knobs:
+
+| Backend | Voice setting | Common choices |
+|---|---|---|
+| Edge | `TTS_VOICE_TYPE`, `TTS_VOICE` | `korean_male`, `korean_female`, `korean_multilingual_male`, `english_male`, `english_female`; any Edge voice from `edge-tts --list-voices` |
+| Supertonic | `SUPERTONIC_VOICE` | `M1`–`M5`, `F1`–`F5`; set `SUPERTONIC_LANGUAGE=ko|en|es|pt|fr` |
+| OpenVoice | `OPENVOICE_REF_AUDIO`, `OPENVOICE_STYLE` | a permitted reference WAV plus style such as `default` |
+| SpeechSwift / CosyVoice | `SPEECHSWIFT_REF_AUDIO`, `SPEECHSWIFT_ENGINE`, `SPEECHSWIFT_SPEAKER` | reference WAV for CosyVoice, or backend-supported speaker/model values |
+
+For Supertonic and local clone backends, use the backend env vars above plus `!voice-test <text>` to audition changes. Voice-command switching currently maps the built-in Edge-style voice types; richer backend catalogs can be added in `config/tts-voices.json`.
+
+## Long Dictation and Pauses
+
+VerbalCoding waits for an idle window before sending speech to STT. The default `UTTERANCE_IDLE_MS=4500` is intentionally a bit patient so a natural pause in a long instruction does not split the sentence, start an agent turn too early, and then treat the rest as a processing-time interruption.
+
+If you prefer faster short commands, lower it in `.env`; if long Korean dictation is still being split, raise it:
+
+```bash
+UTTERANCE_IDLE_MS="6000"
+```
+
 ## Verbose Progress Mode
 
 Verbose progress is off by default unless `AGENT_VERBOSE_PROGRESS=1` is set. Enable it with `!verbose on` or a voice command like “상세 진행 켜”. It can emit short progress lines such as:

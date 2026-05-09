@@ -58,7 +58,7 @@ async function main() {
     const openvoiceRefAudio = await ask('OpenVoice reference audio path', process.env.OPENVOICE_REF_AUDIO || './voice-samples/user-reference.wav');
     const requireWake = (await ask('Require wake word? 1/0', process.env.REQUIRE_WAKE_WORD || '0')) === '1';
     const verboseProgress = (await ask('Verbose progress by default? 1/0', process.env.AGENT_VERBOSE_PROGRESS || process.env.VERBALCODING_VERBOSE_PROGRESS || '0')) === '1';
-    const utteranceIdleMs = await ask('Utterance idle wait before STT, ms', process.env.UTTERANCE_IDLE_MS || '2000');
+    const utteranceIdleMs = await ask('Utterance idle wait before STT, ms', process.env.UTTERANCE_IDLE_MS || '4500');
     const latencyLogPath = await ask('Latency JSONL log path', process.env.LATENCY_LOG_PATH || './.logs/latency.jsonl');
 
     const values = normalizeInstallAnswers({

@@ -63,7 +63,7 @@ test('normalizeInstallAnswers maps supported harnesses to backend env', () => {
   assert.equal(answers.SUPERTONIC_LANGUAGE, 'ko');
   assert.equal(answers.OPENVOICE_LANGUAGE, 'KR');
   assert.equal(answers.REQUIRE_WAKE_WORD, '0');
-  assert.equal(answers.UTTERANCE_IDLE_MS, '2000');
+  assert.equal(answers.UTTERANCE_IDLE_MS, '4500');
 });
 
 test('buildEnvFile writes configurable CLI harness and Discord settings without comments leaking into values', () => {

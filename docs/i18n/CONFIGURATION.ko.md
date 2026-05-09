@@ -45,7 +45,7 @@ AGENT_COMMAND="my-harness run --non-interactive"
 AGENT_TASK_TIMEOUT_MS=0
 AGENT_CHAT_TIMEOUT_MS=45000
 AGENT_VERBOSE_PROGRESS=0
-UTTERANCE_IDLE_MS=2000
+UTTERANCE_IDLE_MS=4500
 LATENCY_LOG_PATH=./.logs/latency.jsonl
 ```
 
@@ -82,7 +82,7 @@ TTS_VOLUME="1.0"
 
 REQUIRE_WAKE_WORD="0"
 MIN_UTTERANCE_SECONDS="1.0"
-UTTERANCE_IDLE_MS="2000"
+UTTERANCE_IDLE_MS="4500"
 HERMES_TASK_TIMEOUT_MS="0"
 HERMES_CHAT_TIMEOUT_MS="45000"
 AGENT_VERBOSE_PROGRESS="0"
@@ -119,6 +119,24 @@ TTS_VOICE_CONFIG="config/tts-voices.json"
 ```
 
 OpenVoice, SpeechSwift, Supertonic을 쓸 때는 아래 백엔드별 reference/voice 설정을 유지하세요. 같은 voice catalog 파일에서 현재 voice type을 추적할 수 있습니다.
+
+백엔드별 목소리 옵션:
+
+| 백엔드 | 설정 | 목소리 선택지 |
+|---|---|---|
+| Edge | `TTS_VOICE_TYPE`, `TTS_VOICE` | 위 기본 타입, 또는 `edge-tts --list-voices`가 반환하는 모든 voice |
+| Supertonic | `SUPERTONIC_VOICE`, `SUPERTONIC_LANGUAGE` | `M1`–`M5`, `F1`–`F5`; 언어 `ko`, `en`, `es`, `pt`, `fr` |
+| OpenVoice | `OPENVOICE_REF_AUDIO`, `OPENVOICE_STYLE`, `OPENVOICE_LANGUAGE` | 사용자가 제공한 허가된 reference WAV; style 기본값은 `default` |
+| SpeechSwift / CosyVoice | `SPEECHSWIFT_REF_AUDIO`, `SPEECHSWIFT_ENGINE`, `SPEECHSWIFT_SPEAKER`, `SPEECHSWIFT_MODEL_ID` | CosyVoice reference sample voice 또는 백엔드가 지원하는 speaker/model ID |
+
+## 발화 분리 설정
+
+`UTTERANCE_IDLE_MS`는 음성 segment가 끝난 뒤 사용자의 말이 끝났다고 판단하고 STT를 시작하기 전까지 기다리는 시간입니다. 기본값은 `4500` ms입니다. 긴 지시 중 자연스러운 멈춤을 보존하기 위한 값입니다. 낮추면 짧은 명령 반응은 빨라지지만 긴 발화가 잘릴 수 있고, 높이면 생각하면서 말하는 긴 dictation에 더 안전합니다.
+
+```bash
+UTTERANCE_IDLE_MS="4500"  # 균형 잡힌 기본값
+UTTERANCE_IDLE_MS="6000"  # 중간 멈춤이 있는 긴 발화에 더 안전
+```
 
 ## MCP 서버
 

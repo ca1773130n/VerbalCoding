@@ -66,7 +66,7 @@ note('Allowed users configured', env.DISCORD_ALLOWED_USERS ? '[REDACTED]' : 'not
 note('Auto-join channels', env.AUTO_JOIN_VOICE_CHANNELS || 'default: 일반,General,general');
 note('Verbose progress default', ['1', 'true', 'yes', 'on'].includes(String(env.AGENT_VERBOSE_PROGRESS || env.VERBALCODING_VERBOSE_PROGRESS || '0').toLowerCase()) ? 'on' : 'off');
 note('Auto restart voice bot after commits', autoRestartVoiceBotEnabled(env) ? 'on' : 'off');
-note('Utterance idle wait before STT', `${env.UTTERANCE_IDLE_MS || '2000'} ms`);
+note('Utterance idle wait before STT', `${env.UTTERANCE_IDLE_MS || '4500'} ms`);
 note('STT language', env.WHISPER_CPP_LANGUAGE || env.STT_LANGUAGE || 'ko');
 note('Progress/voice language', env.VOICE_LANGUAGE || env.WHISPER_CPP_LANGUAGE || env.STT_LANGUAGE || 'ko');
 note('Latency log path', env.LATENCY_LOG_PATH || './.logs/latency.jsonl');

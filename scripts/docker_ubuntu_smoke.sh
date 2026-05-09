@@ -53,7 +53,7 @@ TTS_VOICE="en-US-GuyNeural"
 TTS_RATE="+0%"
 TTS_VOLUME="1.0"
 REQUIRE_WAKE_WORD="0"
-UTTERANCE_IDLE_MS="2000"
+UTTERANCE_IDLE_MS="4500"
 LATENCY_LOG_PATH="./.logs/latency.jsonl"
 ENV
     chmod 600 .env
