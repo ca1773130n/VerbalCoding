@@ -19,7 +19,8 @@ test('package exposes a short vc shell command', () => {
   assert.ok(pkg.files.includes('app-node/'));
   assert.ok(pkg.files.includes('scripts/*.mjs'));
   assert.ok(pkg.files.includes('scripts/*.sh'));
-  assert.ok(pkg.files.includes('integrations/openvoice/'));
+  assert.ok(pkg.files.includes('integrations/openvoice/*.py'));
+  assert.ok(!pkg.files.includes('integrations/openvoice/'));
   assert.ok(!pkg.files.includes('scripts/*.py'));
   assert.ok(pkg.files.includes('run.sh'));
   assert.ok(pkg.files.includes('LICENSE'));

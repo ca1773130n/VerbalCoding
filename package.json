@@ -1,6 +1,6 @@
 {
   "name": "verbalcoding",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Discord voice bridge for CLI coding agents.",
   "license": "MIT",
   "repository": {
@@ -34,7 +34,7 @@
     "docs/",
     "scripts/*.mjs",
     "scripts/*.sh",
-    "integrations/openvoice/",
+    "integrations/openvoice/*.py",
     "run.sh",
     ".env.example",
     "README.md",
