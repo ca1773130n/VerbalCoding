@@ -107,6 +107,7 @@ flowchart LR
 | [Configuration](docs/CONFIGURATION.md) | `.env`, agent backends, MCP, TTS backends, operational notes |
 | [Multi-Instance](docs/MULTI_INSTANCE.md) | One permanent Discord voice room per project |
 | [Release Notes](docs/RELEASE.md) | Current capabilities and pre-release checklist |
+| [한국어 문서](docs/i18n/README.ko.md) | npm 설치, 사용법, 설정, 멀티 인스턴스 한국어 가이드 |
 
 ## Tiny Command Map
 
@@ -154,4 +155,4 @@ vc doctor
 
 ## Status
 
-VerbalCoding is public-release oriented but still early. Demo video/GIF, broader Linux notes, and a formal license file are still TODOs.
+VerbalCoding is public-release oriented but still early. Demo video/GIF, broader Linux validation, CI, and deeper security review are still TODOs.

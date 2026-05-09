@@ -22,6 +22,7 @@ VerbalCoding is a Discord voice bridge for controlling CLI-based coding agents b
 - Diff/code/log guardrails so large technical output is not read aloud.
 - Normal and conservative sensitivity modes for indoor vs. noisy/outdoor use.
 - Setup wizard, `.env.example`, `vc doctor` prerequisite checker, and `./scripts/install.sh --yes` bootstrap for OS packages, npm dependencies, Edge TTS helper, and the default whisper.cpp model.
+- npm package install path: `npm install -g verbalcoding`, `vc setup --yes`, and `vc start`.
 - Optional verbose progress mode for text-only middle-step updates during long agent work.
 - Always-on JSONL latency metrics plus `!latency` / `!metrics` summary for pipeline optimization.
 - Lower default utterance idle wait (`UTTERANCE_IDLE_MS=2000`) so STT starts about 0.6s sooner after speech ends.
@@ -38,14 +39,15 @@ node --check app-node/main.mjs app-node/agent_adapters.mjs app-node/install_conf
 npm test
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/ -q || [ $? -eq 5 ]  # ok when no Python tests exist
 bash -n run.sh scripts/install.sh scripts/bootstrap_prereqs.sh scripts/docker_ubuntu_smoke.sh
+npm pack --dry-run
 vc doctor
 git diff --check
 ```
 
 Manual smoke test:
 
-1. Start the bridge with `./run.sh`.
-2. Verify log contains `Logged in as Hermes#6718`.
+1. Start the bridge with `vc start` or `./run.sh`.
+2. Verify log contains `Logged in as <bot-name>`.
 3. Verify log contains `Listening in voice channel ... / 일반` or the configured default channel.
 4. In Discord, run `!ping`.
 5. In Discord voice, say a short Korean request.
