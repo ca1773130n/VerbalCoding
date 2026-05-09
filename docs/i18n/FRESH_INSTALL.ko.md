@@ -77,6 +77,14 @@ OS가 지원되지 않으면 아래를 직접 설치한 뒤 다시 실행하세�
 
 ## 3. Discord 애플리케이션 설정
 
+Discord 봇을 처음 만든다면 먼저 공식/상위 문서를 확인하세요.
+
+- Hermes Agent Discord 메시징 가이드: <https://hermes-agent.nousresearch.com/docs/user-guide/messaging/discord>
+- Discord 공식 봇 개요: <https://docs.discord.com/developers/bots/overview>
+- Discord 공식 시작 가이드: <https://docs.discord.com/developers/quick-start/getting-started>
+
+위 문서에는 Discord 애플리케이션 생성, bot user 추가, privileged intent 활성화, 서버 초대 방법이 설명되어 있습니다. VerbalCoding도 같은 Discord bot 설정을 사용하고, 그 위에 음성 수신, STT, CLI 에이전트 실행, TTS 재생을 얹습니다.
+
 1. Discord Developer Portal에서 애플리케이션과 봇을 만듭니다.
 2. Message Content privileged intent를 켭니다.
 3. 봇 토큰을 설치 프롬프트 또는 `.env`의 `DISCORD_BOT_TOKEN`에 넣습니다.

@@ -77,6 +77,14 @@ If your OS is unsupported, install these manually before rerunning:
 
 ## 3. Discord application setup
 
+Read the upstream Discord bot setup guides first if this is your first bot:
+
+- Hermes Agent Discord messaging guide: <https://hermes-agent.nousresearch.com/docs/user-guide/messaging/discord>
+- Discord official bot overview: <https://docs.discord.com/developers/bots/overview>
+- Discord official getting started guide: <https://docs.discord.com/developers/quick-start/getting-started>
+
+Those pages show how to create a Discord application, add a bot user, enable privileged intents, and invite it to a server. VerbalCoding uses the same Discord bot setup, then adds voice receive, STT, CLI-agent execution, and TTS playback on top.
+
 1. Create a Discord application and bot in the Discord Developer Portal.
 2. Enable the Message Content privileged intent.
 3. Copy the bot token into the installer prompt or `.env` as `DISCORD_BOT_TOKEN`.

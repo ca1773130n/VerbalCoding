@@ -2,6 +2,12 @@
 
 ## Setup Wizard
 
+Discord bot/application setup is intentionally not re-explained from scratch here. Use these upstream guides for the Discord-side steps, then return to VerbalCoding setup:
+
+- Hermes Agent Discord messaging guide: <https://hermes-agent.nousresearch.com/docs/user-guide/messaging/discord>
+- Discord official bot overview: <https://docs.discord.com/developers/bots/overview>
+- Discord official quick start: <https://docs.discord.com/developers/quick-start/getting-started>
+
 ```bash
 ./scripts/install.sh
 ```

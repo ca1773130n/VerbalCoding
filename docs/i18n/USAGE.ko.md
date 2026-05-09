@@ -51,6 +51,13 @@ VERBALCODING_INSTANCE_ENV=instances/my-project.env ./run.sh
 
 ## Discord 명령
 
+명령을 연결하기 전에 먼저 상위 문서대로 Discord 애플리케이션/봇을 설정하세요.
+
+- Hermes Agent Discord 가이드: <https://hermes-agent.nousresearch.com/docs/user-guide/messaging/discord>
+- Discord 공식 봇 문서: <https://docs.discord.com/developers/bots/overview>
+
+그 다음 `vc bot invite CLIENT_ID`를 사용하면 VerbalCoding에 필요한 텍스트/음성 권한이 포함된 초대 URL을 만들 수 있습니다.
+
 | 명령 | 용도 |
 |---|---|
 | `!ping` | 봇 연결 기본 확인 |

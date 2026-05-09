@@ -2,6 +2,12 @@
 
 ## 설정 마법사
 
+Discord 봇/애플리케이션 생성 절차는 여기에서 처음부터 반복 설명하지 않습니다. Discord 쪽 설정은 아래 상위 문서를 보고 진행한 뒤 VerbalCoding 설정으로 돌아오세요.
+
+- Hermes Agent Discord 메시징 가이드: <https://hermes-agent.nousresearch.com/docs/user-guide/messaging/discord>
+- Discord 공식 봇 개요: <https://docs.discord.com/developers/bots/overview>
+- Discord 공식 시작 가이드: <https://docs.discord.com/developers/quick-start/getting-started>
+
 npm으로 설치한 경우:
 
 ```bash

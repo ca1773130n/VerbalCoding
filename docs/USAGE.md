@@ -43,6 +43,13 @@ The bot auto-joins the first configured channel name, defaulting to `일반,Gene
 
 ## Discord Commands
 
+Before wiring commands, set up the Discord application/bot using the upstream guides:
+
+- Hermes Agent Discord guide: <https://hermes-agent.nousresearch.com/docs/user-guide/messaging/discord>
+- Discord official bot docs: <https://docs.discord.com/developers/bots/overview>
+
+Then use `vc bot invite CLIENT_ID` to generate the VerbalCoding-specific invite URL with text and voice permissions.
+
 | Command | Purpose |
 |---|---|
 | `!ping` | Basic bot check |
