@@ -207,9 +207,10 @@ const MIN_UTTERANCE_BYTES = 48000 * 2 * 2 * MIN_UTTERANCE_SECONDS;
 const BARGE_IN_MIN_SECONDS = Number(process.env.BARGE_IN_MIN_SECONDS || '1.4');
 const BARGE_IN_MIN_MEAN_VOLUME_DB = Number(process.env.BARGE_IN_MIN_MEAN_VOLUME_DB || '-30');
 const BARGE_IN_MIN_MAX_VOLUME_DB = Number(process.env.BARGE_IN_MIN_MAX_VOLUME_DB || '-14');
-const PLAYBACK_BARGE_IN_MIN_SECONDS = Number(process.env.PLAYBACK_BARGE_IN_MIN_SECONDS || '0.45');
-const PLAYBACK_BARGE_IN_MIN_MEAN_VOLUME_DB = Number(process.env.PLAYBACK_BARGE_IN_MIN_MEAN_VOLUME_DB || '-42');
-const PLAYBACK_BARGE_IN_MIN_MAX_VOLUME_DB = Number(process.env.PLAYBACK_BARGE_IN_MIN_MAX_VOLUME_DB || '-22');
+const PLAYBACK_BARGE_IN_MIN_SECONDS = Number(process.env.PLAYBACK_BARGE_IN_MIN_SECONDS || '0.9');
+const PLAYBACK_BARGE_IN_MIN_MEAN_VOLUME_DB = Number(process.env.PLAYBACK_BARGE_IN_MIN_MEAN_VOLUME_DB || '-36');
+const PLAYBACK_BARGE_IN_MIN_MAX_VOLUME_DB = Number(process.env.PLAYBACK_BARGE_IN_MIN_MAX_VOLUME_DB || '-18');
+const PLAYBACK_BARGE_IN_REQUIRE_BOTH = !['0', 'false', 'no', 'off'].includes(String(process.env.PLAYBACK_BARGE_IN_REQUIRE_BOTH || '1').toLowerCase());
 const BARGE_IN_CONSERVATIVE_MIN_SECONDS = Number(process.env.BARGE_IN_CONSERVATIVE_MIN_SECONDS || '1.8');
 const BARGE_IN_CONSERVATIVE_MIN_MEAN_VOLUME_DB = Number(process.env.BARGE_IN_CONSERVATIVE_MIN_MEAN_VOLUME_DB || '-27');
 const BARGE_IN_CONSERVATIVE_MIN_MAX_VOLUME_DB = Number(process.env.BARGE_IN_CONSERVATIVE_MIN_MAX_VOLUME_DB || '-12');
@@ -327,6 +328,7 @@ function currentPlaybackBargeInThresholds() {
     minSeconds: PLAYBACK_BARGE_IN_MIN_SECONDS,
     minMeanDb: PLAYBACK_BARGE_IN_MIN_MEAN_VOLUME_DB,
     minMaxDb: PLAYBACK_BARGE_IN_MIN_MAX_VOLUME_DB,
+    requireBoth: PLAYBACK_BARGE_IN_REQUIRE_BOTH,
     mode: 'playback',
   };
 }
@@ -1333,12 +1335,13 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
 function subscribeUser(receiver, userId) {
   if (!isAllowed(userId)) return;
   if (String(userId) === client.user?.id) return;
-  if ((speaking || processing) && !activeStreams.has(userId)) {
-    // During voice playback, real user speech should stop only the currently
-    // playing audio chunk. If an agent/task is still processing, keep it alive;
-    // the recorded segment will be validated and only explicit stop phrases abort.
-    if (speaking) stopPlaybackForBargeIn(userId, 'playback-speaking-start');
-    log('possible barge-in start; waiting for segment validation', userId, 'speaking', speaking, 'processing', processing);
+  const wasSpeaking = speaking;
+  const wasProcessing = processing;
+  if ((wasSpeaking || wasProcessing) && !activeStreams.has(userId)) {
+    // Speaking-start alone is too noisy in Discord voice. Record and validate a
+    // real segment first; only confirmed playback barge-in stops the current
+    // audio chunk, and only explicit stop transcripts abort active agent work.
+    log('possible barge-in start; waiting for segment validation', userId, 'speaking', wasSpeaking, 'processing', wasProcessing);
   }
   if (activeStreams.has(userId)) return;
   const pending = bridgeState.getPending(userId);
@@ -1354,11 +1357,12 @@ function subscribeUser(receiver, userId) {
   const writer = new wav.FileWriter(file, { sampleRate: 48000, channels: 2, bitDepth: 16 });
   activeStreams.set(userId, { opusStream, decoder, writer, file, startedAtMs: Date.now() });
   let pcmBytes = 0;
-  const liveThresholds = speaking && !processing ? currentPlaybackBargeInThresholds() : currentBargeInThresholds();
-  const liveBargeIn = shouldUseLivePlaybackBargeIn({ speaking, processing }) ? createLiveBargeInMonitor({
+  const liveThresholds = wasSpeaking && !wasProcessing ? currentPlaybackBargeInThresholds() : currentBargeInThresholds();
+  const liveBargeIn = shouldUseLivePlaybackBargeIn({ speaking: wasSpeaking, processing: wasProcessing }) ? createLiveBargeInMonitor({
     minBytes: liveThresholds.minBytes,
     minMeanDb: liveThresholds.minMeanDb,
     minMaxDb: liveThresholds.minMaxDb,
+    requireBoth: liveThresholds.requireBoth,
     log,
     onConfirm: ({ pcmBytes: confirmedBytes, levels }) => {
       log('confirmed live playback barge-in before segment end', userId, 'pcmBytes', confirmedBytes, 'meanDb', levels.meanDb, 'maxDb', levels.maxDb);

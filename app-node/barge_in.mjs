@@ -25,7 +25,9 @@ export function isBargeInCandidate(pcmBytes, levels, thresholds) {
   const minBytes = Number(thresholds?.minBytes ?? 0);
   const minMeanDb = Number(thresholds?.minMeanDb ?? -Infinity);
   const minMaxDb = Number(thresholds?.minMaxDb ?? -Infinity);
+  const requireBoth = Boolean(thresholds?.requireBoth);
   if (pcmBytes < minBytes) return false;
+  if (requireBoth) return levels.meanDb >= minMeanDb && levels.maxDb >= minMaxDb;
   return levels.meanDb >= minMeanDb || levels.maxDb >= minMaxDb;
 }
 
@@ -114,6 +116,7 @@ export function createLiveBargeInMonitor({
   minBytes,
   minMeanDb,
   minMaxDb,
+  requireBoth = false,
   onConfirm,
   log = () => {},
 }) {
@@ -127,7 +130,7 @@ export function createLiveBargeInMonitor({
       bytes += chunk.length;
       if (bytes < minBytes) return false;
       const levels = pcm16StereoLevels(Buffer.concat(chunks, bytes));
-      if (!isBargeInCandidate(bytes, levels, { minBytes, minMeanDb, minMaxDb })) {
+      if (!isBargeInCandidate(bytes, levels, { minBytes, minMeanDb, minMaxDb, requireBoth })) {
         log('live barge-in below volume threshold', 'pcmBytes', bytes, 'meanDb', levels.meanDb, 'maxDb', levels.maxDb);
         return false;
       }

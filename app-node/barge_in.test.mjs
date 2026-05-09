@@ -55,20 +55,33 @@ test('createLiveBargeInMonitor confirms while audio stream is still active', () 
   assert.equal(monitor.confirmed, true);
 });
 
-test('playback barge-in can confirm on a shorter, quieter utterance', () => {
-  const pcmBytes = 48000 * 2 * 2 * 0.45;
+test('playback barge-in requires a longer deliberate utterance by default', () => {
+  const pcmBytes = 48000 * 2 * 2 * 0.9;
   const events = [];
   const monitor = createLiveBargeInMonitor({
     minBytes: pcmBytes,
-    minMeanDb: -42,
-    minMaxDb: -22,
+    minMeanDb: -36,
+    minMaxDb: -18,
+    requireBoth: true,
     onConfirm: event => events.push(event),
   });
 
-  assert.equal(monitor.push(pcmWithConstantSample(5000, pcmBytes / 2)), true);
+  assert.equal(monitor.push(pcmWithConstantSample(5000, pcmBytes / 3 / 2)), false);
+  assert.equal(events.length, 0);
+
+  assert.equal(monitor.push(pcmWithConstantSample(5000, pcmBytes / 3 / 2)), false);
+  assert.equal(events.length, 0);
+
+  assert.equal(monitor.push(pcmWithConstantSample(5000, pcmBytes / 3 / 2)), true);
   assert.equal(events.length, 1);
   assert.equal(events[0].pcmBytes, pcmBytes);
-  assert.ok(events[0].levels.maxDb > -22);
+  assert.ok(events[0].levels.meanDb > -36);
+  assert.ok(events[0].levels.maxDb > -18);
+});
+
+test('playback barge-in requireBoth ignores short clicky peaks without sustained RMS', () => {
+  assert.equal(isBargeInCandidate(400, { meanDb: -50, maxDb: -3 }, { minBytes: 400, minMeanDb: -36, minMaxDb: -18, requireBoth: true }), false);
+  assert.equal(isBargeInCandidate(400, { meanDb: -35, maxDb: -17 }, { minBytes: 400, minMeanDb: -36, minMaxDb: -18, requireBoth: true }), true);
 });
 
 test('createLiveBargeInMonitor ignores low-volume candidates after minimum duration', () => {
