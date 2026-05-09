@@ -38,6 +38,18 @@ test('bootstrap script installs cross-platform prerequisites and local model hel
   assert.match(script, /\.venv-tts/);
 });
 
+test('Ubuntu Docker smoke script validates clean install without secrets', () => {
+  const script = fs.readFileSync(path.join(ROOT, 'scripts', 'docker_ubuntu_smoke.sh'), 'utf8');
+
+  assert.match(script, /ubuntu:24\.04/);
+  assert.match(script, /git .*archive --format=tar HEAD/);
+  assert.match(script, /\.\/scripts\/install\.sh --yes --no-wizard/);
+  assert.match(script, /DISCORD_BOT_TOKEN="smoke-test-token"/);
+  assert.match(script, /AGENT_BACKEND="custom"/);
+  assert.match(script, /vc doctor/);
+  assert.doesNotMatch(script, /npm run vc/);
+});
+
 test('healInstanceProfileFromEnv ensures profile when HERMES_HOME is set', async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'vc-home-'));
   const calls = [];

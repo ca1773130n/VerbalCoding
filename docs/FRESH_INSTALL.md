@@ -145,6 +145,8 @@ Then set `TTS_BACKEND=openvoice`, run `vc doctor`, and test `!voice-test <text>`
 
 ## 8. Clean clone smoke test for maintainers
 
+Fast host-only smoke test:
+
 ```bash
 TMPDIR=$(mktemp -d)
 git clone https://github.com/ca1773130n/VerbalCoding.git "$TMPDIR/VerbalCoding"
@@ -156,3 +158,11 @@ vc doctor || true
 ```
 
 The expected failure at this point is missing local secrets or unauthenticated agent CLI, not leaked tokens or missing install scripts.
+
+Docker-based Ubuntu clean install smoke test:
+
+```bash
+./scripts/docker_ubuntu_smoke.sh
+```
+
+This runs `ubuntu:24.04`, copies the tracked repository tree into a clean container, runs `./scripts/install.sh --yes --no-wizard`, writes a non-secret smoke `.env`, checks `vc`, runs Node tests, and verifies `vc doctor`. It does not connect to Discord voice; use a real Ubuntu VM or WSL2 after this if you need an end-to-end voice-channel test.

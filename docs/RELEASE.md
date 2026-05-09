@@ -33,10 +33,11 @@ Run from the repo root:
 
 ```bash
 ./scripts/install.sh --yes --no-wizard
+./scripts/docker_ubuntu_smoke.sh   # requires Docker; validates ubuntu:24.04 clean install
 node --check app-node/main.mjs app-node/agent_adapters.mjs app-node/install_config.mjs scripts/install.mjs
 npm test
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/ -q
-bash -n run.sh scripts/install.sh scripts/bootstrap_prereqs.sh
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/ -q || [ $? -eq 5 ]  # ok when no Python tests exist
+bash -n run.sh scripts/install.sh scripts/bootstrap_prereqs.sh scripts/docker_ubuntu_smoke.sh
 vc doctor
 git diff --check
 ```
