@@ -48,7 +48,7 @@ The bot auto-joins the first configured channel name, defaulting to `일반,Gene
 | `!ping` | Basic bot check |
 | `!join` / `!leave` | Join or leave voice |
 | `!say <text>` | Speak text directly through TTS |
-| `!voice-test <text>` | Test the active TTS backend |
+| `!voice-test <text>` | Test the active TTS backend/voice |
 | `!voice-clone capture` | Save the next valid utterance as an OpenVoice reference sample |
 | `!voice-clone status` / `!voice-clone cancel` | Inspect or cancel capture |
 | `!ask <prompt>` | Send text through the same selected harness adapter as voice |
@@ -62,6 +62,31 @@ The bot auto-joins the first configured channel name, defaulting to `일반,Gene
 | `!sensitivity normal/conservative` | Switch barge-in sensitivity |
 
 Voice equivalents such as “외부 모드”, “보수 모드”, “실내”, “기본 감도”, and clear stop phrases like “잠깐”, “멈춰”, “그만” are handled by the bridge. You can also say “상세 진행 켜” / “상세 진행 꺼” to toggle verbose progress by voice.
+
+## Changing the Voice
+
+`vc language ko|en|auto` changes STT language, progress language, and the matching default TTS voice together. If you only want to change the speaker/voice while the bridge is running, say it in Discord voice:
+
+```text
+남자 한국어 목소리로 바꿔
+여자 한국어 목소리로 바꿔
+change voice to Korean female
+switch speaker to English
+```
+
+The live bridge recognizes these as voice-control commands, updates `config/tts-voices.json`, updates the effective TTS env for the running process, and answers with a short confirmation such as “목소리를 Korean male로 바꿨어.” Use `!voice-test <text>` right after changing it to hear the current backend and voice.
+
+Built-in Edge voice types:
+
+| Voice type | Edge voice |
+|---|---|
+| `korean_male` | `ko-KR-InJoonNeural` |
+| `korean_female` | `ko-KR-SunHiNeural` |
+| `korean_multilingual_male` | `ko-KR-HyunsuMultilingualNeural` |
+| `english_male` | `en-US-GuyNeural` |
+| `english_female` | `en-US-AriaNeural` |
+
+For persistent manual config, set `TTS_BACKEND=edge`, `TTS_VOICE_TYPE=<voice-type>`, and optionally `TTS_VOICE=<edge-voice>` in `.env`, or edit `config/tts-voices.json` for custom voice catalogs.
 
 ## Verbose Progress Mode
 

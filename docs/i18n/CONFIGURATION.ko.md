@@ -74,6 +74,7 @@ WHISPER_CPP_BIN="whisper-cli"
 WHISPER_CPP_MODEL="./models/ggml-small-q5_1.bin"
 
 TTS_BACKEND="edge"
+TTS_VOICE_TYPE="korean_female"
 TTS_VOICE="ko-KR-SunHiNeural"
 TTS_RATE="+10%"
 TTS_MAX_CHARS="495"
@@ -87,6 +88,37 @@ HERMES_CHAT_TIMEOUT_MS="45000"
 AGENT_VERBOSE_PROGRESS="0"
 LATENCY_LOG_PATH="./.logs/latency.jsonl"
 ```
+
+## TTS 목소리 선택
+
+언어 프리셋과 목소리 선택은 분리되어 있습니다.
+
+- `vc language ko|en|auto`는 STT 언어, 진행 언어, 해당 언어의 기본 목소리를 함께 바꿉니다.
+- “남자 한국어 목소리로 바꿔”, “여자 한국어 목소리로 바꿔”, `change voice to Korean female`, `switch speaker to English` 같은 실시간 음성 명령은 말하는 사람/목소리 타입만 바꿉니다.
+- `!voice-test <text>`는 현재 선택된 백엔드와 목소리로 짧은 샘플을 재생합니다.
+
+목소리 선택은 기본적으로 `config/tts-voices.json`에 저장됩니다. 경로는 `TTS_VOICE_CONFIG`로 바꿀 수 있습니다. 실행 중인 브릿지는 합성 직전에 목소리 선택을 다시 적용하므로, 음성 명령으로 바꾼 목소리는 전체 재시작 없이 바로 반영됩니다.
+
+기본 Edge 카탈로그:
+
+| `TTS_VOICE_TYPE` | `TTS_VOICE` | 언어 |
+|---|---|---|
+| `korean_male` | `ko-KR-InJoonNeural` | 한국어 |
+| `korean_female` | `ko-KR-SunHiNeural` | 한국어 |
+| `korean_multilingual_male` | `ko-KR-HyunsuMultilingualNeural` | 한국어 |
+| `english_male` | `en-US-GuyNeural` | 영어 |
+| `english_female` | `en-US-AriaNeural` | 영어 |
+
+수동 영구 override 예시:
+
+```bash
+TTS_BACKEND="edge"
+TTS_VOICE_TYPE="korean_male"
+TTS_VOICE="ko-KR-InJoonNeural"
+TTS_VOICE_CONFIG="config/tts-voices.json"
+```
+
+OpenVoice, SpeechSwift, Supertonic을 쓸 때는 아래 백엔드별 reference/voice 설정을 유지하세요. 같은 voice catalog 파일에서 현재 voice type을 추적할 수 있습니다.
 
 ## MCP 서버
 

@@ -56,7 +56,7 @@ VERBALCODING_INSTANCE_ENV=instances/my-project.env ./run.sh
 | `!ping` | 봇 연결 기본 확인 |
 | `!join` / `!leave` | 음성 채널 입장/퇴장 |
 | `!say <text>` | 텍스트를 바로 TTS로 읽기 |
-| `!voice-test <text>` | 현재 TTS 백엔드 테스트 |
+| `!voice-test <text>` | 현재 TTS 백엔드/목소리 테스트 |
 | `!voice-clone capture` | 다음 유효 발화를 OpenVoice 기준 샘플로 저장 |
 | `!voice-clone status` / `!voice-clone cancel` | 샘플 캡처 상태 확인/취소 |
 | `!ask <prompt>` | 음성과 같은 선택된 CLI 어댑터로 텍스트 요청 보내기 |
@@ -70,6 +70,31 @@ VERBALCODING_INSTANCE_ENV=instances/my-project.env ./run.sh
 | `!sensitivity normal/conservative` | 끼어들기 감도 전환 |
 
 음성으로도 “외부 모드”, “보수 모드”, “실내”, “기본 감도” 같은 감도 전환과 “잠깐”, “멈춰”, “그만” 같은 명확한 중단 표현을 처리합니다. “상세 진행 켜” / “상세 진행 꺼”처럼 말해서 verbose progress도 바꿀 수 있습니다.
+
+## 목소리 변경
+
+`vc language ko|en|auto`는 STT 언어, 진행 언어, 기본 TTS 목소리를 함께 바꿉니다. 언어 전체가 아니라 말하는 사람/목소리만 바꾸고 싶다면 Discord 음성에서 이렇게 말하면 됩니다.
+
+```text
+남자 한국어 목소리로 바꿔
+여자 한국어 목소리로 바꿔
+change voice to Korean female
+switch speaker to English
+```
+
+실행 중인 브릿지는 이 발화를 제어 명령으로 인식해 `config/tts-voices.json`을 갱신하고, 현재 프로세스의 TTS 설정도 바로 바꾼 뒤 “목소리를 Korean male로 바꿨어.” 같은 짧은 확인을 말합니다. 바꾼 직후에는 `!voice-test <text>`로 현재 백엔드와 목소리를 바로 들어볼 수 있습니다.
+
+기본 Edge 목소리 타입:
+
+| 목소리 타입 | Edge voice |
+|---|---|
+| `korean_male` | `ko-KR-InJoonNeural` |
+| `korean_female` | `ko-KR-SunHiNeural` |
+| `korean_multilingual_male` | `ko-KR-HyunsuMultilingualNeural` |
+| `english_male` | `en-US-GuyNeural` |
+| `english_female` | `en-US-AriaNeural` |
+
+영구 수동 설정이 필요하면 `.env`에 `TTS_BACKEND=edge`, `TTS_VOICE_TYPE=<voice-type>`, 필요 시 `TTS_VOICE=<edge-voice>`를 설정하세요. 더 많은 커스텀 목소리 카탈로그는 `config/tts-voices.json`에서 관리할 수 있습니다.
 
 ## 자세한 진행 모드
 
