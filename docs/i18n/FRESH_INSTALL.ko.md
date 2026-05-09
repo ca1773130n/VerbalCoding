@@ -170,7 +170,7 @@ OpenVoice 음성 복제는 선택 기능입니다. 공개 설치 직후에는 `T
 # OpenVoice V2 체크포인트를 vendor/OpenVoice/checkpoints_v2/ 아래에 넣습니다.
 # 허가된 로컬 샘플을 voice-samples/user-reference.wav에 두거나,
 # 봇 실행 후 “목소리 샘플 녹음 시작해”라고 말하고 10~30초 발화합니다.
-python3 scripts/openvoice_smoke.py
+python3 integrations/openvoice/synth.py --openvoice-dir vendor/OpenVoice --ref-audio voice-samples/user-reference.wav --text '안녕하세요. 버벌코딩 목소리 복제 테스트입니다.' --output /tmp/verbalcoding-openvoice-smoke.wav
 ```
 
 그 뒤 `TTS_BACKEND=openvoice`로 설정하고 `vc doctor`, Discord의 `!voice-test <text>`로 테스트합니다.

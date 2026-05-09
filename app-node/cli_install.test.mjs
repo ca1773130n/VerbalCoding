@@ -19,7 +19,8 @@ test('package exposes a short vc shell command', () => {
   assert.ok(pkg.files.includes('app-node/'));
   assert.ok(pkg.files.includes('scripts/*.mjs'));
   assert.ok(pkg.files.includes('scripts/*.sh'));
-  assert.ok(pkg.files.includes('scripts/*.py'));
+  assert.ok(pkg.files.includes('integrations/openvoice/'));
+  assert.ok(!pkg.files.includes('scripts/*.py'));
   assert.ok(pkg.files.includes('run.sh'));
   assert.ok(pkg.files.includes('LICENSE'));
 });
@@ -39,10 +40,21 @@ test('installer shell script links the vc command during setup', () => {
 
   assert.match(script, /bootstrap_prereqs\.sh/);
   assert.match(script, /--no-wizard/);
+  assert.match(script, /--yes\) BOOTSTRAP_ARGS\+=\("\$arg"\); INSTALL_ARGS\+=\("\$arg"\)/);
   assert.match(script, /VERBALCODING_SKIP_BOOTSTRAP/);
   assert.match(script, /npm link/);
   assert.match(script, /Installed shell CLI: vc/);
   assert.match(script, /VERBALCODING_SKIP_CLI_LINK/);
+});
+
+test('npm setup supports non-interactive --yes mode', () => {
+  const installer = fs.readFileSync(path.join(ROOT, 'scripts', 'install.mjs'), 'utf8');
+  const config = fs.readFileSync(path.join(ROOT, 'app-node', 'install_config.mjs'), 'utf8');
+
+  assert.match(installer, /args\.includes\('--yes'\)/);
+  assert.match(installer, /normalizeInstallAnswers\(process\.env\)/);
+  assert.match(config, /vc start/);
+  assert.doesNotMatch(config, /npm install -g \.\s+#/);
 });
 
 test('bootstrap script installs cross-platform prerequisites and local model helpers', () => {

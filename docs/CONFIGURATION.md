@@ -171,7 +171,7 @@ Edge TTS remains the default and fallback. To try local voice cloning with OpenV
 mkdir -p voice-samples
 # Put a permitted reference sample at voice-samples/user-reference.wav,
 # or capture one from Discord with !voice-clone capture.
-python3 scripts/openvoice_smoke.py
+python3 integrations/openvoice/synth.py --openvoice-dir vendor/OpenVoice --ref-audio voice-samples/user-reference.wav --text '안녕하세요. 버벌코딩 목소리 복제 테스트입니다.' --output /tmp/verbalcoding-openvoice-smoke.wav
 ```
 
 Then set:

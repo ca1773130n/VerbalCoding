@@ -179,7 +179,7 @@ Edge TTS가 기본값이자 fallback입니다. OpenVoice V2로 로컬 음성 복
 mkdir -p voice-samples
 # 허가된 기준 샘플을 voice-samples/user-reference.wav에 넣거나,
 # Discord에서 !voice-clone capture로 샘플을 캡처합니다.
-python3 scripts/openvoice_smoke.py
+python3 integrations/openvoice/synth.py --openvoice-dir vendor/OpenVoice --ref-audio voice-samples/user-reference.wav --text '안녕하세요. 버벌코딩 목소리 복제 테스트입니다.' --output /tmp/verbalcoding-openvoice-smoke.wav
 ```
 
 그 뒤 설정:

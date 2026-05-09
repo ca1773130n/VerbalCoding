@@ -86,7 +86,7 @@ if (ttsBackend === 'edge') {
   ok = check('OpenVoice repo', fs.existsSync(openvoiceDir), path.relative(ROOT, openvoiceDir)) && ok;
   ok = check('OpenVoice venv', fs.existsSync(openvoiceVenv), path.relative(ROOT, openvoiceVenv)) && ok;
   ok = check('OpenVoice reference audio', fs.existsSync(refAudio), path.relative(ROOT, refAudio)) && ok;
-  ok = check('OpenVoice synth wrapper help', spawnSync('python3', ['scripts/openvoice_synth.py', '--help'], { cwd: ROOT, encoding: 'utf8' }).status === 0, 'scripts/openvoice_synth.py') && ok;
+  ok = check('OpenVoice synth wrapper help', spawnSync('python3', ['integrations/openvoice/synth.py', '--help'], { cwd: ROOT, encoding: 'utf8' }).status === 0, 'integrations/openvoice/synth.py') && ok;
   note('OpenVoice progress prompts', ['1', 'true', 'yes', 'on'].includes(String(env.OPENVOICE_PROGRESS || '0').toLowerCase()) ? 'openvoice' : 'edge fallback');
 } else if (ttsBackend === 'speechswift') {
   const mode = String(env.SPEECHSWIFT_MODE || 'cli').toLowerCase() === 'server' ? 'server' : 'cli';

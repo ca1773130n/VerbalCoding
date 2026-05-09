@@ -121,7 +121,7 @@ test('OpenVoice final synthesis calls Python wrapper with reference audio and ou
   const out = await backend.synthesize('복제 음성 테스트', { kind: 'final' });
 
   assert.equal(calls[0].cmd, path.join('/project/.venv-openvoice', 'bin', 'python'));
-  assert.ok(calls[0].args.some(arg => String(arg).endsWith('scripts/openvoice_synth.py')));
+  assert.ok(calls[0].args.some(arg => String(arg).endsWith('integrations/openvoice/synth.py')));
   assert.ok(calls[0].args.includes('--ref-audio'));
   assert.ok(calls[0].args.includes('/project/voice-samples/me.wav'));
   assert.ok(calls[0].args.includes('--text'));

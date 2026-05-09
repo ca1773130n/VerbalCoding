@@ -17,6 +17,7 @@ async function ask(question, fallback = '', options = {}) {
 
 async function main() {
   const args = process.argv.slice(2);
+  const yes = args.includes('--yes') || args.includes('-y');
   if (args[0] === 'instance' || args.includes('--instance')) {
     const { spawnSync } = await import('node:child_process');
     const pass = args[0] === 'instance'
@@ -24,6 +25,19 @@ async function main() {
       : args.filter(arg => arg !== '--instance');
     const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'cli.mjs'), 'instance', 'setup', ...pass], { stdio: 'inherit', cwd: ROOT });
     process.exitCode = result.status ?? 1;
+    return;
+  }
+  if (yes) {
+    const values = normalizeInstallAnswers(process.env);
+    const envPath = path.join(ROOT, '.env');
+    if (fs.existsSync(envPath)) {
+      const backup = `${envPath}.bak-${Date.now()}`;
+      fs.copyFileSync(envPath, backup);
+      console.log(`Backed up existing .env to ${backup}`);
+    }
+    fs.writeFileSync(envPath, buildEnvFile(values), { mode: 0o600 });
+    console.log(`Wrote ${envPath}`);
+    console.log(renderInstallSummary(values));
     return;
   }
   globalThis.__rl = readline.createInterface({ input, output });

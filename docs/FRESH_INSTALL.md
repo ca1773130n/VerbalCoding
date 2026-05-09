@@ -170,7 +170,7 @@ OpenVoice voice cloning is optional. Keep `TTS_BACKEND=edge` for a fresh public 
 # Download OpenVoice V2 checkpoints into vendor/OpenVoice/checkpoints_v2/
 # Add a permitted local sample at voice-samples/user-reference.wav,
 # or run the bot, say "목소리 샘플 녹음 시작해", then speak 10-30 seconds.
-python3 scripts/openvoice_smoke.py
+python3 integrations/openvoice/synth.py --openvoice-dir vendor/OpenVoice --ref-audio voice-samples/user-reference.wav --text '안녕하세요. 버벌코딩 목소리 복제 테스트입니다.' --output /tmp/verbalcoding-openvoice-smoke.wav
 ```
 
 Then set `TTS_BACKEND=openvoice`, run `vc doctor`, and test `!voice-test <text>` in Discord.

@@ -9,7 +9,8 @@ for arg in "$@"; do
   case "$arg" in
     --no-wizard) RUN_WIZARD=0 ;;
     --skip-bootstrap) export VERBALCODING_SKIP_BOOTSTRAP=1 ;;
-    --yes|--skip-system|--skip-model|--skip-edge-tts) BOOTSTRAP_ARGS+=("$arg") ;;
+    --yes) BOOTSTRAP_ARGS+=("$arg"); INSTALL_ARGS+=("$arg") ;;
+    --skip-system|--skip-model|--skip-edge-tts) BOOTSTRAP_ARGS+=("$arg") ;;
     *) INSTALL_ARGS+=("$arg") ;;
   esac
 done

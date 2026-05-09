@@ -135,7 +135,7 @@ export function createOpenVoiceBackend(settings, deps = {}) {
         return edge.synthesize(text, { signal, kind });
       }
       const out = uniquePath(tmpdir, 'verbalcoding-openvoice', 'wav');
-      const script = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', 'scripts', 'openvoice_synth.py');
+      const script = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', 'integrations', 'openvoice', 'synth.py');
       const args = [
         script,
         '--openvoice-dir', openvoice.dir,
