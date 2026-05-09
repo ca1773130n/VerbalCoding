@@ -30,6 +30,8 @@ function usage() {
   return `VerbalCoding CLI
 
 Usage:
+  vc setup [--yes] [--no-wizard] [--skip-system] [--skip-model] [--skip-edge-tts]
+  vc start
   vc status
   vc language <ko|en|auto>
   vc language status
@@ -44,6 +46,9 @@ Usage:
   vc doctor
 
 Examples:
+  npx verbalcoding setup --yes
+  vc setup --yes
+  vc start
   vc language en
   vc language ko
   vc language auto
@@ -266,6 +271,23 @@ async function main(argv = process.argv.slice(2)) {
   const [command, subcommand] = argv;
   if (!command || ['help', '-h', '--help'].includes(command)) {
     console.log(usage());
+    return;
+  }
+  if (command === 'setup' || command === 'install') {
+    const { spawnSync } = await import('node:child_process');
+    const script = path.join(ROOT, 'scripts', 'install.sh');
+    const result = spawnSync('bash', [script, ...argv.slice(1)], {
+      stdio: 'inherit',
+      cwd: ROOT,
+      env: { ...process.env, VERBALCODING_SKIP_CLI_LINK: process.env.VERBALCODING_SKIP_CLI_LINK || '1' },
+    });
+    process.exitCode = result.status ?? 1;
+    return;
+  }
+  if (command === 'start' || command === 'run') {
+    const { spawnSync } = await import('node:child_process');
+    const result = spawnSync('bash', [path.join(ROOT, 'run.sh'), ...argv.slice(1)], { stdio: 'inherit', cwd: ROOT });
+    process.exitCode = result.status ?? 1;
     return;
   }
   if (command === 'doctor') {

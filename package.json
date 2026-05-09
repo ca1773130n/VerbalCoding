@@ -1,13 +1,45 @@
 {
   "name": "verbalcoding",
   "version": "0.2.0",
-  "private": true,
+  "description": "Discord voice bridge for CLI coding agents.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ca1773130n/VerbalCoding.git"
+  },
+  "homepage": "https://github.com/ca1773130n/VerbalCoding#readme",
+  "bugs": {
+    "url": "https://github.com/ca1773130n/VerbalCoding/issues"
+  },
+  "keywords": [
+    "discord",
+    "voice",
+    "coding-agent",
+    "cli",
+    "speech-to-text",
+    "tts",
+    "whisper"
+  ],
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "bin": {
     "vc": "scripts/cli.mjs",
     "verbalcoding": "scripts/cli.mjs",
     "verbalcoding-mcp": "scripts/mcp-server.mjs"
   },
+  "files": [
+    "app-node/",
+    "docs/",
+    "scripts/*.mjs",
+    "scripts/*.sh",
+    "scripts/*.py",
+    "run.sh",
+    ".env.example",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "start": "node app-node/main.mjs",
     "setup": "node scripts/install.mjs",

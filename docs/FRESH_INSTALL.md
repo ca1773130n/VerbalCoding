@@ -1,17 +1,38 @@
 # Fresh install
 
-This guide is for a clean public GitHub clone. It avoids local-only assumptions and uses the installer to bootstrap as much as possible.
+This guide is for a clean public install. It avoids local-only assumptions and uses the installer to bootstrap as much as possible.
 
-## 1. Clone
+## 1. Install the CLI
+
+Recommended npm path:
+
+```bash
+npm install -g verbalcoding
+```
+
+Or run the published package directly:
+
+```bash
+npx verbalcoding setup --yes
+```
+
+If you used `npm install -g`, continue with:
+
+```bash
+vc setup --yes
+```
+
+Contributor GitHub clone path:
 
 ```bash
 git clone https://github.com/ca1773130n/VerbalCoding.git
 cd VerbalCoding
+./scripts/install.sh --yes
 ```
 
 ## 2. Bootstrap dependencies and run the setup wizard
 
-Recommended:
+The npm commands above run the same bootstrapper as the clone install. For a clone, run:
 
 ```bash
 ./scripts/install.sh --yes
@@ -38,7 +59,8 @@ Supported system bootstrap paths:
 Useful installer variants:
 
 ```bash
-./scripts/install.sh --yes --no-wizard       # dependency/bootstrap only
+vc setup --yes --no-wizard                   # dependency/bootstrap only from npm install
+./scripts/install.sh --yes --no-wizard       # dependency/bootstrap only from a clone
 ./scripts/install.sh --skip-system           # do not install OS packages
 ./scripts/install.sh --skip-model            # do not download the default STT model
 ./scripts/install.sh --skip-edge-tts         # do not create .venv-tts
@@ -87,7 +109,7 @@ Expected success includes:
 ✓ Discord bot token configured — [REDACTED]
 ✓ edge-tts
 ✓ hermes CLI
-Doctor passed. Run ./run.sh to start VerbalCoding.
+Doctor passed. Run vc start to start VerbalCoding.
 ```
 
 If the installer created a local Edge TTS helper, `.env` should contain an `EDGE_TTS_COMMAND` path pointing at `.venv-tts/bin/edge-tts`.
@@ -95,6 +117,8 @@ If the installer created a local Edge TTS helper, `.env` should contain an `EDGE
 ## 5. Run the single default bot
 
 ```bash
+vc start
+# or, from a GitHub clone:
 ./run.sh
 ```
 
@@ -152,6 +176,7 @@ TMPDIR=$(mktemp -d)
 git clone https://github.com/ca1773130n/VerbalCoding.git "$TMPDIR/VerbalCoding"
 cd "$TMPDIR/VerbalCoding"
 ./scripts/install.sh --yes --no-wizard
+npm pack --dry-run
 cp .env.example .env
 chmod 600 .env
 vc doctor || true

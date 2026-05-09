@@ -11,8 +11,27 @@ const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 test('package exposes a short vc shell command', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 
+  assert.equal(pkg.private, undefined);
+  assert.equal(pkg.license, 'MIT');
+  assert.equal(pkg.engines?.node, '>=20');
   assert.equal(pkg.bin?.vc, 'scripts/cli.mjs');
   assert.equal(pkg.bin?.verbalcoding, 'scripts/cli.mjs');
+  assert.ok(pkg.files.includes('app-node/'));
+  assert.ok(pkg.files.includes('scripts/*.mjs'));
+  assert.ok(pkg.files.includes('scripts/*.sh'));
+  assert.ok(pkg.files.includes('scripts/*.py'));
+  assert.ok(pkg.files.includes('run.sh'));
+  assert.ok(pkg.files.includes('LICENSE'));
+});
+
+test('CLI includes npm-friendly setup and start commands', () => {
+  const cli = fs.readFileSync(path.join(ROOT, 'scripts', 'cli.mjs'), 'utf8');
+
+  assert.match(cli, /vc setup \[--yes\]/);
+  assert.match(cli, /command === 'setup'/);
+  assert.match(cli, /VERBALCODING_SKIP_CLI_LINK/);
+  assert.match(cli, /command === 'start'/);
+  assert.match(cli, /run\.sh/);
 });
 
 test('installer shell script links the vc command during setup', () => {

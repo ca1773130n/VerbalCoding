@@ -42,6 +42,25 @@ VerbalCoding turns a Discord voice channel into a hands-free control surface for
 
 ## Quick Start
 
+Fastest path with npm:
+
+```bash
+npm install -g verbalcoding
+vc setup --yes
+vc doctor
+vc start
+```
+
+Or run directly without a permanent global install:
+
+```bash
+npx verbalcoding setup --yes
+vc doctor
+vc start
+```
+
+GitHub clone path for contributors:
+
 ```bash
 git clone https://github.com/ca1773130n/VerbalCoding.git
 cd VerbalCoding
@@ -50,7 +69,7 @@ vc doctor
 ./run.sh
 ```
 
-`./scripts/install.sh --yes` bootstraps local prerequisites where possible: Node/npm dependencies, `ffmpeg`, `whisper-cli`, the default whisper.cpp model, a local `.venv-tts` Edge TTS helper, and the short `vc` shell command. It supports macOS/Homebrew plus common Linux package managers (`apt`, `dnf`, `pacman`); rerun with `--no-wizard` for dependency-only setup or `--skip-system` if you want to install OS packages yourself.
+`vc setup --yes` and `./scripts/install.sh --yes` bootstrap local prerequisites where possible: Node/npm dependencies, `ffmpeg`, `whisper-cli`, the default whisper.cpp model, a local `.venv-tts` Edge TTS helper, and the short `vc` shell command for clone installs. They support macOS/Homebrew plus common Linux package managers (`apt`, `dnf`, `pacman`); rerun with `--no-wizard` for dependency-only setup or `--skip-system` if you want to install OS packages yourself.
 
 Need a clean install walkthrough? Start with [Fresh Install](docs/FRESH_INSTALL.md).
 
@@ -98,6 +117,7 @@ vc bot invite CLIENT_ID   # generate the Discord bot invite URL
 vc instance setup NAME    # create an isolated project voice bot
 vc instance start NAME    # run that bot in the background
 vc doctor                 # redacted health check
+vc start                  # start the default bridge
 ```
 
 In Discord:
@@ -128,6 +148,7 @@ Run the lightweight checks before sending changes:
 node --check app-node/main.mjs
 npm test
 bash -n run.sh scripts/install.sh
+npm pack --dry-run
 vc doctor
 ```
 
