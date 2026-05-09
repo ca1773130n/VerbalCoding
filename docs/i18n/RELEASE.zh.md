@@ -1,4 +1,4 @@
-# VerbalCoding 릴리스 노트
+# VerbalCoding 发布说明
 
 ## Current release candidate
 

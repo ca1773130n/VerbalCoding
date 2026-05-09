@@ -1,6 +1,6 @@
-# 새 설치
+# 新規インストール
 
-This guide mirrors the English fresh-install flow for 한국어. It is intended for a clean public install and avoids local-only assumptions.
+This guide mirrors the English fresh-install flow for 日本語. It is intended for a clean public install and avoids local-only assumptions.
 
 ## 1. Install the CLI
 

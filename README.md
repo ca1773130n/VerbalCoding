@@ -108,6 +108,11 @@ flowchart LR
 | [Multi-Instance](docs/MULTI_INSTANCE.md) | One permanent Discord voice room per project |
 | [Release Notes](docs/RELEASE.md) | Current capabilities and pre-release checklist |
 | [한국어 문서](docs/i18n/README.ko.md) | npm 설치, 사용법, 설정, 멀티 인스턴스 한국어 가이드 |
+| [日本語 docs](docs/i18n/README.ja.md) | npm install, usage, configuration, multi-instance guide in Japanese |
+| [中文文档](docs/i18n/README.zh.md) | npm 安装、使用、配置和多实例中文指南 |
+| [Español docs](docs/i18n/README.es.md) | Instalación npm, uso, configuración y multiinstancia en español |
+| [Français docs](docs/i18n/README.fr.md) | Installation npm, utilisation, configuration et multi-instance en français |
+| [Русская документация](docs/i18n/README.ru.md) | npm установка, использование, конфигурация и мульти-инстансы на русском |
 
 ## Tiny Command Map
 

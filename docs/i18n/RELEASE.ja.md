@@ -1,4 +1,4 @@
-# VerbalCoding 릴리스 노트
+# VerbalCoding リリースノート
 
 ## Current release candidate
 

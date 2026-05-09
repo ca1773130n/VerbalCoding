@@ -1,4 +1,4 @@
-# VerbalCoding 설정
+# VerbalCoding 配置
 
 ## Setup Wizard
 

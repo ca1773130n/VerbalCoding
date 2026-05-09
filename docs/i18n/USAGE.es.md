@@ -1,6 +1,6 @@
-# VerbalCoding 사용 가이드
+# VerbalCoding Guía de uso
 
-Operational details for 한국어 users.
+Operational details for Español users.
 
 ## CLI Commands
 

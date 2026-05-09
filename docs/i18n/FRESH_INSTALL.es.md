@@ -1,6 +1,6 @@
-# 새 설치
+# Instalación limpia
 
-This guide mirrors the English fresh-install flow for 한국어. It is intended for a clean public install and avoids local-only assumptions.
+This guide mirrors the English fresh-install flow for Español. It is intended for a clean public install and avoids local-only assumptions.
 
 ## 1. Install the CLI
 

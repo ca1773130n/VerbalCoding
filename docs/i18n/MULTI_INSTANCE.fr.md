@@ -1,4 +1,4 @@
-# VerbalCoding 멀티 인스턴스
+# VerbalCoding Multi-instance
 
 VerbalCoding can run multiple independent Discord voice bridge processes. Each process loads a different `instances/<name>.env` file and uses a different Discord bot token.
 

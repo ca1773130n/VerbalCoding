@@ -1,91 +1,66 @@
 # VerbalCoding
 
-<p align="center">
-  <strong>Pilotez vos agents de code CLI à la voix dans Discord, comme au téléphone.</strong>
-</p>
+**Parlez à vos agents de code en CLI via la voix Discord, comme lors d’un appel.**
 
-<p align="center">
-  <a href="../../README.md">English</a> ·
-  <a href="README.ko.md">한국어</a> ·
-  <a href="README.ja.md">日本語</a> ·
-  <a href="README.zh.md">中文</a> ·
-  <a href="README.es.md">Español</a> ·
-  <a href="README.fr.md">Français</a> ·
-  <a href="README.ru.md">Русский</a>
-</p>
+[English](../../README.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · [中文](README.zh.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md)
 
-<p align="center">
-  <img alt="Node.js" src="https://img.shields.io/badge/Node.js-20%2B-339933?logo=node.js&logoColor=white">
-  <img alt="Discord" src="https://img.shields.io/badge/Discord-voice%20bridge-5865F2?logo=discord&logoColor=white">
-  <img alt="STT" src="https://img.shields.io/badge/STT-whisper.cpp-7C3AED">
-  <img alt="TTS" src="https://img.shields.io/badge/TTS-Edge%20%7C%20OpenVoice%20%7C%20Supertonic%20%7C%20SpeechSwift-0EA5E9">
-</p>
-
-<p align="center">
-  <img src="../assets/figures/verbalcoding-flow.svg" alt="VerbalCoding voice-to-agent flow" width="860">
-</p>
+![VerbalCoding voice-to-agent flow](../assets/figures/verbalcoding-flow.svg)
 
 ## Why
 
-VerbalCoding transforme un salon vocal Discord en interface mains libres pour agents de code. Dictez une demande, laissez le CLI travailler, puis écoutez une réponse concise — avec transcription texte, événements de progression et garde-fous pour éviter de lire de longs blocs de code ou logs.
+VerbalCoding transforme un salon vocal Discord en interface mains libres pour agents de programmation. Vous dictez une demande, l’agent CLI travaille, puis vous recevez une réponse vocale concise avec transcription texte et événements de progression.
 
-## Points forts
+## Highlights
 
-| Fonction | Pourquoi c’est utile |
+| Feature | What it means |
 |---|---|
-| Contrôle vocal d’abord | Pilotez Hermes Agent, Claude Code, Codex, Gemini CLI, OpenCode, OpenClaw ou un CLI personnalisé à la voix. |
-| Boucle vocale locale | Voix Discord → STT `whisper.cpp` → agent → lecture TTS par segments. |
-| Contexte partagé voix + texte | Les tours vocaux et `!ask` peuvent réutiliser la même session d’agent compatible. |
-| Interruption et sensibilité | Interrompez naturellement la lecture et basculez entre sensibilité normale ou conservatrice. |
-| Préréglages vocaux multilingues | `vc language ko/en/auto` change ensemble STT, langue de progression et voix TTS. |
-| Isolation par projet | Un bot, profil Hermes, session, mémoire et logs par salon/projet. |
+| Voice-first agent control | Hermes Agent, Claude Code, Codex, Gemini CLI, OpenCode, OpenClaw, or a custom CLI harness. |
+| Local-first speech loop | Discord voice capture → `whisper.cpp` STT → agent → chunked TTS playback. |
+| Shared voice + text context | Voice turns and `!ask` text commands can reuse the same supported agent session. |
+| Barge-in and sensitivity modes | Interrupt playback naturally and switch between normal and conservative/noisy modes. |
+| Multilingual voice presets | `vc language ko/en/auto` changes STT, progress language, and TTS voice together. |
+| Multi-room project isolation | Run one bot per project room with isolated Hermes profiles, sessions, memory, and logs. |
 
-## Démarrage rapide
+## Quick Start
 
 ```bash
-git clone git@github.com:ca1773130n/VerbalCoding.git
+npm install -g verbalcoding
+vc setup --yes
+vc doctor
+vc start
+```
+
+Run without a permanent global install:
+
+```bash
+npx verbalcoding setup --yes
+vc doctor
+vc start
+```
+
+Contributor clone path:
+
+```bash
+git clone https://github.com/ca1773130n/VerbalCoding.git
 cd VerbalCoding
-./scripts/install.sh
+./scripts/install.sh --yes
 vc doctor
 ./run.sh
 ```
 
-## Fonctionnement
+`vc setup --yes` and `./scripts/install.sh --yes` bootstrap npm dependencies, `ffmpeg`, `whisper-cli`, the default whisper.cpp model, a local Edge TTS helper, and the short `vc` command where possible.
 
-```mermaid
-flowchart LR
-  A[Discord voice] --> B["@discordjs/voice"]
-  B --> C[PCM cleanup + gates]
-  C --> D["whisper.cpp STT"]
-  D --> E["CLI agent adapter"]
-  E --> F["Concise answer"]
-  F --> G["Chunked TTS"]
-  G --> H["Discord playback"]
-```
+## Guides
 
-## Backends d’agents pris en charge
-
-| Backend | Default command | Session support |
-|---|---:|---|
-| Hermes Agent | `hermes chat -Q -q` | Resume, verbose progress, cancellation, final-answer recovery |
-| Claude Code | `claude -p` | CLI session file support through adapter defaults |
-| Codex CLI | `codex exec` | CLI session file support through adapter defaults |
-| Gemini CLI | `gemini -p` | CLI session file support through adapter defaults |
-| OpenCode | `opencode run` | CLI session file support through adapter defaults |
-| OpenClaw | `openclaw run` | CLI session file support through adapter defaults |
-| Custom | `AGENT_COMMAND` | Bring your own non-interactive command |
-
-## En savoir plus
-
-| Guide | What you get |
+| Guide | Link |
 |---|---|
-| [Fresh Install](../FRESH_INSTALL.md) | Installation propre, téléchargement du modèle, premier lancement |
-| [Usage Guide](../USAGE.md) | Commandes CLI, commandes Discord, progression, métriques de latence |
-| [Configuration](../CONFIGURATION.md) | .env, backends agent, MCP, TTS et notes d’exploitation |
-| [Multi-Instance](../MULTI_INSTANCE.md) | Un salon vocal Discord permanent par projet |
-| [Release Notes](../RELEASE.md) | Fonctionnalités actuelles et checklist pré-release |
+| Installation propre | [FRESH_INSTALL.fr.md](FRESH_INSTALL.fr.md) |
+| Guide d’utilisation | [USAGE.fr.md](USAGE.fr.md) |
+| Configuration | [CONFIGURATION.fr.md](CONFIGURATION.fr.md) |
+| Multi-instance | [MULTI_INSTANCE.fr.md](MULTI_INSTANCE.fr.md) |
+| Notes de version | [RELEASE.fr.md](RELEASE.fr.md) |
 
-## Mini carte des commandes
+## Command map
 
 ```bash
 vc status
@@ -94,28 +69,17 @@ vc bot invite CLIENT_ID
 vc instance setup NAME
 vc instance start NAME
 vc doctor
+vc start
 ```
 
-## Prérequis
+Discord commands:
 
-| Layer | Default |
-|---|---|
-| Runtime | Node.js 20+, npm |
-| Audio | `ffmpeg` |
-| STT | `whisper.cpp` / `whisper-cli` |
-| Discord | Bot token, Message Content intent, voice permissions |
-| Agent | At least one authenticated CLI harness, Hermes Agent by default |
-| Platform focus | macOS / Apple Silicon currently gets the most testing |
-
-## Contribuer
-
-```bash
-node --check app-node/main.mjs
-npm test
-bash -n run.sh scripts/install.sh
-vc doctor
+```text
+!join        !ask <prompt>       !verbose on/off
+!latency     !sensitivity normal !sensitivity conservative
+!session new <name> <workdir> [context] --voice <voice-channel>
 ```
 
-## Statut
+## Requirements
 
-VerbalCoding is public-release oriented but still early. Demo video/GIF, broader Linux notes, and a formal license file are still TODOs.
+Node.js 20+, npm, `ffmpeg`, `whisper.cpp` / `whisper-cli`, Edge TTS CLI, a Discord bot token with Message Content intent and voice permissions, and at least one authenticated CLI agent backend.
