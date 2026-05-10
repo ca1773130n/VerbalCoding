@@ -1,6 +1,6 @@
 <svg width="1200" height="520" viewBox="0 0 1200 520" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
-  <title id="title">VerbalCoding voice-to-agent flow</title>
-  <desc id="desc">A stylized pipeline from Discord voice to speech recognition, CLI agent, text answer, and TTS playback.</desc>
+  <title id="title">VerbalCoding natural voice loop</title>
+  <desc id="desc">A compact phone-call-like loop: user speaks in Discord, local STT with whisper-cli transcribes, the CLI agent works, TTS speaks back, and the user can interrupt anytime.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="520" gradientUnits="userSpaceOnUse">
       <stop stop-color="#0F172A"/>
@@ -14,50 +14,56 @@
     <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
       <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#000" flood-opacity="0.35"/>
     </filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2 2L10 6L2 10Z" fill="#94A3B8"/>
+    </marker>
+    <marker id="cyanArrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2 2L10 6L2 10Z" fill="#67E8F9"/>
+    </marker>
   </defs>
   <rect width="1200" height="520" rx="34" fill="url(#bg)"/>
   <circle cx="1030" cy="90" r="190" fill="#6366F1" opacity="0.16"/>
   <circle cx="170" cy="430" r="210" fill="#06B6D4" opacity="0.13"/>
   <rect x="70" y="54" width="1060" height="412" rx="32" fill="url(#card)" stroke="#334155" filter="url(#shadow)"/>
   <text x="110" y="118" fill="#F8FAFC" font-family="Inter, ui-sans-serif, system-ui" font-size="42" font-weight="800">VerbalCoding</text>
-  <text x="110" y="154" fill="#94A3B8" font-family="Inter, ui-sans-serif, system-ui" font-size="20">Discord voice → local STT → CLI coding agent → spoken answer</text>
+  <text x="110" y="154" fill="#94A3B8" font-family="Inter, ui-sans-serif, system-ui" font-size="20">A natural Discord voice loop for coding agents — speak, listen, interrupt, continue</text>
 
   <g font-family="Inter, ui-sans-serif, system-ui" font-size="17" font-weight="700">
-    <rect x="110" y="220" width="150" height="92" rx="20" fill="#5865F2"/>
-    <text x="185" y="258" fill="white" text-anchor="middle">Discord</text>
-    <text x="185" y="284" fill="#E0E7FF" text-anchor="middle" font-size="14">voice channel</text>
+    <rect x="105" y="220" width="160" height="92" rx="20" fill="#5865F2"/>
+    <text x="185" y="254" fill="white" text-anchor="middle">Discord</text>
+    <text x="185" y="280" fill="#E0E7FF" text-anchor="middle" font-size="14">phone-call voice</text>
 
-    <rect x="305" y="220" width="150" height="92" rx="20" fill="#0891B2"/>
-    <text x="380" y="258" fill="white" text-anchor="middle">whisper-cli</text>
-    <text x="380" y="284" fill="#CFFAFE" text-anchor="middle" font-size="14">on-device speech</text>
+    <rect x="305" y="220" width="165" height="92" rx="20" fill="#0891B2"/>
+    <text x="387.5" y="254" fill="white" text-anchor="middle">Local STT</text>
+    <text x="387.5" y="280" fill="#CFFAFE" text-anchor="middle" font-size="14">whisper-cli</text>
 
-    <rect x="500" y="220" width="150" height="92" rx="20" fill="#7C3AED"/>
-    <text x="575" y="258" fill="white" text-anchor="middle">Adapter</text>
-    <text x="575" y="284" fill="#EDE9FE" text-anchor="middle" font-size="14">Hermes / Claude / Codex</text>
+    <rect x="510" y="220" width="165" height="92" rx="20" fill="#7C3AED"/>
+    <text x="592.5" y="254" fill="white" text-anchor="middle">Adapter</text>
+    <text x="592.5" y="280" fill="#EDE9FE" text-anchor="middle" font-size="14">Hermes / Claude / Codex</text>
 
-    <rect x="695" y="220" width="150" height="92" rx="20" fill="#111827" stroke="#475569"/>
-    <text x="770" y="258" fill="white" text-anchor="middle">CLI Agent</text>
-    <text x="770" y="284" fill="#CBD5E1" text-anchor="middle" font-size="14">does the work</text>
+    <rect x="715" y="220" width="165" height="92" rx="20" fill="#111827" stroke="#475569"/>
+    <text x="797.5" y="254" fill="white" text-anchor="middle">CLI Agent</text>
+    <text x="797.5" y="280" fill="#CBD5E1" text-anchor="middle" font-size="14">does the work</text>
 
-    <rect x="890" y="220" width="150" height="92" rx="20" fill="#0EA5E9"/>
-    <text x="965" y="258" fill="white" text-anchor="middle">TTS</text>
-    <text x="965" y="284" fill="#E0F2FE" text-anchor="middle" font-size="14">chunked playback</text>
+    <rect x="920" y="220" width="165" height="92" rx="20" fill="#0EA5E9"/>
+    <text x="1002.5" y="254" fill="white" text-anchor="middle">TTS</text>
+    <text x="1002.5" y="280" fill="#E0F2FE" text-anchor="middle" font-size="14">spoken reply</text>
   </g>
 
-  <g stroke="#94A3B8" stroke-width="4" stroke-linecap="round">
-    <path d="M266 266H296"/>
-    <path d="M461 266H491"/>
-    <path d="M656 266H686"/>
-    <path d="M851 266H881"/>
-  </g>
-  <g fill="#94A3B8">
-    <path d="M296 266l-10-7v14l10-7z"/>
-    <path d="M491 266l-10-7v14l10-7z"/>
-    <path d="M686 266l-10-7v14l10-7z"/>
-    <path d="M881 266l-10-7v14l10-7z"/>
+  <g stroke="#94A3B8" stroke-width="4" stroke-linecap="round" marker-end="url(#arrow)">
+    <path d="M271 266H295"/>
+    <path d="M476 266H500"/>
+    <path d="M681 266H705"/>
+    <path d="M886 266H910"/>
   </g>
 
-  <rect x="150" y="360" width="900" height="54" rx="17" fill="#020617" stroke="#1F2937"/>
-  <text x="182" y="394" fill="#A7F3D0" font-family="SFMono-Regular, ui-monospace, monospace" font-size="18">$ vc language ko &amp;&amp; vc instance start my-project</text>
-  <text x="1045" y="394" fill="#64748B" text-anchor="end" font-family="Inter, ui-sans-serif, system-ui" font-size="15">hands-free coding loop</text>
+  <path d="M1002 330C1002 410 185 410 185 330" stroke="#67E8F9" stroke-width="4" stroke-linecap="round" stroke-dasharray="12 12" marker-end="url(#cyanArrow)"/>
+  <text x="594" y="444" fill="#A5F3FC" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="17" font-weight="700">Conversation loop: hear the answer, speak again, or interrupt anytime</text>
+
+  <path d="M185 210C185 178 1002 178 1002 210" stroke="#FBBF24" stroke-width="3" stroke-linecap="round" stroke-dasharray="8 10" marker-end="url(#arrow)" opacity="0.9"/>
+  <text x="594" y="194" fill="#FDE68A" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="15" font-weight="700">Barge-in stays open while the agent is thinking or speaking</text>
+
+  <rect x="150" y="348" width="900" height="54" rx="17" fill="#020617" stroke="#1F2937"/>
+  <text x="182" y="382" fill="#A7F3D0" font-family="SFMono-Regular, ui-monospace, monospace" font-size="18">$ vc language ko &amp;&amp; vc instance start my-project</text>
+  <text x="1045" y="382" fill="#64748B" text-anchor="end" font-family="Inter, ui-sans-serif, system-ui" font-size="15">hands-free coding call</text>
 </svg>
