@@ -1,24 +1,46 @@
 # VerbalCoding Configuration
 
-## Setup Wizard
+## Setup Command Map
 
-Discord bot/application setup is intentionally not re-explained from scratch here. Use these upstream guides for the Discord-side steps, then return to VerbalCoding setup:
+For npm/global installs, use `vc` commands instead of manually editing `.env`:
+
+```bash
+vc setup --yes                         # bootstrap supported prerequisites and starter config
+vc setup token                         # interactively save/update Discord bot token
+vc setup token TOKEN --client-id ID     # non-interactive token/client-id update
+vc setup channels "General,Team Voice" # save auto-join voice channel names
+vc setup channel "General"             # alias
+vc setup voice "General"               # alias
+vc doctor                               # redacted health check and supported auto-fixes
+vc start                                # run the default bridge
+```
+
+Clone-only setup remains available:
+
+```bash
+./scripts/install.sh --yes
+```
+
+`vc setup token` updates `DISCORD_BOT_TOKEN` and optional `DISCORD_CLIENT_ID`. `vc setup channels` updates `AUTO_JOIN_VOICE_CHANNELS`. Both preserve unrelated `.env` values, write the file with mode `0600`, and avoid printing token values.
+
+## Discord Bot/Application Setup
+
+Use these upstream guides for the Discord-side steps, then return to VerbalCoding setup:
 
 - Hermes Agent Discord messaging guide: <https://hermes-agent.nousresearch.com/docs/user-guide/messaging/discord>
 - Discord official bot overview: <https://docs.discord.com/developers/bots/overview>
 - Discord official quick start: <https://docs.discord.com/developers/quick-start/getting-started>
 
-```bash
-./scripts/install.sh
-```
-
-The installer asks for Discord token, allowed users, auto-join voice channel names, transcript channel/thread, CLI harness backend, default voice language, TTS settings, and wake-word behavior. It writes `.env` with mode `0600`; `.env` is ignored by git. It also links the short shell command `vc`.
-
-If you only need the shell command after manual install:
+Minimum flow:
 
 ```bash
-npm link
+vc bot invite <discord-client-id>
+vc setup token <bot-token> --client-id <discord-client-id>
+vc setup channels "VerbalCoding,General"
+vc doctor
 ```
+
+The bot needs Message Content privileged intent plus text/voice permissions for the target channels.
 
 ## Supported Agent Backends
 
@@ -26,7 +48,7 @@ Set `AGENT_BACKEND` in `.env`.
 
 | Backend | Default command | Notes |
 |---|---|---|
-| `hermes` | `hermes chat -Q -q` | Default. Preserves `.verbalcoding-session` resume behavior. |
+| `hermes` | `hermes chat -Q -q` | Default. Preserves `.verbalcoding-session` resume behavior. `vc doctor` can auto-install the Hermes CLI on supported macOS/Linux installs. |
 | `claude-code` / `claude` | `claude -p` | Override with `CLAUDE_COMMAND` or `AGENT_COMMAND`. |
 | `codex` | `codex exec` | Override with `CODEX_COMMAND` or `AGENT_COMMAND`. |
 | `gemini` | `gemini -p` | Override with `GEMINI_COMMAND` or `AGENT_COMMAND`. |
@@ -62,8 +84,9 @@ New backends should implement the same contract and keep voice/STT/TTS behavior 
 
 ```bash
 DISCORD_BOT_TOKEN="***"
+DISCORD_CLIENT_ID="123456789012345678"
 DISCORD_ALLOWED_USERS="123456789012345678"
-AUTO_JOIN_VOICE_CHANNELS="일반,General,general"
+AUTO_JOIN_VOICE_CHANNELS="VerbalCoding,General"
 TRANSCRIPT_CHANNEL_ID="123456789012345678"
 
 AGENT_BACKEND="hermes"
@@ -95,9 +118,7 @@ Language presets and voice selection are separate:
 - Live voice commands such as “남자 한국어 목소리로 바꿔”, “여자 한국어 목소리로 바꿔”, `change voice to Korean female`, and `switch speaker to English` change only the speaker/voice type.
 - `!voice-test <text>` plays a quick sample with the currently selected backend and voice.
 
-Voice selection is stored in `config/tts-voices.json` by default. Override the path with `TTS_VOICE_CONFIG`. The running bridge re-reads/applies voice selection before synthesis, so voice commands take effect without a full restart.
-
-Default Edge catalog:
+Voice selection is stored in `config/tts-voices.json` by default. Override the path with `TTS_VOICE_CONFIG`.
 
 | `TTS_VOICE_TYPE` | `TTS_VOICE` | Language |
 |---|---|---|
@@ -107,29 +128,9 @@ Default Edge catalog:
 | `english_male` | `en-US-GuyNeural` | English |
 | `english_female` | `en-US-AriaNeural` | English |
 
-Manual persistent override:
-
-```bash
-TTS_BACKEND="edge"
-TTS_VOICE_TYPE="korean_male"
-TTS_VOICE="ko-KR-InJoonNeural"
-TTS_VOICE_CONFIG="config/tts-voices.json"
-```
-
-For OpenVoice, SpeechSwift, or Supertonic, keep the backend-specific voice/reference settings in the sections below; the same voice catalog file can still track the active voice type.
-
-Backend-specific voice options:
-
-| Backend | Settings | Voice choices |
-|---|---|---|
-| Edge | `TTS_VOICE_TYPE`, `TTS_VOICE` | Built-in types above, plus any voice returned by `edge-tts --list-voices` |
-| Supertonic | `SUPERTONIC_VOICE`, `SUPERTONIC_LANGUAGE` | `M1`–`M5`, `F1`–`F5`; language `ko`, `en`, `es`, `pt`, `fr` |
-| OpenVoice | `OPENVOICE_REF_AUDIO`, `OPENVOICE_STYLE`, `OPENVOICE_LANGUAGE` | User-provided permitted reference WAV; style defaults to `default` |
-| SpeechSwift / CosyVoice | `SPEECHSWIFT_REF_AUDIO`, `SPEECHSWIFT_ENGINE`, `SPEECHSWIFT_SPEAKER`, `SPEECHSWIFT_MODEL_ID` | Reference-sample voices for CosyVoice, or backend-supported speaker/model IDs |
-
 ## Utterance Segmentation
 
-`UTTERANCE_IDLE_MS` controls how long the bridge waits after a speech segment before it decides the user is done and starts STT. The default is `4500` ms to preserve longer spoken instructions with natural pauses. Lower values feel faster for short commands but can split long dictation; higher values are safer for thoughtful speech.
+`UTTERANCE_IDLE_MS` controls how long the bridge waits after a speech segment before it decides the user is done and starts STT.
 
 ```bash
 UTTERANCE_IDLE_MS="4500"  # balanced default
@@ -138,7 +139,7 @@ UTTERANCE_IDLE_MS="6000"  # safer for long dictation with pauses
 
 ## MCP Server
 
-VerbalCoding ships a stdio MCP server so Hermes Agent or any MCP client can control the bridge through tools instead of relying on skills or free-form shell commands.
+VerbalCoding ships a stdio MCP server so Hermes Agent or any MCP client can control the bridge through tools.
 
 Hermes config example:
 
@@ -161,74 +162,30 @@ Exposed MCP tools:
 | `set_language` | Update STT/progress/TTS language together |
 | `start`, `stop`, `restart` | Control the Discord voice bridge |
 
-## Optional OpenVoice TTS
+## Docker / Container Networking
 
-Edge TTS remains the default and fallback. To try local voice cloning with OpenVoice V2:
+Discord voice needs outbound UDP. If Docker logs show `Cannot perform IP discovery - socket closed`, try Linux host networking:
 
-```bash
-./scripts/setup_openvoice.sh
-# Download checkpoints_v2_0417.zip from OpenVoice docs and extract under vendor/OpenVoice/checkpoints_v2/
-mkdir -p voice-samples
-# Put a permitted reference sample at voice-samples/user-reference.wav,
-# or capture one from Discord with !voice-clone capture.
-python3 integrations/openvoice/synth.py --openvoice-dir vendor/OpenVoice --ref-audio voice-samples/user-reference.wav --text '안녕하세요. 버벌코딩 목소리 복제 테스트입니다.' --output /tmp/verbalcoding-openvoice-smoke.wav
+```yaml
+services:
+  verbalcoding:
+    network_mode: "host"
 ```
 
-Then set:
+Remove `ports:` from that Compose service. On Docker Desktop for macOS/Windows, host networking may not expose UDP the same way; run on the host or a Linux VM if voice still fails.
 
-```bash
-TTS_BACKEND="openvoice"
-OPENVOICE_REF_AUDIO="./voice-samples/user-reference.wav"
-OPENVOICE_PROGRESS="0"
-```
+## Optional TTS Backends
 
-Only clone voices you own or have permission to use. If OpenVoice fails or times out, VerbalCoding falls back to Edge TTS.
+Edge TTS remains the default and fallback. Optional local backends are configured with their own env vars:
 
-## Optional Supertonic TTS
+| Backend | Settings | Voice choices |
+|---|---|---|
+| Edge | `TTS_VOICE_TYPE`, `TTS_VOICE` | Built-in types above, plus any voice returned by `edge-tts --list-voices` |
+| Supertonic | `SUPERTONIC_VOICE`, `SUPERTONIC_LANGUAGE` | `M1`–`M5`, `F1`–`F5`; language `ko`, `en`, `es`, `pt`, `fr` |
+| OpenVoice | `OPENVOICE_REF_AUDIO`, `OPENVOICE_STYLE`, `OPENVOICE_LANGUAGE` | User-provided permitted reference WAV; style defaults to `default` |
+| SpeechSwift / CosyVoice | `SPEECHSWIFT_REF_AUDIO`, `SPEECHSWIFT_ENGINE`, `SPEECHSWIFT_SPEAKER`, `SPEECHSWIFT_MODEL_ID` | Reference-sample voices for CosyVoice, or backend-supported speaker/model IDs |
 
-```bash
-./scripts/setup_supertonic.sh
-supertonic tts '안녕하세요. 수퍼토닉 테스트입니다.' --lang ko --voice M1 --steps 2 --speed 1.0 -o /tmp/verbalcoding-supertonic.wav
-```
-
-Then set:
-
-```bash
-TTS_BACKEND="supertonic"
-SUPERTONIC_COMMAND="./.venv-supertonic/bin/supertonic"
-SUPERTONIC_VOICE="M1"
-SUPERTONIC_LANGUAGE="ko"
-SUPERTONIC_STEPS="2"
-SUPERTONIC_SPEED="1.0"
-SUPERTONIC_PROGRESS="0"
-```
-
-If Supertonic is missing, fails, or times out, VerbalCoding falls back to Edge TTS.
-
-## Optional SpeechSwift / CosyVoice TTS
-
-On Apple Silicon, `speech-swift` is a local backend for Korean voice cloning with MLX-native CosyVoice/Qwen3-TTS.
-
-```bash
-brew tap soniqo/speech https://github.com/soniqo/speech-swift
-brew install speech
-```
-
-Recommended env:
-
-```bash
-TTS_BACKEND="speechswift"
-SPEECHSWIFT_MODE="server"
-SPEECHSWIFT_ENGINE="cosyvoice"
-SPEECHSWIFT_LANGUAGE="korean"
-SPEECHSWIFT_REF_AUDIO="./voice-samples/user-reference.wav"
-SPEECHSWIFT_SERVER_HOST="127.0.0.1"
-SPEECHSWIFT_SERVER_PORT="18080"
-SPEECHSWIFT_SERVER_URL="http://127.0.0.1:18080"
-SPEECHSWIFT_PROGRESS="0"
-```
-
-Keep Edge for quick progress/backchannel prompts.
+Only clone voices you own or have permission to use. If a local backend fails or times out, VerbalCoding falls back to Edge TTS.
 
 ## Operational Notes
 

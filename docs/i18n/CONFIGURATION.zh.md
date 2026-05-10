@@ -1,5 +1,19 @@
 # VerbalCoding 配置
 
+
+## 最新 setup 流程
+
+```bash
+npm install -g verbalcoding@latest
+vc setup --yes
+vc setup token
+vc setup channels "General,Team Voice"
+vc doctor
+vc start
+```
+
+不要手动编辑 `.env`；使用 `vc setup token` 保存 `DISCORD_BOT_TOKEN`/`DISCORD_CLIENT_ID`，使用 `vc setup channels` 保存 `AUTO_JOIN_VOICE_CHANNELS`。如果 Docker 中出现 `Cannot perform IP discovery - socket closed`，请在 Linux Compose 服务中使用 `network_mode: "host"` 并移除 `ports:`。
+
 ## 设置向导
 
 这里有意不从头重新解释 Discord 机器人/应用设置。请先使用这些上游指南完成 Discord 侧步骤，然后回到 VerbalCoding 设置：

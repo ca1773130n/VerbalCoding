@@ -1,7 +1,7 @@
 # VerbalCoding
 
 <p align="center">
-  <strong>Talk to your CLI coding agents through Discord voice — like a phone call for software work.</strong>
+  <strong>Talk to CLI coding agents through Discord voice — like a phone call for software work.</strong>
 </p>
 
 <p align="center">
@@ -14,11 +14,12 @@
 </p>
 
 <p align="center">
+  <img alt="npm" src="https://img.shields.io/npm/v/verbalcoding?color=CB3837&logo=npm&logoColor=white">
   <img alt="Node.js" src="https://img.shields.io/badge/Node.js-20%2B-339933?logo=node.js&logoColor=white">
   <img alt="Discord" src="https://img.shields.io/badge/Discord-voice%20bridge-5865F2?logo=discord&logoColor=white">
   <img alt="STT" src="https://img.shields.io/badge/STT-whisper.cpp-7C3AED">
-  <img alt="TTS" src="https://img.shields.io/badge/TTS-Edge%20%7C%20OpenVoice%20%7C%20Supertonic%20%7C%20SpeechSwift-0EA5E9">
-  <img alt="Agents" src="https://img.shields.io/badge/Agents-Hermes%20%7C%20Claude%20%7C%20Codex%20%7C%20Gemini%20%7C%20OpenCode-111827">
+  <img alt="TTS" src="https://img.shields.io/badge/TTS-Edge%20%7C%20OpenVoice%20%7C%20SpeechSwift-0EA5E9">
+  <img alt="License" src="https://img.shields.io/github/license/ca1773130n/VerbalCoding">
 </p>
 
 <p align="center">
@@ -27,37 +28,41 @@
 
 ## Why
 
-VerbalCoding turns a Discord voice channel into a hands-free control surface for coding agents. Speak a request, let your CLI agent work, and hear a concise answer back — with text transcripts, progress events, and guardrails for noisy code/log output.
+VerbalCoding turns a Discord voice channel into a hands-free control surface for coding agents. Speak a request, let your CLI agent work, and hear a concise answer back — with text transcripts, progress events, and guardrails so code diffs and logs are not read aloud.
 
 ## Highlights
 
 | What you get | Why it feels good |
 |---|---|
-| Voice-first agent control | Talk to Hermes Agent, Claude Code, Codex, Gemini CLI, OpenCode, OpenClaw, or any custom CLI harness. |
-| On-device speech loop | Discord voice capture → local `whisper-cli` transcription → agent → chunked TTS playback. |
+| Voice-first agent control | Talk to Hermes Agent, Claude Code, Codex, Gemini CLI, OpenCode, OpenClaw, or any custom non-interactive CLI. |
+| Guided npm setup | `vc setup`, `vc setup token`, `vc setup channels`, and `vc doctor` keep fresh installs out of manual `.env` editing. |
+| Local speech loop | Discord voice capture → local `whisper-cli` STT → CLI agent → chunked TTS playback. |
 | Shared voice + text context | Voice turns and `!ask` text commands can reuse the same supported agent session. |
 | Barge-in and sensitivity modes | Interrupt playback naturally and switch between normal and conservative/noisy environments. |
-| Multilingual voice presets | Switch STT, progress language, and TTS voice together with `vc language ko/en/auto`. |
 | Multi-room project isolation | Run one bot per project room with isolated Hermes profiles, sessions, memory, and logs. |
 
 ## Quick Start
 
-Fastest path with npm:
+Fresh npm install:
 
 ```bash
-npm install -g verbalcoding
+npm install -g verbalcoding@latest
 vc setup --yes
+vc setup token
+vc setup channels "General,Team Voice"
 vc doctor
 vc start
 ```
 
-Or run directly without a permanent global install:
+What each setup step does:
 
-```bash
-npx verbalcoding setup --yes
-vc doctor
-vc start
-```
+| Command | Purpose |
+|---|---|
+| `vc setup --yes` | Bootstraps supported local prerequisites and writes a starter `.env`. |
+| `vc setup token` | Adds or updates `DISCORD_BOT_TOKEN` and optional `DISCORD_CLIENT_ID` without manual editing. |
+| `vc setup channels "..."` | Sets `AUTO_JOIN_VOICE_CHANNELS` to your real Discord voice channel names. |
+| `vc doctor` | Redacted health check; auto-fixes installable prerequisites on macOS/Linux where possible. |
+| `vc start` | Starts the default voice bridge. |
 
 GitHub clone path for contributors:
 
@@ -65,13 +70,34 @@ GitHub clone path for contributors:
 git clone https://github.com/ca1773130n/VerbalCoding.git
 cd VerbalCoding
 ./scripts/install.sh --yes
+vc setup token
+vc setup channels "General"
 vc doctor
 ./run.sh
 ```
 
-`vc setup --yes` bootstraps local prerequisites from the npm package. `./scripts/install.sh --yes` does the same for GitHub clone installs. Both cover Node/npm dependencies, `ffmpeg`, `whisper-cli`, the default whisper.cpp model, a local `.venv-tts` Edge TTS helper, and setup wizard configuration where possible. They support macOS/Homebrew plus common Linux package managers (`apt`, `dnf`, `pacman`); rerun with `--no-wizard` for dependency-only setup or `--skip-system` if you want to install OS packages yourself.
+Need a guided walkthrough? Start with [Fresh Install](docs/FRESH_INSTALL.md).
 
-Need a clean install walkthrough? Start with [Fresh Install](docs/FRESH_INSTALL.md).
+## Discord Setup in One Minute
+
+1. Create a Discord application/bot in the Developer Portal.
+2. Enable the Message Content privileged intent.
+3. Invite the bot with the generated URL:
+
+```bash
+vc bot invite <discord-client-id>
+vc bot invite <discord-client-id> --guild <guild-id>
+```
+
+4. Register the token and voice rooms:
+
+```bash
+vc setup token <bot-token> --client-id <discord-client-id>
+vc setup channels "VerbalCoding,LLM-Wiki,General"
+vc doctor
+```
+
+`vc setup token` stores secrets in the local ignored `.env` with mode `0600` and does not print the token back.
 
 ## Supported Agent Backends
 
@@ -85,26 +111,20 @@ Need a clean install walkthrough? Start with [Fresh Install](docs/FRESH_INSTALL.
 | OpenClaw | `openclaw run` | CLI session file support through adapter defaults |
 | Custom | `AGENT_COMMAND` | Bring your own non-interactive command |
 
-## Learn More
-
-| Guide | What you get |
-|---|---|
-| [Fresh Install](docs/FRESH_INSTALL.md) | Clean clone setup, model download, first run |
-| [Usage Guide](docs/USAGE.md) | CLI commands, Discord commands, progress mode, latency metrics |
-| [Configuration](docs/CONFIGURATION.md) | `.env`, agent backends, MCP, TTS backends, operational notes |
-| [Multi-Instance](docs/MULTI_INSTANCE.md) | One permanent Discord voice room per project |
-| [Release Notes](docs/RELEASE.md) | Current capabilities and pre-release checklist |
-
 ## Tiny Command Map
 
 ```bash
-vc status                 # current language, TTS, and bridge settings
-vc language ko|en|auto    # switch STT/progress/TTS language preset
-vc bot invite CLIENT_ID   # generate the Discord bot invite URL
-vc instance setup NAME    # create an isolated project voice bot
-vc instance start NAME    # run that bot in the background
-vc doctor                 # redacted health check
-vc start                  # start the default bridge
+vc setup --yes                         # bootstrap supported prerequisites and starter config
+vc setup token                         # interactively save/update Discord bot token
+vc setup token TOKEN --client-id ID     # non-interactive token/client-id update
+vc setup channels "General,Team Voice" # save auto-join voice channel names
+vc bot invite CLIENT_ID                 # generate Discord bot invite URL
+vc status                               # current language, TTS, and bridge settings
+vc language ko|en|auto                  # switch STT/progress/TTS language preset
+vc doctor                               # redacted health check and supported auto-fixes
+vc start                                # start the default bridge
+vc instance setup NAME                  # create an isolated project voice bot
+vc instance start NAME                  # run that bot in the background
 ```
 
 In Discord:
@@ -119,17 +139,40 @@ In Discord:
 | `!sensitivity conservative` | Use stricter noisy/outdoor sensitivity. |
 | `!session new <name> <workdir> [context] --voice <voice-channel>` | Bind a project session to a voice room. |
 
+## Docker / Container Note
+
+Discord login can work while voice join fails if the container blocks outbound UDP. If logs show `Cannot perform IP discovery - socket closed`, the bot found the channel but Discord voice UDP discovery failed. On Linux Docker, run with host networking:
+
+```yaml
+services:
+  verbalcoding:
+    network_mode: "host"
+```
+
+Do not combine `network_mode: "host"` with `ports:`. Docker Desktop for macOS/Windows has different host-network behavior; if voice UDP still fails there, run VerbalCoding directly on the host or a Linux VM. See [Troubleshooting](docs/TROUBLESHOOTING.md).
+
+## Learn More
+
+| Guide | What you get |
+|---|---|
+| [Fresh Install](docs/FRESH_INSTALL.md) | npm/global setup, Discord app setup, token/channel commands, first run |
+| [Usage Guide](docs/USAGE.md) | CLI commands, Discord commands, run modes, progress mode, latency metrics |
+| [Configuration](docs/CONFIGURATION.md) | `.env`, setup command map, agent backends, MCP, TTS backends, operational notes |
+| [Troubleshooting](docs/TROUBLESHOOTING.md) | Docker host networking, voice UDP failures, missing token/channel diagnostics |
+| [Multi-Instance](docs/MULTI_INSTANCE.md) | One permanent Discord voice room per project |
+| [Release Notes](docs/RELEASE.md) | Current capabilities and pre-release checklist |
+
 ## Requirements
 
 | Layer | Default |
 |---|---|
-| Runtime | Node.js 20+, npm; install script can install via Homebrew/apt/dnf/pacman |
-| Audio | `ffmpeg`; install script can install it |
-| Speech recognition | Local `whisper-cli` from whisper.cpp; install script uses Homebrew on macOS or local Linux build fallback |
-| TTS | Edge TTS CLI; install script creates `.venv-tts` if needed |
-| Discord | Bot token, Message Content intent, voice permissions |
+| Runtime | Node.js 20+, npm; setup can install via Homebrew/apt/dnf/pacman where supported |
+| Audio | `ffmpeg`; setup/doctor can install it on supported OSes |
+| Speech recognition | Local `whisper-cli` from whisper.cpp; setup uses Homebrew on macOS or local Linux build fallback |
+| TTS | Edge TTS CLI; setup creates `.venv-tts` if needed |
+| Discord | Bot token, Message Content intent, voice permissions, matching auto-join voice channel names |
 | Agent | At least one authenticated CLI harness, Hermes Agent by default |
-| Platform focus | macOS / Apple Silicon most tested; Linux bootstrap is best-effort and documented |
+| Platform focus | macOS / Apple Silicon most tested; Linux bootstrap is best-effort; Windows unsupported for now |
 
 ## Contributing
 
@@ -138,7 +181,7 @@ Run the lightweight checks before sending changes:
 ```bash
 node --check app-node/main.mjs
 npm test
-bash -n run.sh scripts/install.sh
+bash -n run.sh scripts/install.sh scripts/bootstrap_prereqs.sh
 npm pack --dry-run
 vc doctor
 ```

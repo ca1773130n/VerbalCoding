@@ -1,5 +1,19 @@
 # Installation propre
 
+
+## Flux setup actuel
+
+```bash
+npm install -g verbalcoding@latest
+vc setup --yes
+vc setup token
+vc setup channels "General,Team Voice"
+vc doctor
+vc start
+```
+
+Ne modifiez pas `.env` à la main : utilisez `vc setup token` pour enregistrer `DISCORD_BOT_TOKEN`/`DISCORD_CLIENT_ID`, et `vc setup channels` pour `AUTO_JOIN_VOICE_CHANNELS`. Si Docker affiche `Cannot perform IP discovery - socket closed`, utilisez `network_mode: "host"` avec Compose sous Linux et supprimez `ports:`.
+
 Ce guide couvre une installation publique propre. Il évite les hypothèses propres à une machine locale et utilise l'installateur pour amorcer autant d'éléments que possible.
 
 ## 1. Installer la CLI

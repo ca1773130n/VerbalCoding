@@ -1,5 +1,19 @@
 # 新規インストール
 
+
+## 最新の setup フロー
+
+```bash
+npm install -g verbalcoding@latest
+vc setup --yes
+vc setup token
+vc setup channels "General,Team Voice"
+vc doctor
+vc start
+```
+
+手動で `.env` を編集せず、`vc setup token` で `DISCORD_BOT_TOKEN`/`DISCORD_CLIENT_ID`、`vc setup channels` で `AUTO_JOIN_VOICE_CHANNELS` を保存してください。Docker で `Cannot perform IP discovery - socket closed` が出る場合、Linux Compose サービスに `network_mode: "host"` を使い、`ports:` を削除します。
+
 このガイドは、クリーンな公開インストール向けです。ローカル環境だけに依存する前提を避け、インストーラーで可能な限りブートストラップします。
 
 ## 1. CLI をインストールする

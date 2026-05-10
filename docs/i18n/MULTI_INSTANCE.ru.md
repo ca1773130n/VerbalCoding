@@ -1,5 +1,19 @@
 # Многоэкземплярный VerbalCoding
 
+
+## Актуальный setup-процесс
+
+```bash
+npm install -g verbalcoding@latest
+vc setup --yes
+vc setup token
+vc setup channels "General,Team Voice"
+vc doctor
+vc start
+```
+
+Не редактируйте `.env` вручную: используйте `vc setup token` для `DISCORD_BOT_TOKEN`/`DISCORD_CLIENT_ID` и `vc setup channels` для `AUTO_JOIN_VOICE_CHANNELS`. Если Docker показывает `Cannot perform IP discovery - socket closed`, в Linux Compose используйте `network_mode: "host"` и удалите `ports:`.
+
 VerbalCoding может запускать несколько независимых процессов голосового bridge Discord. Каждый процесс всё ещё является существующим одноэкземплярным Node bridge, но загружает другой файл `instances/<name>.env` и использует другой токен Discord-бота.
 
 Используйте это, когда каждый проект должен постоянно занимать собственный голосовой канал Discord и писать в собственный канал/тред расшифровок.

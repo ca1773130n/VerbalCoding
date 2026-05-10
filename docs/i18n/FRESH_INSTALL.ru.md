@@ -1,5 +1,19 @@
 # Чистая установка
 
+
+## Актуальный setup-процесс
+
+```bash
+npm install -g verbalcoding@latest
+vc setup --yes
+vc setup token
+vc setup channels "General,Team Voice"
+vc doctor
+vc start
+```
+
+Не редактируйте `.env` вручную: используйте `vc setup token` для `DISCORD_BOT_TOKEN`/`DISCORD_CLIENT_ID` и `vc setup channels` для `AUTO_JOIN_VOICE_CHANNELS`. Если Docker показывает `Cannot perform IP discovery - socket closed`, в Linux Compose используйте `network_mode: "host"` и удалите `ports:`.
+
 Это руководство предназначено для чистой публичной установки. Оно избегает локальных предположений и использует установщик, чтобы подготовить как можно больше компонентов.
 
 ## 1. Установите CLI

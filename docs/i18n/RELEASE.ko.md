@@ -1,5 +1,19 @@
 # VerbalCoding 릴리스 노트
 
+
+## 최신 setup 흐름
+
+```bash
+npm install -g verbalcoding@latest
+vc setup --yes
+vc setup token
+vc setup channels "General,Team Voice"
+vc doctor
+vc start
+```
+
+수동 `.env` 편집 대신 `vc setup token`으로 `DISCORD_BOT_TOKEN`/`DISCORD_CLIENT_ID`를 저장하고, `vc setup channels`로 `AUTO_JOIN_VOICE_CHANNELS`를 저장하세요. Docker에서 `Cannot perform IP discovery - socket closed`가 보이면 Linux Compose 서비스에 `network_mode: "host"`를 사용하고 `ports:`를 제거하세요.
+
 ## 현재 릴리스 후보
 
 VerbalCoding은 CLI 기반 코딩 에이전트를 음성으로 제어하기 위한 Discord 음성 브리지입니다. 공개 릴리스를 지향하며, macOS / Apple Silicon 경로가 가장 많이 테스트되었고 일반적인 패키지 관리자에 대한 Linux 부트스트랩은 최선 노력으로 지원됩니다.

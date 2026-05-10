@@ -1,5 +1,19 @@
 # Configuración de VerbalCoding
 
+
+## Flujo setup actualizado
+
+```bash
+npm install -g verbalcoding@latest
+vc setup --yes
+vc setup token
+vc setup channels "General,Team Voice"
+vc doctor
+vc start
+```
+
+No edites `.env` manualmente: usa `vc setup token` para guardar `DISCORD_BOT_TOKEN`/`DISCORD_CLIENT_ID` y `vc setup channels` para guardar `AUTO_JOIN_VOICE_CHANNELS`. Si Docker muestra `Cannot perform IP discovery - socket closed`, usa `network_mode: "host"` en Linux Compose y elimina `ports:`.
+
 ## Asistente de configuración
 
 La configuración de la aplicación/bot de Discord no se vuelve a explicar desde cero aquí de forma intencionada. Usa estas guías originales para los pasos del lado de Discord y luego vuelve a la configuración de VerbalCoding:

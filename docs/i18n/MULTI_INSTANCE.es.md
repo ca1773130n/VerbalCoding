@@ -1,5 +1,19 @@
 # VerbalCoding multiinstancia
 
+
+## Flujo setup actualizado
+
+```bash
+npm install -g verbalcoding@latest
+vc setup --yes
+vc setup token
+vc setup channels "General,Team Voice"
+vc doctor
+vc start
+```
+
+No edites `.env` manualmente: usa `vc setup token` para guardar `DISCORD_BOT_TOKEN`/`DISCORD_CLIENT_ID` y `vc setup channels` para guardar `AUTO_JOIN_VOICE_CHANNELS`. Si Docker muestra `Cannot perform IP discovery - socket closed`, usa `network_mode: "host"` en Linux Compose y elimina `ports:`.
+
 VerbalCoding puede ejecutar múltiples procesos independientes de puente de voz de Discord. Cada proceso sigue siendo el puente Node de instancia única existente, pero carga un archivo `instances/<name>.env` diferente y usa un token de bot de Discord diferente.
 
 Usa esto cuando cada proyecto deba ocupar permanentemente su propio canal de voz de Discord y escribir en su propio canal/hilo de transcripción.

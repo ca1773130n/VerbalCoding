@@ -1,5 +1,19 @@
 # マルチインスタンス VerbalCoding
 
+
+## 最新の setup フロー
+
+```bash
+npm install -g verbalcoding@latest
+vc setup --yes
+vc setup token
+vc setup channels "General,Team Voice"
+vc doctor
+vc start
+```
+
+手動で `.env` を編集せず、`vc setup token` で `DISCORD_BOT_TOKEN`/`DISCORD_CLIENT_ID`、`vc setup channels` で `AUTO_JOIN_VOICE_CHANNELS` を保存してください。Docker で `Cannot perform IP discovery - socket closed` が出る場合、Linux Compose サービスに `network_mode: "host"` を使い、`ports:` を削除します。
+
 VerbalCoding は、複数の独立した Discord 音声ブリッジプロセスを実行できます。各プロセスは既存の単一インスタンス Node ブリッジのままですが、異なる `instances/<name>.env` ファイルを読み込み、異なる Discord ボットトークンを使います。
 
 各プロジェクトが専用の Discord 音声チャンネルに常駐し、専用の文字起こしチャンネル/スレッドへ書き込む必要がある場合に使います。

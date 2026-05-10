@@ -1,5 +1,19 @@
 # Заметки о релизе VerbalCoding
 
+
+## Актуальный setup-процесс
+
+```bash
+npm install -g verbalcoding@latest
+vc setup --yes
+vc setup token
+vc setup channels "General,Team Voice"
+vc doctor
+vc start
+```
+
+Не редактируйте `.env` вручную: используйте `vc setup token` для `DISCORD_BOT_TOKEN`/`DISCORD_CLIENT_ID` и `vc setup channels` для `AUTO_JOIN_VOICE_CHANNELS`. Если Docker показывает `Cannot perform IP discovery - socket closed`, в Linux Compose используйте `network_mode: "host"` и удалите `ports:`.
+
 ## Текущий релиз-кандидат
 
 VerbalCoding — это голосовой bridge Discord для управления CLI-агентами кодинга голосом. Он ориентирован на публичный релиз; macOS / Apple Silicon — наиболее протестированный путь, а bootstrap-поддержка Linux для распространённых менеджеров пакетов предоставляется по мере возможностей.

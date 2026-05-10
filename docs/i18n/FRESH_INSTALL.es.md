@@ -1,5 +1,19 @@
 # Instalación limpia
 
+
+## Flujo setup actualizado
+
+```bash
+npm install -g verbalcoding@latest
+vc setup --yes
+vc setup token
+vc setup channels "General,Team Voice"
+vc doctor
+vc start
+```
+
+No edites `.env` manualmente: usa `vc setup token` para guardar `DISCORD_BOT_TOKEN`/`DISCORD_CLIENT_ID` y `vc setup channels` para guardar `AUTO_JOIN_VOICE_CHANNELS`. Si Docker muestra `Cannot perform IP discovery - socket closed`, usa `network_mode: "host"` en Linux Compose y elimina `ports:`.
+
 Esta guía es para una instalación pública limpia. Evita suposiciones locales y usa el instalador para inicializar todo lo posible.
 
 ## 1. Instala la CLI

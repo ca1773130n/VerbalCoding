@@ -24,9 +24,15 @@ Typical commands:
 vc instance status
 vc bot invite 123456789012345678
 vc instance setup llm-wiki
-./scripts/install.sh --instance llm-wiki
 vc instance start llm-wiki
 vc instance stop llm-wiki
 vc instance restart llm-wiki
 vc doctor
+```
+
+For the single default bot, use the targeted setup commands instead of editing `.env` manually:
+
+```bash
+vc setup token
+vc setup channels "General,Team Voice"
 ```

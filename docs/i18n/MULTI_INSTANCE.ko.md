@@ -1,5 +1,19 @@
 # Multi-instance VerbalCoding
 
+
+## 최신 setup 흐름
+
+```bash
+npm install -g verbalcoding@latest
+vc setup --yes
+vc setup token
+vc setup channels "General,Team Voice"
+vc doctor
+vc start
+```
+
+수동 `.env` 편집 대신 `vc setup token`으로 `DISCORD_BOT_TOKEN`/`DISCORD_CLIENT_ID`를 저장하고, `vc setup channels`로 `AUTO_JOIN_VOICE_CHANNELS`를 저장하세요. Docker에서 `Cannot perform IP discovery - socket closed`가 보이면 Linux Compose 서비스에 `network_mode: "host"`를 사용하고 `ports:`를 제거하세요.
+
 VerbalCoding은 여러 개의 독립적인 Discord 음성 브리지 프로세스를 실행할 수 있습니다. 각 프로세스는 여전히 기존 단일 인스턴스 Node 브리지이지만, 서로 다른 `instances/<name>.env` 파일을 로드하고 서로 다른 Discord 봇 토큰을 사용합니다.
 
 각 프로젝트가 자체 Discord 음성 채널을 영구적으로 차지하고 자체 전사 채널/스레드에 기록해야 할 때 사용하세요.

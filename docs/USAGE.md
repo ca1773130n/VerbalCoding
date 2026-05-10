@@ -1,45 +1,65 @@
 # VerbalCoding Usage Guide
 
-This page holds the operational details that used to make the README too long.
+This page holds the operational details that should stay out of the README.
 
 ## CLI Commands
 
 ```bash
-vc status                    # show STT language, progress language, and TTS voice
-vc language en               # English STT + English progress/TTS voice
-vc language ko               # Korean STT + Korean progress/TTS voice
-vc language auto             # Whisper auto-detect STT + English progress/TTS voice
-vc restart auto status       # show commit-time voice-bot auto-restart setting
-vc restart auto on           # enable commit-time voice-bot auto-restart
-vc restart auto off          # disable it; this is the default
-vc bot invite CLIENT_ID      # print a Discord invite URL with required permissions
-vc instance status           # list per-instance bridge configs and process status
-vc instance setup NAME       # write instances/NAME.env and create ~/.hermes/profiles/NAME
-vc instance start NAME       # start ./run.sh instances/NAME.env detached
-vc instance stop NAME        # stop a detached instance and remove its pid file
-vc doctor                    # run the redacted doctor check
-npm run mcp                  # run the stdio MCP server
+vc setup --yes                         # bootstrap supported prerequisites and starter config
+vc setup --yes --no-wizard             # dependency/bootstrap only
+vc setup token                         # interactively save/update Discord bot token
+vc setup token TOKEN --client-id ID     # non-interactive token/client-id update
+vc setup channels "General,Team Voice" # save auto-join voice channel names
+vc setup channel "General"             # alias for setup channels
+vc setup voice "General"               # alias for setup channels
+vc bot invite CLIENT_ID                 # print a Discord invite URL with required permissions
+vc status                               # show STT language, progress language, and TTS voice
+vc language en                          # English STT + English progress/TTS voice
+vc language ko                          # Korean STT + Korean progress/TTS voice
+vc language auto                        # Whisper auto-detect STT + English progress/TTS voice
+vc restart auto status                  # show commit-time voice-bot auto-restart setting
+vc restart auto on                      # enable commit-time voice-bot auto-restart
+vc restart auto off                     # disable it; this is the default
+vc instance list                        # list per-instance bridge configs
+vc instance status [NAME]               # show instance process status
+vc instance setup NAME                  # write instances/NAME.env and create ~/.hermes/profiles/NAME
+vc instance start NAME                  # start ./run.sh instances/NAME.env detached
+vc instance stop NAME                   # stop a detached instance and remove its pid file
+vc doctor                               # run the redacted doctor check and supported auto-fixes
+vc start                                # start the default bridge
+npm run mcp                             # run the stdio MCP server from a clone
 ```
 
-Language changes update `.env`; restart the bridge with `./run.sh` or your process manager for them to take effect.
+For npm/global installs, prefer `vc ...` commands. Use `./scripts/install.sh` only from a GitHub clone.
+
+`vc setup token` and `vc setup channels` are safe follow-up commands: they update `.env` in place, preserve unrelated keys, set file mode `0600`, and avoid printing secrets.
+
+Language changes update `.env`; restart the bridge with `vc start`, `./run.sh`, or your process manager for them to take effect.
 
 ## Run Modes
 
 Single-instance bridge:
 
 ```bash
+vc start
+# clone equivalent:
 ./run.sh
 ```
 
 Per-instance bridge using a local override env:
 
 ```bash
+vc instance start my-project
+# clone/debug equivalent:
 ./run.sh instances/my-project.env
-# or
 VERBALCODING_INSTANCE_ENV=instances/my-project.env ./run.sh
 ```
 
-The bot auto-joins the first configured channel name, defaulting to `일반,General,general`.
+The bot auto-joins the first matching configured channel name. Set it with:
+
+```bash
+vc setup channels "VerbalCoding,LLM-Wiki,General"
+```
 
 ## Discord Commands
 
@@ -81,7 +101,7 @@ change voice to Korean female
 switch speaker to English
 ```
 
-The live bridge recognizes these as voice-control commands, updates `config/tts-voices.json`, updates the effective TTS env for the running process, and answers with a short confirmation such as “목소리를 Korean male로 바꿨어.” Use `!voice-test <text>` right after changing it to hear the current backend and voice.
+The live bridge recognizes these as voice-control commands, updates `config/tts-voices.json`, updates the effective TTS env for the running process, and answers with a short confirmation. Use `!voice-test <text>` right after changing it to hear the current backend and voice.
 
 Built-in Edge voice types:
 
@@ -93,27 +113,12 @@ Built-in Edge voice types:
 | `english_male` | `en-US-GuyNeural` |
 | `english_female` | `en-US-AriaNeural` |
 
-For persistent manual config, set `TTS_BACKEND=edge`, `TTS_VOICE_TYPE=<voice-type>`, and optionally `TTS_VOICE=<edge-voice>` in `.env`, or edit `config/tts-voices.json` for custom voice catalogs.
-
-Backend-specific voice knobs:
-
-| Backend | Voice setting | Common choices |
-|---|---|---|
-| Edge | `TTS_VOICE_TYPE`, `TTS_VOICE` | `korean_male`, `korean_female`, `korean_multilingual_male`, `english_male`, `english_female`; any Edge voice from `edge-tts --list-voices` |
-| Supertonic | `SUPERTONIC_VOICE` | `M1`–`M5`, `F1`–`F5`; set `SUPERTONIC_LANGUAGE=ko|en|es|pt|fr` |
-| OpenVoice | `OPENVOICE_REF_AUDIO`, `OPENVOICE_STYLE` | a permitted reference WAV plus style such as `default` |
-| SpeechSwift / CosyVoice | `SPEECHSWIFT_REF_AUDIO`, `SPEECHSWIFT_ENGINE`, `SPEECHSWIFT_SPEAKER` | reference WAV for CosyVoice, or backend-supported speaker/model values |
-
-For Supertonic and local clone backends, use the backend env vars above plus `!voice-test <text>` to audition changes. Voice-command switching currently maps the built-in Edge-style voice types; richer backend catalogs can be added in `config/tts-voices.json`.
-
 ## Long Dictation and Pauses
 
-VerbalCoding waits for an idle window before sending speech to STT. The default `UTTERANCE_IDLE_MS=4500` is intentionally a bit patient so a natural pause in a long instruction does not split the sentence, start an agent turn too early, and then treat the rest as a processing-time interruption.
-
-If you prefer faster short commands, lower it in `.env`; if long Korean dictation is still being split, raise it:
+VerbalCoding waits for an idle window before sending speech to STT. The default `UTTERANCE_IDLE_MS=4500` is intentionally patient so a natural pause in a long instruction does not split the sentence.
 
 ```bash
-UTTERANCE_IDLE_MS="6000"
+UTTERANCE_IDLE_MS="6000"  # safer for long dictation with pauses
 ```
 
 ## Verbose Progress Mode
@@ -128,7 +133,19 @@ Verbose progress is off by default unless `AGENT_VERBOSE_PROGRESS=1` is set. Ena
 🤖 Hermes Agent 응답 수신
 ```
 
-This mode asks the selected CLI harness to emit `VERBALCODING_PROGRESS: ...` lines and summarizes common tool markers from streaming stdout/stderr when available. Secret-looking fields are redacted and progress lines are removed from the final spoken answer.
+Secret-looking fields are redacted and progress lines are removed from the final spoken answer.
+
+## Docker / Container Run Mode
+
+If you run VerbalCoding in Docker and voice auto-join fails with `Cannot perform IP discovery - socket closed`, the likely issue is UDP connectivity, not channel lookup. For Linux Docker Compose:
+
+```yaml
+services:
+  verbalcoding:
+    network_mode: "host"
+```
+
+Remove `ports:` from that service. Docker Desktop for macOS/Windows has different host networking behavior; if UDP voice still fails there, run on the host or in a Linux VM. See [Troubleshooting](TROUBLESHOOTING.md).
 
 ## Latency Metrics
 
@@ -137,8 +154,6 @@ VerbalCoding writes per-turn latency records as JSONL. Default path:
 ```text
 ./.logs/latency.jsonl
 ```
-
-Each record includes status, total time, voice capture time, utterance idle wait, STT time, agent time, TTS synthesis/playback time, chunk counts, transcript length, answer length, and audio levels where available.
 
 In Discord:
 
@@ -154,7 +169,7 @@ The summary uses the latest 200 records: count, average, p95, max, and non-OK st
 ```bash
 node --check app-node/main.mjs
 npm test
-bash -n run.sh scripts/install.sh
+bash -n run.sh scripts/install.sh scripts/bootstrap_prereqs.sh
 vc doctor
 ```
 
