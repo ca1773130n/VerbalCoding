@@ -1,5 +1,18 @@
 # マルチインスタンス VerbalCoding
 
+<!-- readme-glow-up:intro -->
+<p align="center">
+  <a href="../../README.ja.md">README</a> ·
+  <a href="README.ja.md">ドキュメントハブ</a> ·
+  <a href="FRESH_INSTALL.ja.md">Fresh Install</a> ·
+  <a href="USAGE.ja.md">Usage</a> ·
+  <a href="CONFIGURATION.ja.md">Configuration</a> ·
+  <a href="TROUBLESHOOTING.ja.md">Troubleshooting</a> ·
+  <a href="MULTI_INSTANCE.ja.md">Multi-Instance</a>
+</p>
+
+> 最短経路: `npm install -g verbalcoding@latest → vc setup → vc doctor → vc start`
+<!-- /readme-glow-up:intro -->
 
 ## 最新の setup フロー
 

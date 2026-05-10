@@ -1,5 +1,21 @@
 # VerbalCoding release notes
 
+<!-- readme-glow-up:intro -->
+<p align="center">
+  <a href="../README.md">README</a> ·
+  <a href="README.md">Docs hub</a> ·
+  <a href="FRESH_INSTALL.md">Fresh Install</a> ·
+  <a href="USAGE.md">Usage</a> ·
+  <a href="CONFIGURATION.md">Configuration</a> ·
+  <a href="TROUBLESHOOTING.md">Troubleshooting</a> ·
+  <a href="MULTI_INSTANCE.md">Multi-Instance</a>
+</p>
+
+> Release-facing capability list and verification checklist.
+>
+> Fast path: `npm pack --dry-run → npm test → vc doctor → manual Discord smoke test`
+<!-- /readme-glow-up:intro -->
+
 ## Current release candidate
 
 VerbalCoding is a Discord voice bridge for controlling CLI-based coding agents by voice. It is public-release oriented, with macOS / Apple Silicon as the most tested path and best-effort Linux bootstrap support for common package managers. Windows is not supported yet.

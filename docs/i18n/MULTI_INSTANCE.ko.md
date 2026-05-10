@@ -1,5 +1,18 @@
 # Multi-instance VerbalCoding
 
+<!-- readme-glow-up:intro -->
+<p align="center">
+  <a href="../../README.ko.md">README</a> ·
+  <a href="README.ko.md">문서 허브</a> ·
+  <a href="FRESH_INSTALL.ko.md">Fresh Install</a> ·
+  <a href="USAGE.ko.md">Usage</a> ·
+  <a href="CONFIGURATION.ko.md">Configuration</a> ·
+  <a href="TROUBLESHOOTING.ko.md">Troubleshooting</a> ·
+  <a href="MULTI_INSTANCE.ko.md">Multi-Instance</a>
+</p>
+
+> 빠른 경로: `npm install -g verbalcoding@latest → vc setup → vc doctor → vc start`
+<!-- /readme-glow-up:intro -->
 
 ## 최신 setup 흐름
 

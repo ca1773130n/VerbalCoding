@@ -73,6 +73,6 @@
   <text x="594" y="194" fill="#FDE68A" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="15" font-weight="700">Barge-in stays open while the agent is thinking or speaking</text>
 
   <rect x="150" y="348" width="900" height="54" rx="17" fill="#020617" stroke="#1F2937"/>
-  <text x="182" y="382" fill="#A7F3D0" font-family="SFMono-Regular, ui-monospace, monospace" font-size="18">$ vc setup token &amp;&amp; vc setup channels "General"</text>
+  <text x="182" y="382" fill="#A7F3D0" font-family="SFMono-Regular, ui-monospace, monospace" font-size="18">$ vc setup → vc doctor → vc start</text>
   <text x="1045" y="382" fill="#64748B" text-anchor="end" font-family="Inter, ui-sans-serif, system-ui" font-size="15">hands-free coding call</text>
 </svg>

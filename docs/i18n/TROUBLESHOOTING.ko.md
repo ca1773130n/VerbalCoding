@@ -1,5 +1,19 @@
 # VerbalCoding 문제 해결
 
+<!-- readme-glow-up:intro -->
+<p align="center">
+  <a href="../../README.ko.md">README</a> ·
+  <a href="README.ko.md">문서 허브</a> ·
+  <a href="FRESH_INSTALL.ko.md">Fresh Install</a> ·
+  <a href="USAGE.ko.md">Usage</a> ·
+  <a href="CONFIGURATION.ko.md">Configuration</a> ·
+  <a href="TROUBLESHOOTING.ko.md">Troubleshooting</a> ·
+  <a href="MULTI_INSTANCE.ko.md">Multi-Instance</a>
+</p>
+
+> 빠른 경로: `npm install -g verbalcoding@latest → vc setup → vc doctor → vc start`
+<!-- /readme-glow-up:intro -->
+
 ## `Cannot perform IP discovery - socket closed`
 
 이 오류는 봇이 Discord에 로그인하고 음성 채널을 찾았지만 Discord 음성 UDP 검색에 실패했다는 뜻입니다.

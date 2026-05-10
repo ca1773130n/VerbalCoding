@@ -1,5 +1,18 @@
 # Конфигурация VerbalCoding
 
+<!-- readme-glow-up:intro -->
+<p align="center">
+  <a href="../../README.ru.md">README</a> ·
+  <a href="README.ru.md">Центр документации</a> ·
+  <a href="FRESH_INSTALL.ru.md">Fresh Install</a> ·
+  <a href="USAGE.ru.md">Usage</a> ·
+  <a href="CONFIGURATION.ru.md">Configuration</a> ·
+  <a href="TROUBLESHOOTING.ru.md">Troubleshooting</a> ·
+  <a href="MULTI_INSTANCE.ru.md">Multi-Instance</a>
+</p>
+
+> Быстрый путь: `npm install -g verbalcoding@latest → vc setup → vc doctor → vc start`
+<!-- /readme-glow-up:intro -->
 
 ## Актуальный setup-процесс
 

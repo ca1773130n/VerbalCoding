@@ -1,5 +1,18 @@
 # 多实例 VerbalCoding
 
+<!-- readme-glow-up:intro -->
+<p align="center">
+  <a href="../../README.zh.md">README</a> ·
+  <a href="README.zh.md">文档中心</a> ·
+  <a href="FRESH_INSTALL.zh.md">Fresh Install</a> ·
+  <a href="USAGE.zh.md">Usage</a> ·
+  <a href="CONFIGURATION.zh.md">Configuration</a> ·
+  <a href="TROUBLESHOOTING.zh.md">Troubleshooting</a> ·
+  <a href="MULTI_INSTANCE.zh.md">Multi-Instance</a>
+</p>
+
+> 最快路径: `npm install -g verbalcoding@latest → vc setup → vc doctor → vc start`
+<!-- /readme-glow-up:intro -->
 
 ## 最新 setup 流程
 

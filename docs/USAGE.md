@@ -1,5 +1,21 @@
 # VerbalCoding Usage Guide
 
+<!-- readme-glow-up:intro -->
+<p align="center">
+  <a href="../README.md">README</a> ·
+  <a href="README.md">Docs hub</a> ·
+  <a href="FRESH_INSTALL.md">Fresh Install</a> ·
+  <a href="USAGE.md">Usage</a> ·
+  <a href="CONFIGURATION.md">Configuration</a> ·
+  <a href="TROUBLESHOOTING.md">Troubleshooting</a> ·
+  <a href="MULTI_INSTANCE.md">Multi-Instance</a>
+</p>
+
+> Operational command reference for the voice bridge.
+>
+> Fast path: `vc setup → vc start → speak or use !ask in Discord`
+<!-- /readme-glow-up:intro -->
+
 This page holds the operational details that should stay out of the README.
 
 ## CLI Commands

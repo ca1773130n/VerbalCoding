@@ -1,21 +1,15 @@
 # VerbalCoding
 
-<p align="center"><strong>Работайте с CLI-агентами кодинга голосом в Discord — как по телефону.</strong></p>
+<p align="center"><strong>Общайтесь с CLI-агентами для разработки голосом в Discord, как по телефону.</strong></p>
 
-<p align="center">
-  <a href="./README.md">English</a> ·
-  <a href="./README.ko.md">한국어</a> ·
-  <a href="./README.ja.md">日本語</a> ·
-  <a href="./README.zh.md">中文</a> ·
-  <a href="./README.es.md">Español</a> ·
-  <a href="./README.fr.md">Français</a>
-</p>
+<p align="center"><a href="./README.md">English</a> · <a href="./README.ko.md">한국어</a> · <a href="./README.ja.md">日本語</a> · <a href="./README.zh.md">中文</a> · <a href="./README.es.md">Español</a> · <a href="./README.fr.md">Français</a></p>
 
 <p align="center">
   <img alt="npm" src="https://img.shields.io/npm/v/verbalcoding?color=CB3837&logo=npm&logoColor=white">
   <img alt="Node.js" src="https://img.shields.io/badge/Node.js-20%2B-339933?logo=node.js&logoColor=white">
   <img alt="Discord" src="https://img.shields.io/badge/Discord-voice%20bridge-5865F2?logo=discord&logoColor=white">
   <img alt="STT" src="https://img.shields.io/badge/STT-whisper.cpp-7C3AED">
+  <img alt="TTS" src="https://img.shields.io/badge/TTS-Edge%20%7C%20OpenVoice%20%7C%20SpeechSwift-0EA5E9">
   <img alt="License" src="https://img.shields.io/github/license/ca1773130n/VerbalCoding">
 </p>
 
@@ -23,19 +17,19 @@
   <img src="docs/assets/figures/verbalcoding-flow.svg" alt="VerbalCoding voice-to-agent flow" width="860">
 </p>
 
-## Why
+## Зачем это нужно
 
-VerbalCoding превращает голосовой канал Discord в hands-free панель управления агентами разработки. Произнесите запрос, дайте CLI-агенту выполнить работу и получите ответ голосом и текстом.
+VerbalCoding превращает голосовую комнату Discord в hands-free кабину для coding agents. Вы произносите задачу, CLI-агент работает, а в ответ получаете короткую озвучку, текстовую расшифровку и события прогресса. Diffs и logs не зачитываются длинным TTS.
 
-## Главное
+## Что ощущается иначе
 
-| Возможность | Польза |
+| Возможность | Зачем это важно |
 |---|---|
-| Голосовое управление агентами | Управляйте Hermes Agent, Claude Code, Codex, Gemini CLI, OpenCode, OpenClaw или custom CLI голосом в Discord. |
-| Guided setup | `vc setup` guides Discord Developer Portal values, bot token, client ID, and voice channels in one flow. `vc setup token` / `vc setup channels` are for later updates. |
-| Local speech loop | Discord voice → `whisper-cli` STT → CLI agent → chunked TTS playback. |
-| Shared voice + text context | Voice turns and `!ask` text commands can reuse the same supported agent session. |
-| Docker-aware troubleshooting | Если видно `Cannot perform IP discovery - socket closed`, канал найден, но UDP-обнаружение Discord voice не прошло. В Linux Docker используйте `network_mode: "host"` и удалите `ports:` у этого сервиса. |
+| Работа как звонок | Говорите, слушайте, перебивайте и продолжайте в одном голосовом канале Discord. |
+| Пошаговая настройка | `vc setup` проводит через prerequisites, Discord token/client ID, voice channel, transcript target, backend и TTS settings за один проход. |
+| Локальный голосовой цикл | Discord audio → local `whisper-cli` → selected CLI agent → TTS reply. |
+| Выбор агента | Hermes Agent, Claude Code, Codex, Gemini CLI, OpenCode, OpenClaw или custom command. |
+| Готовность к эксплуатации | doctor auto-fix, Docker UDP guide, latency metrics, multi-instance rooms и redacted config checks встроены. |
 
 ## Быстрый старт
 
@@ -46,35 +40,70 @@ vc doctor
 vc start
 ```
 
-## Настройка Discord
+`vc setup` — обычный путь для человека. Держите Discord Developer Portal открытым и введите bot token, application/client ID, transcript target и voice channel names.
 
-`vc setup` проводит через единый поток настройки с открытым Discord Developer Portal: токен, client ID и голосовые каналы автоподключения. Позже для точечного изменения используйте `vc setup token` или `vc setup channels`.
+Для автоматизации можно пропустить prompts и добавить Discord-данные позже.
 
 ```bash
-vc setup
-vc bot invite <discord-client-id>
-# later updates only:
+vc setup --yes
 vc setup token <bot-token> --client-id <discord-client-id>
-vc setup channels "VerbalCoding,LLM-Wiki,General"
+vc setup channels "General,Team Voice"
 vc doctor
+```
+
+## Discord за одну минуту
+
+1. Создайте application и bot в Discord Developer Portal.
+2. Включите Message Content privileged intent.
+3. Запустите `vc setup` и вставьте bot token и application/client ID.
+4. Введите точные имена voice channels для auto-join.
+5. Пригласите bot этими командами.
+
+```bash
+vc bot invite <discord-client-id>
+vc bot invite <discord-client-id> --guild <guild-id>
 ```
 
 ## Краткая карта команд
 
 ```bash
-vc setup                               # guided setup: prerequisites, Discord token, voice channels
-vc setup token                         # save/update Discord bot token
-vc setup channels "General,Team Voice" # save auto-join voice channel names
-vc bot invite CLIENT_ID                 # generate Discord invite URL
-vc doctor                               # redacted health check and supported auto-fixes
-vc start                                # start the default bridge
-vc instance setup NAME                  # create isolated project bot config
-vc instance start NAME                  # run that bot in the background
+vc setup                                 # пошаговая настройка: prerequisites, Discord, backend, voice
+vc setup --yes                           # неинтерактивный bootstrap/starter config
+vc setup token                           # позже обновить или добавить Discord bot token/client ID
+vc setup channels "General,Team Voice"   # обновить auto-join voice channel names
+vc bot invite CLIENT_ID                  # сгенерировать Discord bot invite URL
+vc status                                # показать текущие настройки
+vc language ko|en|auto                   # переключить language preset
+vc doctor                                # redacted health check и auto-fixes
+vc start                                 # запустить bridge по умолчанию
+vc instance setup NAME                   # создать изолированный project voice bot
+vc instance start NAME                   # запустить этот bot в background
 ```
+
+## Подробнее
+
+| Гайд | Что внутри |
+|---|---|
+| [Центр документации](docs/i18n/README.ru.md) | Индекс локализованных гайдов. |
+| [Fresh Install](docs/i18n/FRESH_INSTALL.ru.md) | npm/global setup, настройка Discord и первый запуск. |
+| [Usage](docs/i18n/USAGE.ru.md) | CLI-команды, Discord-команды, режимы запуска и latency. |
+| [Configuration](docs/i18n/CONFIGURATION.ru.md) | .env, agent backends, MCP, TTS и эксплуатация. |
+| [Troubleshooting](docs/i18n/TROUBLESHOOTING.ru.md) | Docker UDP и проверки token/channel. |
+| [Multi-Instance](docs/i18n/MULTI_INSTANCE.ru.md) | Одна постоянная voice room на проект. |
+
+## Требования
+
+| Слой | По умолчанию |
+|---|---|
+| Runtime | Node.js 20+ и npm. |
+| Audio | `ffmpeg` и local `whisper-cli`. |
+| TTS | По умолчанию Edge TTS; опционально OpenVoice, SpeechSwift/CosyVoice, Supertonic. |
+| Discord | Bot token, Message Content intent, voice permissions и совпадающие channel names. |
+| Agent | Минимум один аутентифицированный CLI harness; по умолчанию Hermes Agent. |
 
 ## Docker / контейнеры
 
-Если видно `Cannot perform IP discovery - socket closed`, канал найден, но UDP-обнаружение Discord voice не прошло. В Linux Docker используйте `network_mode: "host"` и удалите `ports:` у этого сервиса.
+Если в logs видно `Cannot perform IP discovery - socket closed`, Discord voice UDP заблокирован. В Linux Docker Compose используйте:
 
 ```yaml
 services:
@@ -82,12 +111,18 @@ services:
     network_mode: "host"
 ```
 
-## Подробнее
+Не совмещайте `network_mode: "host"` с `ports:`.
 
-| Руководство | Ссылка |
-|---|---|
-| Fresh install | [FRESH_INSTALL](docs/i18n/FRESH_INSTALL.ru.md) |
-| Usage | [USAGE](docs/i18n/USAGE.ru.md) |
-| Configuration | [CONFIGURATION](docs/i18n/CONFIGURATION.ru.md) |
-| Troubleshooting | [TROUBLESHOOTING](docs/i18n/TROUBLESHOOTING.ru.md) |
-| Multi-instance | [MULTI_INSTANCE](docs/i18n/MULTI_INSTANCE.ru.md) |
+## Участие
+
+```bash
+node --check app-node/main.mjs
+npm test
+bash -n run.sh scripts/install.sh scripts/bootstrap_prereqs.sh
+npm pack --dry-run
+vc doctor
+```
+
+## Статус
+
+VerbalCoding ориентирован на публичный релиз, но проект ещё ранний. Demo video/GIF, более широкая Linux validation, CI и security review остаются TODO.

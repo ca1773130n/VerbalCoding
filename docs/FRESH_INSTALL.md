@@ -1,5 +1,21 @@
 # Fresh install
 
+<!-- readme-glow-up:intro -->
+<p align="center">
+  <a href="../README.md">README</a> ·
+  <a href="README.md">Docs hub</a> ·
+  <a href="FRESH_INSTALL.md">Fresh Install</a> ·
+  <a href="USAGE.md">Usage</a> ·
+  <a href="CONFIGURATION.md">Configuration</a> ·
+  <a href="TROUBLESHOOTING.md">Troubleshooting</a> ·
+  <a href="MULTI_INSTANCE.md">Multi-Instance</a>
+</p>
+
+> Clean install path for humans first, automation second.
+>
+> Fast path: `npm install -g verbalcoding@latest → vc setup → vc doctor → vc start`
+<!-- /readme-glow-up:intro -->
+
 This guide is for a clean public install. It avoids local-only assumptions and uses the `vc` CLI to bootstrap as much as possible. Windows is not supported yet.
 
 ## 1. Install the CLI and run guided setup

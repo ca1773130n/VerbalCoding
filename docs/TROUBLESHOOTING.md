@@ -1,5 +1,21 @@
 # VerbalCoding Troubleshooting
 
+<!-- readme-glow-up:intro -->
+<p align="center">
+  <a href="../README.md">README</a> ·
+  <a href="README.md">Docs hub</a> ·
+  <a href="FRESH_INSTALL.md">Fresh Install</a> ·
+  <a href="USAGE.md">Usage</a> ·
+  <a href="CONFIGURATION.md">Configuration</a> ·
+  <a href="TROUBLESHOOTING.md">Troubleshooting</a> ·
+  <a href="MULTI_INSTANCE.md">Multi-Instance</a>
+</p>
+
+> Fast diagnosis for Discord voice, Docker UDP, tokens, channels, and doctor checks.
+>
+> Fast path: `vc doctor → check channel names → check UDP/permissions`
+<!-- /readme-glow-up:intro -->
+
 ## `Cannot perform IP discovery - socket closed`
 
 This usually means the bot logged into Discord and found a voice channel, but Discord voice UDP discovery failed.

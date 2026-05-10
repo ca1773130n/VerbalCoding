@@ -1,5 +1,21 @@
 # VerbalCoding Configuration
 
+<!-- readme-glow-up:intro -->
+<p align="center">
+  <a href="../README.md">README</a> ·
+  <a href="README.md">Docs hub</a> ·
+  <a href="FRESH_INSTALL.md">Fresh Install</a> ·
+  <a href="USAGE.md">Usage</a> ·
+  <a href="CONFIGURATION.md">Configuration</a> ·
+  <a href="TROUBLESHOOTING.md">Troubleshooting</a> ·
+  <a href="MULTI_INSTANCE.md">Multi-Instance</a>
+</p>
+
+> Settings reference for Discord, agents, TTS, MCP, and runtime behavior.
+>
+> Fast path: `vc setup handles normal config; edit .env only for advanced overrides`
+<!-- /readme-glow-up:intro -->
+
 ## Setup Command Map
 
 For npm/global installs, use `vc` commands instead of manually editing `.env`:

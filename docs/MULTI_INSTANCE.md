@@ -1,5 +1,21 @@
 # Multi-instance VerbalCoding
 
+<!-- readme-glow-up:intro -->
+<p align="center">
+  <a href="../README.md">README</a> ·
+  <a href="README.md">Docs hub</a> ·
+  <a href="FRESH_INSTALL.md">Fresh Install</a> ·
+  <a href="USAGE.md">Usage</a> ·
+  <a href="CONFIGURATION.md">Configuration</a> ·
+  <a href="TROUBLESHOOTING.md">Troubleshooting</a> ·
+  <a href="MULTI_INSTANCE.md">Multi-Instance</a>
+</p>
+
+> Run one isolated Discord voice bridge per project room.
+>
+> Fast path: `vc instance setup NAME → vc bot invite CLIENT_ID → vc instance start NAME`
+<!-- /readme-glow-up:intro -->
+
 VerbalCoding can run multiple independent Discord voice bridge processes. Each process is still the existing single-instance Node bridge, but it loads a different `instances/<name>.env` file and uses a different Discord bot token.
 
 Use this when each project should permanently occupy its own Discord voice channel and write to its own transcript channel/thread.
