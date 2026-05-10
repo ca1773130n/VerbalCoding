@@ -141,7 +141,7 @@ function discordSetupGuidance(env) {
     'Discord bot setup:',
     '  1. Open https://discord.com/developers/applications and create an application.',
     '  2. Bot tab: Add Bot, enable Message Content Intent, then Reset/Copy Token.',
-    `  3. Save it in ${path.join(ROOT, '.env')} as DISCORD_BOT_TOKEN="...".`,
+    `  3. Register it with \`vc setup token\` (or \`vc setup token <token>\`).`,
     '  4. OAuth2 tab: copy the Application/Client ID.',
     clientId
       ? `  5. Invite the bot: vc bot invite ${clientId}`

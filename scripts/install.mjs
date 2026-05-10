@@ -15,8 +15,73 @@ async function ask(question, fallback = '', options = {}) {
   return answer || fallback;
 }
 
+function quoteEnv(value) {
+  return JSON.stringify(String(value ?? ''));
+}
+
+function upsertEnvFile(file, updates) {
+  const existing = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+  const seen = new Set();
+  const lines = existing.split(/\r?\n/).map(raw => {
+    const line = raw.trim();
+    if (!line || line.startsWith('#') || !line.includes('=')) return raw;
+    const idx = line.indexOf('=');
+    const key = line.slice(0, idx).trim().replace(/^export\s+/, '');
+    if (!(key in updates)) return raw;
+    seen.add(key);
+    return `${key}=${quoteEnv(updates[key])}`;
+  });
+  for (const [key, value] of Object.entries(updates)) {
+    if (!seen.has(key)) lines.push(`${key}=${quoteEnv(value)}`);
+  }
+  const text = `${lines.filter((line, index, arr) => line !== '' || index < arr.length - 1).join('\n')}\n`;
+  fs.writeFileSync(file, text, { mode: 0o600 });
+}
+
+function argValue(args, name) {
+  const idx = args.indexOf(name);
+  if (idx < 0) return '';
+  const value = args[idx + 1] || '';
+  return value.startsWith('--') ? '' : value;
+}
+
+async function configureDiscordToken(args) {
+  const envPath = path.join(ROOT, '.env');
+  const tokenArg = args.find((arg, idx) => idx > 0 && !arg.startsWith('--')) || argValue(args, '--token');
+  const clientIdArg = argValue(args, '--client-id') || argValue(args, '--application-id');
+  let token = tokenArg || process.env.DISCORD_BOT_TOKEN || '';
+  let clientId = clientIdArg || process.env.DISCORD_CLIENT_ID || '';
+  if (!token) {
+    globalThis.__rl = readline.createInterface({ input, output });
+    try {
+      console.log('Discord bot token setup');
+      console.log('Create/copy the token at https://discord.com/developers/applications → your app → Bot.');
+      token = await ask('Discord bot token (DISCORD_BOT_TOKEN)', '', { fallbackLabel: '' });
+      clientId = await ask('Discord application/client ID for invite URL (optional)', clientId, { fallbackLabel: clientId ? 'keep existing' : 'skip' });
+    } finally {
+      globalThis.__rl.close();
+      globalThis.__rl = null;
+    }
+  }
+  if (!token) {
+    console.error('No Discord bot token provided. Nothing changed.');
+    process.exitCode = 2;
+    return;
+  }
+  const updates = { DISCORD_BOT_TOKEN: token };
+  if (clientId) updates.DISCORD_CLIENT_ID = clientId;
+  upsertEnvFile(envPath, updates);
+  console.log(`Updated ${envPath}`);
+  console.log('Discord bot token saved. Run `vc doctor` to verify. You can update it anytime with `vc setup token`.');
+  if (clientId) console.log(`Invite URL: vc bot invite ${clientId}`);
+}
+
 async function main() {
   const args = process.argv.slice(2);
+  if (args[0] === 'token' || args[0] === 'discord' || args[0] === 'bot-token') {
+    await configureDiscordToken(args);
+    return;
+  }
   const yes = args.includes('--yes') || args.includes('-y');
   if (args[0] === 'instance' || args.includes('--instance')) {
     const { spawnSync } = await import('node:child_process');

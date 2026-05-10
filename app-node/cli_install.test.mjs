@@ -30,7 +30,9 @@ test('CLI includes npm-friendly setup and start commands', () => {
   const cli = fs.readFileSync(path.join(ROOT, 'scripts', 'cli.mjs'), 'utf8');
 
   assert.match(cli, /vc setup \[--yes\]/);
+  assert.match(cli, /vc setup token \[bot-token\]/);
   assert.match(cli, /command === 'setup'/);
+  assert.match(cli, /install\.mjs'\), \.\.\.argv\.slice\(1\)/);
   assert.match(cli, /VERBALCODING_SKIP_CLI_LINK/);
   assert.match(cli, /command === 'start'/);
   assert.match(cli, /run\.sh/);
@@ -53,6 +55,9 @@ test('npm setup supports non-interactive --yes mode', () => {
   const config = fs.readFileSync(path.join(ROOT, 'app-node', 'install_config.mjs'), 'utf8');
 
   assert.match(installer, /args\.includes\('--yes'\)/);
+  assert.match(installer, /configureDiscordToken/);
+  assert.match(installer, /DISCORD_BOT_TOKEN: token/);
+  assert.match(installer, /vc setup token/);
   assert.match(installer, /normalizeInstallAnswers\(process\.env\)/);
   assert.match(config, /vc start/);
   assert.doesNotMatch(config, /npm install -g \.\s+#/);
@@ -86,6 +91,7 @@ test('doctor auto-bootstraps fixable prerequisites by default', () => {
   assert.match(doctor, /NousResearch\/hermes-agent\/main\/scripts\/install\.sh/);
   assert.match(doctor, /VERBALCODING_DOCTOR_INSTALL_HERMES/);
   assert.match(doctor, /Discord bot setup:/);
+  assert.match(doctor, /vc setup token/);
   assert.match(doctor, /discord\.com\/developers\/applications/);
   assert.match(cli, /doctor\.mjs'\), \.\.\.argv\.slice\(1\)/);
 });
@@ -99,6 +105,7 @@ test('setup summary guides Discord app creation and records client id', () => {
   assert.match(config, /Discord app setup:/);
   assert.match(config, /https:\/\/discord\.com\/developers\/applications/);
   assert.match(config, /vc bot invite <client-id>/);
+  assert.match(config, /vc setup token/);
   assert.match(config, /buildDiscordBotInviteUrl\(\{ clientId: values\.DISCORD_CLIENT_ID \}\)/);
 });
 

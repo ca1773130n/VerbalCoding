@@ -31,6 +31,7 @@ function usage() {
 
 Usage:
   vc setup [--yes] [--no-wizard] [--skip-system] [--skip-model] [--skip-edge-tts]
+  vc setup token [bot-token] [--client-id <client-id>]
   vc start
   vc status
   vc language <ko|en|auto>
@@ -48,6 +49,7 @@ Usage:
 Examples:
   npx verbalcoding setup --yes
   vc setup --yes
+  vc setup token
   vc start
   vc language en
   vc language ko
@@ -275,6 +277,11 @@ async function main(argv = process.argv.slice(2)) {
   }
   if (command === 'setup' || command === 'install') {
     const { spawnSync } = await import('node:child_process');
+    if (argv[1] === 'token' || argv[1] === 'discord' || argv[1] === 'bot-token') {
+      const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'install.mjs'), ...argv.slice(1)], { stdio: 'inherit', cwd: ROOT });
+      process.exitCode = result.status ?? 1;
+      return;
+    }
     const script = path.join(ROOT, 'scripts', 'install.sh');
     const result = spawnSync('bash', [script, ...argv.slice(1)], {
       stdio: 'inherit',
