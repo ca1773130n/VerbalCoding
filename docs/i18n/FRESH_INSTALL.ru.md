@@ -5,9 +5,7 @@
 
 ```bash
 npm install -g verbalcoding@latest
-vc setup --yes
-vc setup token
-vc setup channels "General,Team Voice"
+vc setup
 vc doctor
 vc start
 ```
@@ -33,7 +31,7 @@ npx verbalcoding setup --yes
 Если вы использовали `npm install -g`, продолжите так:
 
 ```bash
-vc setup --yes
+vc setup
 ```
 
 Путь через клон GitHub для контрибьюторов:
@@ -49,7 +47,7 @@ cd VerbalCoding
 При установке через npm не запускайте `./scripts/install.sh` напрямую: в текущем каталоге нет checkout репозитория. Вместо этого используйте упакованную CLI-обёртку:
 
 ```bash
-vc setup --yes
+vc setup
 ```
 
 `vc setup` запускает `scripts/install.sh`, включённый в установленный npm-пакет. Используйте `./scripts/install.sh --yes` только внутри GitHub-клона:

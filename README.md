@@ -35,7 +35,7 @@ VerbalCoding turns a Discord voice channel into a hands-free control surface for
 | What you get | Why it feels good |
 |---|---|
 | Voice-first agent control | Talk to Hermes Agent, Claude Code, Codex, Gemini CLI, OpenCode, OpenClaw, or any custom non-interactive CLI. |
-| Guided npm setup | `vc setup`, `vc setup token`, `vc setup channels`, and `vc doctor` keep fresh installs out of manual `.env` editing. |
+| Guided npm setup | `vc setup` walks humans through prerequisites, Discord Developer Portal values, bot token, client ID, and voice channels in one flow; `vc setup token` / `vc setup channels` are only for later updates or automation. |
 | Local speech loop | Discord voice capture → local `whisper-cli` STT → CLI agent → chunked TTS playback. |
 | Shared voice + text context | Voice turns and `!ask` text commands can reuse the same supported agent session. |
 | Barge-in and sensitivity modes | Interrupt playback naturally and switch between normal and conservative/noisy environments. |
@@ -47,9 +47,7 @@ Fresh npm install:
 
 ```bash
 npm install -g verbalcoding@latest
-vc setup --yes
-vc setup token
-vc setup channels "General,Team Voice"
+vc setup
 vc doctor
 vc start
 ```
@@ -58,9 +56,10 @@ What each setup step does:
 
 | Command | Purpose |
 |---|---|
-| `vc setup --yes` | Bootstraps supported local prerequisites and writes a starter `.env`. |
-| `vc setup token` | Adds or updates `DISCORD_BOT_TOKEN` and optional `DISCORD_CLIENT_ID` without manual editing. |
-| `vc setup channels "..."` | Sets `AUTO_JOIN_VOICE_CHANNELS` to your real Discord voice channel names. |
+| `vc setup` | Guided setup: bootstraps supported prerequisites, points you to Discord Developer Portal, asks for token/client ID, and asks for voice channel names. |
+| `vc setup --yes` | Non-interactive bootstrap/starter config for automation; follow with `vc setup token` and `vc setup channels` when you have Discord details. |
+| `vc setup token` | Later update `DISCORD_BOT_TOKEN` and optional `DISCORD_CLIENT_ID` without rerunning setup. |
+| `vc setup channels "..."` | Later update `AUTO_JOIN_VOICE_CHANNELS` to your real Discord voice channel names. |
 | `vc doctor` | Redacted health check; auto-fixes installable prerequisites on macOS/Linux where possible. |
 | `vc start` | Starts the default voice bridge. |
 
@@ -69,9 +68,7 @@ GitHub clone path for contributors:
 ```bash
 git clone https://github.com/ca1773130n/VerbalCoding.git
 cd VerbalCoding
-./scripts/install.sh --yes
-vc setup token
-vc setup channels "General"
+./scripts/install.sh
 vc doctor
 ./run.sh
 ```
@@ -80,16 +77,20 @@ Need a guided walkthrough? Start with [Fresh Install](docs/FRESH_INSTALL.md).
 
 ## Discord Setup in One Minute
 
+`vc setup` walks you through these values in one guided flow. Keep the Discord Developer Portal open while it runs:
+
 1. Create a Discord application/bot in the Developer Portal.
 2. Enable the Message Content privileged intent.
-3. Invite the bot with the generated URL:
+3. Copy the bot token and application/client ID into the setup prompts.
+4. Enter the voice channel names the bot should auto-join.
+5. Invite the bot with the generated URL:
 
 ```bash
 vc bot invite <discord-client-id>
 vc bot invite <discord-client-id> --guild <guild-id>
 ```
 
-4. Register the token and voice rooms:
+If you skipped something, update it later without rerunning the whole setup:
 
 ```bash
 vc setup token <bot-token> --client-id <discord-client-id>
@@ -97,7 +98,7 @@ vc setup channels "VerbalCoding,LLM-Wiki,General"
 vc doctor
 ```
 
-`vc setup token` stores secrets in the local ignored `.env` with mode `0600` and does not print the token back.
+Secrets are stored in the local ignored `.env` with mode `0600` and are not printed back.
 
 ## Supported Agent Backends
 
@@ -114,10 +115,10 @@ vc doctor
 ## Tiny Command Map
 
 ```bash
-vc setup --yes                         # bootstrap supported prerequisites and starter config
-vc setup token                         # interactively save/update Discord bot token
-vc setup token TOKEN --client-id ID     # non-interactive token/client-id update
-vc setup channels "General,Team Voice" # save auto-join voice channel names
+vc setup                               # guided setup: prerequisites, Discord token, voice channels
+vc setup --yes                         # non-interactive bootstrap/starter config
+vc setup token                         # later update Discord bot token
+vc setup channels "General,Team Voice" # later update auto-join voice channel names
 vc bot invite CLIENT_ID                 # generate Discord bot invite URL
 vc status                               # current language, TTS, and bridge settings
 vc language ko|en|auto                  # switch STT/progress/TTS language preset

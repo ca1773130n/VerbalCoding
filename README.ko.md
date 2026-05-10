@@ -32,7 +32,7 @@ VerbalCoding은 Discord 음성 채널을 코딩 에이전트를 위한 핸즈프
 | 기능 | 이점 |
 |---|---|
 | 음성 중심 에이전트 제어 | Hermes Agent, Claude Code, Codex, Gemini CLI, OpenCode, OpenClaw 또는 custom CLI를 Discord 음성으로 제어합니다. |
-| Guided setup | 수동 `.env` 편집 대신 `vc setup token`과 `vc setup channels`로 토큰과 자동 입장 음성 채널을 저장합니다. |
+| 안내형 setup | `vc setup` 한 번으로 Discord Developer Portal 값, bot token, client ID, voice channel을 입력합니다. `vc setup token`/`vc setup channels`는 나중 업데이트용입니다. |
 | Local speech loop | Discord voice → `whisper-cli` STT → CLI agent → chunked TTS playback. |
 | Shared voice + text context | Voice turns and `!ask` text commands can reuse the same supported agent session. |
 | Docker-aware troubleshooting | `Cannot perform IP discovery - socket closed`가 보이면 채널은 찾았지만 Discord 음성 UDP 검색이 실패한 것입니다. Linux Docker에서는 `network_mode: "host"`를 사용하고 같은 서비스의 `ports:`를 제거하세요. |
@@ -41,17 +41,19 @@ VerbalCoding은 Discord 음성 채널을 코딩 에이전트를 위한 핸즈프
 
 ```bash
 npm install -g verbalcoding@latest
-vc setup --yes
-vc setup token
-vc setup channels "General,Team Voice"
+vc setup
 vc doctor
 vc start
 ```
 
 ## Discord 설정
 
+`vc setup`은 Discord Developer Portal을 열어 둔 상태에서 토큰, 클라이언트 ID, 자동 입장 음성 채널을 한 번에 입력하도록 안내합니다. 나중에 값만 바꾸려면 `vc setup token` 또는 `vc setup channels`를 사용하세요.
+
 ```bash
+vc setup
 vc bot invite <discord-client-id>
+# later updates only:
 vc setup token <bot-token> --client-id <discord-client-id>
 vc setup channels "VerbalCoding,LLM-Wiki,General"
 vc doctor
@@ -60,7 +62,7 @@ vc doctor
 ## 작은 명령 지도
 
 ```bash
-vc setup --yes                         # bootstrap prerequisites and starter config
+vc setup                               # 안내형 setup: prerequisites, Discord token, voice channels
 vc setup token                         # save/update Discord bot token
 vc setup channels "General,Team Voice" # save auto-join voice channel names
 vc bot invite CLIENT_ID                 # generate Discord invite URL

@@ -5,11 +5,12 @@ This page holds the operational details that should stay out of the README.
 ## CLI Commands
 
 ```bash
-vc setup --yes                         # bootstrap supported prerequisites and starter config
+vc setup                               # guided setup: prerequisites, Discord token, voice channels
+vc setup --yes                         # non-interactive bootstrap/starter config for automation
 vc setup --yes --no-wizard             # dependency/bootstrap only
-vc setup token                         # interactively save/update Discord bot token
+vc setup token                         # later update Discord bot token
 vc setup token TOKEN --client-id ID     # non-interactive token/client-id update
-vc setup channels "General,Team Voice" # save auto-join voice channel names
+vc setup channels "General,Team Voice" # later update auto-join voice channel names
 vc setup channel "General"             # alias for setup channels
 vc setup voice "General"               # alias for setup channels
 vc bot invite CLIENT_ID                 # print a Discord invite URL with required permissions

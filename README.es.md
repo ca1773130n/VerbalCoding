@@ -32,7 +32,7 @@ VerbalCoding convierte un canal de voz de Discord en una superficie manos libres
 | Función | Beneficio |
 |---|---|
 | Control de agentes por voz | Controla Hermes Agent, Claude Code, Codex, Gemini CLI, OpenCode, OpenClaw o un custom CLI desde voz de Discord. |
-| Guided setup | En vez de editar `.env` manualmente, usa `vc setup token` y `vc setup channels` para guardar el token y los canales de voz de auto-unión. |
+| Guided setup | `vc setup` guides Discord Developer Portal values, bot token, client ID, and voice channels in one flow. `vc setup token` / `vc setup channels` are for later updates. |
 | Local speech loop | Discord voice → `whisper-cli` STT → CLI agent → chunked TTS playback. |
 | Shared voice + text context | Voice turns and `!ask` text commands can reuse the same supported agent session. |
 | Docker-aware troubleshooting | Si ves `Cannot perform IP discovery - socket closed`, el canal fue encontrado pero falló el descubrimiento UDP de voz de Discord. En Docker sobre Linux usa `network_mode: "host"` y elimina `ports:` de ese servicio. |
@@ -41,17 +41,19 @@ VerbalCoding convierte un canal de voz de Discord en una superficie manos libres
 
 ```bash
 npm install -g verbalcoding@latest
-vc setup --yes
-vc setup token
-vc setup channels "General,Team Voice"
+vc setup
 vc doctor
 vc start
 ```
 
 ## Configuración de Discord
 
+`vc setup` te guía con Discord Developer Portal abierto para introducir el token, el ID de cliente y los canales de voz de auto-unión en un solo flujo. Después usa `vc setup token` o `vc setup channels` si solo necesitas cambiar un valor.
+
 ```bash
+vc setup
 vc bot invite <discord-client-id>
+# later updates only:
 vc setup token <bot-token> --client-id <discord-client-id>
 vc setup channels "VerbalCoding,LLM-Wiki,General"
 vc doctor
@@ -60,7 +62,7 @@ vc doctor
 ## Mapa breve de comandos
 
 ```bash
-vc setup --yes                         # bootstrap prerequisites and starter config
+vc setup                               # guided setup: prerequisites, Discord token, voice channels
 vc setup token                         # save/update Discord bot token
 vc setup channels "General,Team Voice" # save auto-join voice channel names
 vc bot invite CLIENT_ID                 # generate Discord invite URL

@@ -48,9 +48,10 @@ Usage:
   vc doctor
 
 Examples:
-  npx verbalcoding setup --yes
-  vc setup --yes
-  vc setup token
+  npx verbalcoding setup
+  vc setup
+  vc setup --yes        # automation/non-interactive starter config
+  vc setup token        # later token update
   vc setup channels "General,Team Voice"
   vc start
   vc language en

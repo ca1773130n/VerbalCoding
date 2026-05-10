@@ -5,9 +5,7 @@
 
 ```bash
 npm install -g verbalcoding@latest
-vc setup --yes
-vc setup token
-vc setup channels "General,Team Voice"
+vc setup
 vc doctor
 vc start
 ```
@@ -36,7 +34,7 @@ VerbalCoding est une passerelle vocale Discord pour contrôler par la voix des a
 - Garde-fous diff/code/journaux pour que les grandes sorties techniques ne soient pas lues à voix haute.
 - Modes de sensibilité normal et conservateur pour usage intérieur vs bruyant/extérieur.
 - Assistant de configuration, `.env.example`, vérificateur de prérequis `vc doctor` et amorçage `./scripts/install.sh --yes` pour les paquets OS, les dépendances npm, l'assistant Edge TTS et le modèle whisper.cpp par défaut.
-- Chemin d'installation par paquet npm : `npm install -g verbalcoding`, `vc setup --yes` et `vc start`.
+- Chemin d'installation par paquet npm : `npm install -g verbalcoding`, `vc setup` guidé et `vc start`.
 - Mode de progression détaillée facultatif pour les mises à jour textuelles d'étapes intermédiaires pendant les longs travaux d'agent.
 - Métriques de latence JSONL toujours actives plus résumé `!latency` / `!metrics` pour l'optimisation du pipeline.
 - Attente d'inactivité d'énonciation plus patiente (`UTTERANCE_IDLE_MS=4500`) afin que les longues instructions parlées avec pauses naturelles ne soient pas coupées en prompt partiel plus parole ignorée pendant le traitement.

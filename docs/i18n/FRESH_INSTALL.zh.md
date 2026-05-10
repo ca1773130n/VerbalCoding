@@ -5,9 +5,7 @@
 
 ```bash
 npm install -g verbalcoding@latest
-vc setup --yes
-vc setup token
-vc setup channels "General,Team Voice"
+vc setup
 vc doctor
 vc start
 ```
@@ -33,7 +31,7 @@ npx verbalcoding setup --yes
 如果你使用了 `npm install -g`，继续运行：
 
 ```bash
-vc setup --yes
+vc setup
 ```
 
 贡献者的 GitHub 克隆路径：
@@ -49,7 +47,7 @@ cd VerbalCoding
 通过 npm 安装时，当前目录中没有仓库检出，因此不要直接运行 `./scripts/install.sh`。请改用打包好的 CLI 包装器：
 
 ```bash
-vc setup --yes
+vc setup
 ```
 
 `vc setup` 会运行已安装 npm 包内部的 `scripts/install.sh`。只有在 GitHub 克隆目录中时才使用 `./scripts/install.sh --yes`：

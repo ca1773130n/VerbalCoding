@@ -32,7 +32,7 @@ VerbalCoding 将 Discord 语音频道变成编程代理的免手动控制台。�
 | 功能 | 好处 |
 |---|---|
 | 语音优先的代理控制 | 通过 Discord 语音控制 Hermes Agent、Claude Code、Codex、Gemini CLI、OpenCode、OpenClaw 或 custom CLI。 |
-| Guided setup | 不要手动编辑 `.env`；使用 `vc setup token` 和 `vc setup channels` 保存令牌和自动加入的语音频道。 |
+| Guided setup | `vc setup` guides Discord Developer Portal values, bot token, client ID, and voice channels in one flow. `vc setup token` / `vc setup channels` are for later updates. |
 | Local speech loop | Discord voice → `whisper-cli` STT → CLI agent → chunked TTS playback. |
 | Shared voice + text context | Voice turns and `!ask` text commands can reuse the same supported agent session. |
 | Docker-aware troubleshooting | 如果看到 `Cannot perform IP discovery - socket closed`，说明频道已找到，但 Discord 语音 UDP 发现失败。在 Linux Docker 中使用 `network_mode: "host"`，并移除同一服务的 `ports:`。 |
@@ -41,17 +41,19 @@ VerbalCoding 将 Discord 语音频道变成编程代理的免手动控制台。�
 
 ```bash
 npm install -g verbalcoding@latest
-vc setup --yes
-vc setup token
-vc setup channels "General,Team Voice"
+vc setup
 vc doctor
 vc start
 ```
 
 ## Discord 设置
 
+`vc setup` 会引导你打开 Discord Developer Portal，并一次性输入令牌、客户端 ID 和自动加入的语音频道。之后只需要修改某个值时，使用 `vc setup token` 或 `vc setup channels`。
+
 ```bash
+vc setup
 vc bot invite <discord-client-id>
+# later updates only:
 vc setup token <bot-token> --client-id <discord-client-id>
 vc setup channels "VerbalCoding,LLM-Wiki,General"
 vc doctor
@@ -60,7 +62,7 @@ vc doctor
 ## 简短命令表
 
 ```bash
-vc setup --yes                         # bootstrap prerequisites and starter config
+vc setup                               # guided setup: prerequisites, Discord token, voice channels
 vc setup token                         # save/update Discord bot token
 vc setup channels "General,Team Voice" # save auto-join voice channel names
 vc bot invite CLIENT_ID                 # generate Discord invite URL

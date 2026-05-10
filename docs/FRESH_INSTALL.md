@@ -2,34 +2,41 @@
 
 This guide is for a clean public install. It avoids local-only assumptions and uses the `vc` CLI to bootstrap as much as possible. Windows is not supported yet.
 
-## 1. Install the CLI
+## 1. Install the CLI and run guided setup
 
-Recommended npm path:
+Recommended npm path for humans:
+
+```bash
+npm install -g verbalcoding@latest
+vc setup
+```
+
+`vc setup` bootstraps supported local prerequisites, then asks for the Discord bot token, application/client ID, auto-join voice channel names, transcript target, agent backend, and voice/TTS settings. Keep the Discord Developer Portal open while it runs.
+
+Automation/CI path:
 
 ```bash
 npm install -g verbalcoding@latest
 vc setup --yes
+vc setup token <bot-token> --client-id <discord-client-id>
+vc setup channels "General,Team Voice"
 ```
 
-Or run the published package directly:
-
-```bash
-npx verbalcoding setup --yes
-```
+Use `--yes` only when you need non-interactive bootstrap/starter config. It cannot stop and wait for you to create a Discord application, so token/channel setup remains a follow-up step in that mode.
 
 Contributor GitHub clone path:
 
 ```bash
 git clone https://github.com/ca1773130n/VerbalCoding.git
 cd VerbalCoding
-./scripts/install.sh --yes
+./scripts/install.sh
 ```
 
 For npm/global installs, use `vc ...` commands. Do not run `./scripts/install.sh` unless you are inside a repository clone.
 
-## 2. Bootstrap dependencies
+## 2. What setup bootstraps
 
-`vc setup --yes` runs the bootstrap bundled in the npm package and writes a starter `.env`. It can install or prepare:
+`vc setup` runs the bootstrap bundled in the npm package and writes `.env`. It can install or prepare:
 
 - npm dependencies when `node_modules/` is missing,
 - `ffmpeg`, Node/npm, Python venv support, build tools, and `whisper-cli` where supported,
@@ -54,10 +61,10 @@ vc setup --yes --no-wizard                   # dependency/bootstrap only from np
 vc setup --yes --skip-system                 # skip OS package installation
 vc setup --yes --skip-model                  # skip default STT model download
 vc setup --yes --skip-edge-tts               # skip local Edge TTS helper
-./scripts/install.sh --yes --no-wizard       # clone-only equivalent
+./scripts/install.sh --yes --no-wizard       # clone-only non-interactive equivalent
 ```
 
-## 3. Register Discord bot credentials
+## 3. Discord values collected by setup
 
 Read the upstream Discord bot setup guides if this is your first bot:
 
@@ -65,42 +72,43 @@ Read the upstream Discord bot setup guides if this is your first bot:
 - Discord official bot overview: <https://docs.discord.com/developers/bots/overview>
 - Discord official getting started guide: <https://docs.discord.com/developers/quick-start/getting-started>
 
-Create a Discord application/bot, enable the Message Content privileged intent, then invite it:
+During `vc setup`:
+
+1. Create a Discord application/bot in the Developer Portal.
+2. Enable the Message Content privileged intent.
+3. Paste the bot token when asked for `DISCORD_BOT_TOKEN`.
+4. Paste the application/client ID when asked; setup can print the invite command.
+5. Enter the real voice channel names the bot should auto-join.
+
+Invite URL helper:
 
 ```bash
 vc bot invite <discord-client-id>
-# or pin it to one server:
 vc bot invite <discord-client-id> --guild <guild-id>
 ```
 
-Register the token without manually editing `.env`:
+If you skipped a value or need to rotate it later, update only that part:
 
 ```bash
 vc setup token
-# or non-interactive:
 vc setup token <bot-token> --client-id <discord-client-id>
+vc setup channels "VerbalCoding,LLM-Wiki,General"
 ```
 
-`vc setup token` updates `DISCORD_BOT_TOKEN` and optional `DISCORD_CLIENT_ID` in the local ignored `.env` file with mode `0600`. It preserves unrelated `.env` values and does not print the token back.
+`vc setup token` updates `DISCORD_BOT_TOKEN` and optional `DISCORD_CLIENT_ID`; `vc setup channels` updates `AUTO_JOIN_VOICE_CHANNELS`. Both preserve unrelated `.env` values, set mode `0600`, and do not print secrets back.
 
-## 4. Set auto-join voice channel names
+## 4. Auto-join voice channel names
 
-Set the real Discord voice channel names that the bot should try on startup:
+Use the exact Discord voice channel names:
 
 ```bash
 vc setup channels
 vc setup channels "General,Team Voice"
-vc setup channels "VerbalCoding,LLM-Wiki,General"
-```
-
-Aliases are also available:
-
-```bash
 vc setup channel "General"
 vc setup voice "General"
 ```
 
-This writes `AUTO_JOIN_VOICE_CHANNELS` in `.env`. Restart the bridge after changing channel names.
+Restart the bridge after changing channel names.
 
 ## 5. Verify
 

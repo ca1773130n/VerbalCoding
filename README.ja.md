@@ -32,7 +32,7 @@ VerbalCoding は Discord のボイスチャンネルを、コーディングエ�
 | 機能 | 利点 |
 |---|---|
 | 音声中心のエージェント制御 | Hermes Agent、Claude Code、Codex、Gemini CLI、OpenCode、OpenClaw、または custom CLI を Discord 音声で操作できます。 |
-| Guided setup | 手動で `.env` を編集する代わりに、`vc setup token` と `vc setup channels` でトークンと自動参加する音声チャンネルを保存します。 |
+| Guided setup | `vc setup` guides Discord Developer Portal values, bot token, client ID, and voice channels in one flow. `vc setup token` / `vc setup channels` are for later updates. |
 | Local speech loop | Discord voice → `whisper-cli` STT → CLI agent → chunked TTS playback. |
 | Shared voice + text context | Voice turns and `!ask` text commands can reuse the same supported agent session. |
 | Docker-aware troubleshooting | `Cannot perform IP discovery - socket closed` が出る場合、チャンネルは見つかっていますが Discord 音声の UDP 検出に失敗しています。Linux Docker では `network_mode: "host"` を使い、同じサービスの `ports:` を削除してください。 |
@@ -41,17 +41,19 @@ VerbalCoding は Discord のボイスチャンネルを、コーディングエ�
 
 ```bash
 npm install -g verbalcoding@latest
-vc setup --yes
-vc setup token
-vc setup channels "General,Team Voice"
+vc setup
 vc doctor
 vc start
 ```
 
 ## Discord 設定
 
+`vc setup` は Discord Developer Portal を開いた状態で、トークン、クライアント ID、自動参加する音声チャンネルを一度に入力できるよう案内します。後で値だけ変更する場合は `vc setup token` または `vc setup channels` を使います。
+
 ```bash
+vc setup
 vc bot invite <discord-client-id>
+# later updates only:
 vc setup token <bot-token> --client-id <discord-client-id>
 vc setup channels "VerbalCoding,LLM-Wiki,General"
 vc doctor
@@ -60,7 +62,7 @@ vc doctor
 ## 小さなコマンド表
 
 ```bash
-vc setup --yes                         # bootstrap prerequisites and starter config
+vc setup                               # guided setup: prerequisites, Discord token, voice channels
 vc setup token                         # save/update Discord bot token
 vc setup channels "General,Team Voice" # save auto-join voice channel names
 vc bot invite CLIENT_ID                 # generate Discord invite URL

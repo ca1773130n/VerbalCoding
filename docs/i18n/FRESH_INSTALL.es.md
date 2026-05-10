@@ -5,9 +5,7 @@
 
 ```bash
 npm install -g verbalcoding@latest
-vc setup --yes
-vc setup token
-vc setup channels "General,Team Voice"
+vc setup
 vc doctor
 vc start
 ```
@@ -33,7 +31,7 @@ npx verbalcoding setup --yes
 Si usaste `npm install -g`, continúa con:
 
 ```bash
-vc setup --yes
+vc setup
 ```
 
 Ruta de clonación de GitHub para colaboradores:
@@ -49,7 +47,7 @@ cd VerbalCoding
 En una instalación npm, no ejecutes `./scripts/install.sh` directamente; no hay un checkout del repositorio en tu directorio actual. Usa en su lugar el wrapper CLI empaquetado:
 
 ```bash
-vc setup --yes
+vc setup
 ```
 
 `vc setup` ejecuta el `scripts/install.sh` incluido dentro del paquete npm instalado. Usa `./scripts/install.sh --yes` solo cuando estés dentro de un clon de GitHub:

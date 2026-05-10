@@ -21,7 +21,7 @@ VerbalCoding is a Discord voice bridge for controlling CLI-based coding agents b
 - Long-answer TTS chunking and responsive barge-in.
 - Diff/code/log guardrails so large technical output is not read aloud.
 - Normal and conservative sensitivity modes for indoor vs. noisy/outdoor use.
-- Public npm setup path: `npm install -g verbalcoding@latest`, `vc setup --yes`, `vc setup token`, `vc setup channels`, `vc doctor`, and `vc start`.
+- Public npm setup path: `npm install -g verbalcoding@latest`, guided `vc setup`, `vc doctor`, and `vc start`; `vc setup --yes`, `vc setup token`, and `vc setup channels` remain available for automation or later updates.
 - `vc doctor` redacted prerequisite checker with supported auto-fixes for local media/STT/TTS prerequisites and Hermes CLI on macOS/Linux.
 - Discord onboarding helpers: `vc bot invite <client-id>` plus token/client-id registration through `vc setup token`.
 - Auto-join channel configuration through `vc setup channels`, `vc setup channel`, and `vc setup voice`.

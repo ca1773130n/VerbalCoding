@@ -5,9 +5,7 @@
 
 ```bash
 npm install -g verbalcoding@latest
-vc setup --yes
-vc setup token
-vc setup channels "General,Team Voice"
+vc setup
 vc doctor
 vc start
 ```
@@ -33,7 +31,7 @@ npx verbalcoding setup --yes
 `npm install -g` を使った場合は、続けて次を実行します:
 
 ```bash
-vc setup --yes
+vc setup
 ```
 
 コントリビューター向けの GitHub クローン手順:
@@ -49,7 +47,7 @@ cd VerbalCoding
 npm インストールでは、現在のディレクトリにリポジトリのチェックアウトがないため、`./scripts/install.sh` を直接実行しないでください。代わりにパッケージ済み CLI ラッパーを使います:
 
 ```bash
-vc setup --yes
+vc setup
 ```
 
 `vc setup` は、インストール済み npm パッケージ内の `scripts/install.sh` を実行します。`./scripts/install.sh --yes` は GitHub クローン内にいる場合だけ使ってください:

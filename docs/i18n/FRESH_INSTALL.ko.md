@@ -5,9 +5,7 @@
 
 ```bash
 npm install -g verbalcoding@latest
-vc setup --yes
-vc setup token
-vc setup channels "General,Team Voice"
+vc setup
 vc doctor
 vc start
 ```
@@ -33,7 +31,7 @@ npx verbalcoding setup --yes
 `npm install -g`를 사용했다면 다음을 계속 실행하세요:
 
 ```bash
-vc setup --yes
+vc setup
 ```
 
 기여자를 위한 GitHub 클론 경로:
@@ -49,7 +47,7 @@ cd VerbalCoding
 npm 설치에서는 현재 디렉터리에 저장소 체크아웃이 없으므로 `./scripts/install.sh`를 직접 실행하지 마세요. 대신 패키지된 CLI 래퍼를 사용하세요:
 
 ```bash
-vc setup --yes
+vc setup
 ```
 
 `vc setup`은 설치된 npm 패키지 안의 `scripts/install.sh`를 실행합니다. GitHub 클론 안에 있을 때만 `./scripts/install.sh --yes`를 사용하세요:

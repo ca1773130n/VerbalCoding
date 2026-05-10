@@ -138,6 +138,9 @@ async function main() {
   try {
     console.log('VerbalCoding installer');
     console.log(`Supported harnesses: ${SUPPORTED_HARNESSES.join(', ')}`);
+    console.log('Discord setup: keep https://discord.com/developers/applications open.');
+    console.log('Create an application/bot, enable Message Content intent, then paste the bot token and application/client ID below.');
+    console.log('If you are not ready, press Enter to skip and run `vc setup token` / `vc setup channels` later.');
     const harness = await ask('Harness/backend', 'hermes');
     let agentCommand = '';
     let agentLabel = '';

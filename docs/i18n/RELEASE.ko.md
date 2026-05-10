@@ -5,9 +5,7 @@
 
 ```bash
 npm install -g verbalcoding@latest
-vc setup --yes
-vc setup token
-vc setup channels "General,Team Voice"
+vc setup
 vc doctor
 vc start
 ```
@@ -36,7 +34,7 @@ VerbalCoding은 CLI 기반 코딩 에이전트를 음성으로 제어하기 위�
 - 큰 기술 출력이 소리 내어 읽히지 않도록 하는 diff/code/log 안전장치.
 - 실내와 시끄러운/실외 사용을 위한 일반 및 보수적 감도 모드.
 - OS 패키지, npm 의존성, Edge TTS 헬퍼, 기본 whisper.cpp 모델을 위한 설정 마법사, `.env.example`, `vc doctor` 필수 조건 점검기, `./scripts/install.sh --yes` 부트스트랩.
-- npm 패키지 설치 경로: `npm install -g verbalcoding`, `vc setup --yes`, `vc start`.
+- npm 패키지 설치 경로: `npm install -g verbalcoding`, guided `vc setup`, `vc start`.
 - 긴 에이전트 작업 중 텍스트 전용 중간 단계 업데이트를 위한 선택적 자세한 진행 모드.
 - 파이프라인 최적화를 위한 항상 켜진 JSONL 지연 시간 지표와 `!latency` / `!metrics` 요약.
 - 더 여유 있는 발화 유휴 대기(`UTTERANCE_IDLE_MS=4500`)로, 자연스러운 멈춤이 있는 긴 음성 지시가 부분 프롬프트와 무시되는 처리 중 발화로 나뉘지 않도록 함.

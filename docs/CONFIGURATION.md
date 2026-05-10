@@ -5,10 +5,10 @@
 For npm/global installs, use `vc` commands instead of manually editing `.env`:
 
 ```bash
-vc setup --yes                         # bootstrap supported prerequisites and starter config
-vc setup token                         # interactively save/update Discord bot token
-vc setup token TOKEN --client-id ID     # non-interactive token/client-id update
-vc setup channels "General,Team Voice" # save auto-join voice channel names
+vc setup                               # guided setup: prerequisites, Discord token, voice channels
+vc setup --yes                         # non-interactive bootstrap/starter config
+vc setup token                         # later update Discord bot token
+vc setup channels "General,Team Voice" # later update auto-join voice channel names
 vc setup channel "General"             # alias
 vc setup voice "General"               # alias
 vc doctor                               # redacted health check and supported auto-fixes

@@ -5,9 +5,7 @@
 
 ```bash
 npm install -g verbalcoding@latest
-vc setup --yes
-vc setup token
-vc setup channels "General,Team Voice"
+vc setup
 vc doctor
 vc start
 ```
@@ -36,7 +34,7 @@ VerbalCoding 是一个 Discord 语音桥接，用于通过语音控制基于 CLI
 - Diff/code/log 保护机制，避免大段技术输出被朗读。
 - 面向室内与嘈杂/户外使用的普通和保守灵敏度模式。
 - 设置向导、`.env.example`、`vc doctor` 前置条件检查器，以及用于 OS 软件包、npm 依赖、Edge TTS 辅助环境和默认 whisper.cpp 模型的 `./scripts/install.sh --yes` 引导。
-- npm 包安装路径：`npm install -g verbalcoding`、`vc setup --yes` 和 `vc start`。
+- npm 包安装路径：`npm install -g verbalcoding`、guided `vc setup` 和 `vc start`。
 - 可选详细进度模式，在长时间代理工作期间提供仅文本的中间步骤更新。
 - 常开 JSONL 延迟指标，以及用于流水线优化的 `!latency` / `!metrics` 摘要。
 - 更耐心的发言空闲等待（`UTTERANCE_IDLE_MS=4500`），使带自然停顿的长口述指令不会被拆成部分提示加被忽略的处理期间语音。
