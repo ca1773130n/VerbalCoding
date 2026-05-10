@@ -21,6 +21,10 @@
   <img alt="Agents" src="https://img.shields.io/badge/Agents-Hermes%20%7C%20Claude%20%7C%20Codex%20%7C%20Gemini%20%7C%20OpenCode-111827">
 </p>
 
+<p align="center">
+  <img src="docs/assets/figures/verbalcoding-flow.svg" alt="VerbalCoding voice-to-agent flow" width="860">
+</p>
+
 ## Why
 
 VerbalCoding turns a Discord voice channel into a hands-free control surface for coding agents. Speak a request, let your CLI agent work, and hear a concise answer back — with text transcripts, progress events, and guardrails for noisy code/log output.
@@ -30,7 +34,7 @@ VerbalCoding turns a Discord voice channel into a hands-free control surface for
 | What you get | Why it feels good |
 |---|---|
 | Voice-first agent control | Talk to Hermes Agent, Claude Code, Codex, Gemini CLI, OpenCode, OpenClaw, or any custom CLI harness. |
-| Local-first speech loop | Discord voice capture → `whisper.cpp` STT → agent → chunked TTS playback. |
+| On-device speech loop | Discord voice capture → local `whisper-cli` transcription → agent → chunked TTS playback. |
 | Shared voice + text context | Voice turns and `!ask` text commands can reuse the same supported agent session. |
 | Barge-in and sensitivity modes | Interrupt playback naturally and switch between normal and conservative/noisy environments. |
 | Multilingual voice presets | Switch STT, progress language, and TTS voice together with `vc language ko/en/auto`. |
@@ -68,12 +72,6 @@ vc doctor
 `vc setup --yes` and `./scripts/install.sh --yes` bootstrap local prerequisites where possible: Node/npm dependencies, `ffmpeg`, `whisper-cli`, the default whisper.cpp model, a local `.venv-tts` Edge TTS helper, and the short `vc` shell command for clone installs. They support macOS/Homebrew plus common Linux package managers (`apt`, `dnf`, `pacman`); rerun with `--no-wizard` for dependency-only setup or `--skip-system` if you want to install OS packages yourself.
 
 Need a clean install walkthrough? Start with [Fresh Install](docs/FRESH_INSTALL.md).
-
-## How It Works
-
-<p align="center">
-  <img src="docs/assets/figures/verbalcoding-flow.svg" alt="Vertical VerbalCoding voice-to-agent flow" width="760">
-</p>
 
 ## Supported Agent Backends
 
@@ -127,7 +125,7 @@ In Discord:
 |---|---|
 | Runtime | Node.js 20+, npm; install script can install via Homebrew/apt/dnf/pacman |
 | Audio | `ffmpeg`; install script can install it |
-| STT | `whisper.cpp` / `whisper-cli`; install script uses Homebrew on macOS or local Linux build fallback |
+| Speech recognition | Local `whisper-cli` from whisper.cpp; install script uses Homebrew on macOS or local Linux build fallback |
 | TTS | Edge TTS CLI; install script creates `.venv-tts` if needed |
 | Discord | Bot token, Message Content intent, voice permissions |
 | Agent | At least one authenticated CLI harness, Hermes Agent by default |
