@@ -79,13 +79,25 @@ install_system_linux_packages() {
   if has_cmd apt-get; then
     log 'Installing Linux packages with apt-get'
     run_sudo apt-get update
-    run_sudo apt-get install -y curl ca-certificates git python3 python3-venv python3-pip build-essential cmake pkg-config ffmpeg nodejs npm
+    local packages=(curl ca-certificates git python3 python3-venv python3-pip build-essential cmake pkg-config ffmpeg)
+    # npm installs often run under NodeSource Node.js, whose `nodejs` package conflicts
+    # with Ubuntu's separate `npm` package. Do not request nodejs/npm again when the
+    # current npm-based installer is already running with working node and npm.
+    has_cmd node || packages+=(nodejs)
+    has_cmd npm || packages+=(npm)
+    run_sudo apt-get install -y "${packages[@]}"
   elif has_cmd dnf; then
     log 'Installing Linux packages with dnf'
-    run_sudo dnf install -y curl ca-certificates git python3 python3-pip gcc gcc-c++ make cmake pkgconf-pkg-config ffmpeg nodejs npm
+    local packages=(curl ca-certificates git python3 python3-pip gcc gcc-c++ make cmake pkgconf-pkg-config ffmpeg)
+    has_cmd node || packages+=(nodejs)
+    has_cmd npm || packages+=(npm)
+    run_sudo dnf install -y "${packages[@]}"
   elif has_cmd pacman; then
     log 'Installing Linux packages with pacman'
-    run_sudo pacman -Sy --needed --noconfirm curl ca-certificates git python python-pip base-devel cmake pkgconf ffmpeg nodejs npm
+    local packages=(curl ca-certificates git python python-pip base-devel cmake pkgconf ffmpeg)
+    has_cmd node || packages+=(nodejs)
+    has_cmd npm || packages+=(npm)
+    run_sudo pacman -Sy --needed --noconfirm "${packages[@]}"
   else
     warn 'No supported Linux package manager found. Install node/npm, ffmpeg, python3, git, cmake, and a C++ toolchain manually.'
     return 1

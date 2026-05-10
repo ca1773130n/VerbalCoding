@@ -32,7 +32,13 @@ cd VerbalCoding
 
 ## 2. 依存関係をブートストラップし、セットアップウィザードを実行する
 
-上記の npm コマンドは、クローンインストールと同じブートストラッパーを実行します。クローンの場合は次を実行します:
+npm インストールでは、現在のディレクトリにリポジトリのチェックアウトがないため、`./scripts/install.sh` を直接実行しないでください。代わりにパッケージ済み CLI ラッパーを使います:
+
+```bash
+vc setup --yes
+```
+
+`vc setup` は、インストール済み npm パッケージ内の `scripts/install.sh` を実行します。`./scripts/install.sh --yes` は GitHub クローン内にいる場合だけ使ってください:
 
 ```bash
 ./scripts/install.sh --yes

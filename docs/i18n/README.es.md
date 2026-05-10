@@ -70,7 +70,7 @@ vc doctor
 ./run.sh
 ```
 
-`vc setup --yes` y `./scripts/install.sh --yes` inicializan los prerrequisitos locales cuando es posible: dependencias de Node/npm, `ffmpeg`, `whisper-cli`, el modelo predeterminado de whisper.cpp, un asistente local de Edge TTS en `.venv-tts` y el comando corto de shell `vc` para instalaciones desde clon. Admiten macOS/Homebrew y administradores de paquetes comunes de Linux (`apt`, `dnf`, `pacman`); vuelve a ejecutarlos con `--no-wizard` para configurar solo dependencias o con `--skip-system` si quieres instalar los paquetes del sistema por tu cuenta.
+`vc setup --yes` inicializa los prerrequisitos locales desde el paquete npm instalado. `./scripts/install.sh --yes` hace lo mismo solo dentro de un clon de GitHub. Ambos cubren, cuando es posible, dependencias de Node/npm, `ffmpeg`, `whisper-cli`, el modelo predeterminado de whisper.cpp, el asistente local de Edge TTS en `.venv-tts` y la configuración del asistente. Admiten macOS/Homebrew y administradores de paquetes comunes de Linux (`apt`, `dnf`, `pacman`); vuelve a ejecutar con `--no-wizard` para configurar solo dependencias o con `--skip-system` si quieres instalar los paquetes del sistema por tu cuenta.
 
 ¿Necesitas un recorrido de instalación limpia? Empieza con [Instalación limpia](FRESH_INSTALL.es.md).
 

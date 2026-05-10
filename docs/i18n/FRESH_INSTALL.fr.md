@@ -32,7 +32,13 @@ cd VerbalCoding
 
 ## 2. Amorcer les dépendances et lancer l'assistant de configuration
 
-Les commandes npm ci-dessus exécutent le même programme d'amorçage que l'installation depuis clone. Pour un clone, exécutez :
+Pour une installation npm, n'exécutez pas `./scripts/install.sh` directement : il n'y a pas de checkout du dépôt dans votre répertoire courant. Utilisez plutôt l'enveloppe CLI empaquetée :
+
+```bash
+vc setup --yes
+```
+
+`vc setup` exécute le `scripts/install.sh` inclus dans le paquet npm installé. N'utilisez `./scripts/install.sh --yes` que lorsque vous êtes dans un clone GitHub :
 
 ```bash
 ./scripts/install.sh --yes

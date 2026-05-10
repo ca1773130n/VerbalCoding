@@ -69,7 +69,7 @@ vc doctor
 ./run.sh
 ```
 
-`vc setup --yes` and `./scripts/install.sh --yes` bootstrap local prerequisites where possible: Node/npm dependencies, `ffmpeg`, `whisper-cli`, the default whisper.cpp model, a local `.venv-tts` Edge TTS helper, and the short `vc` shell command for clone installs. They support macOS/Homebrew plus common Linux package managers (`apt`, `dnf`, `pacman`); rerun with `--no-wizard` for dependency-only setup or `--skip-system` if you want to install OS packages yourself.
+`vc setup --yes` bootstraps local prerequisites from the npm package. `./scripts/install.sh --yes` does the same for GitHub clone installs. Both cover Node/npm dependencies, `ffmpeg`, `whisper-cli`, the default whisper.cpp model, a local `.venv-tts` Edge TTS helper, and setup wizard configuration where possible. They support macOS/Homebrew plus common Linux package managers (`apt`, `dnf`, `pacman`); rerun with `--no-wizard` for dependency-only setup or `--skip-system` if you want to install OS packages yourself.
 
 Need a clean install walkthrough? Start with [Fresh Install](docs/FRESH_INSTALL.md).
 

@@ -32,7 +32,13 @@ cd VerbalCoding
 
 ## 2. Bootstrap dependencies and run the setup wizard
 
-The npm commands above run the same bootstrapper as the clone install. For a clone, run:
+For an npm install, do not run `./scripts/install.sh` directly; there is no repository checkout in your current directory. Use the packaged CLI wrapper instead:
+
+```bash
+vc setup --yes
+```
+
+`vc setup` runs the `scripts/install.sh` bundled inside the installed npm package. Only use `./scripts/install.sh --yes` when you are inside a GitHub clone:
 
 ```bash
 ./scripts/install.sh --yes

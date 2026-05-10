@@ -32,7 +32,13 @@ cd VerbalCoding
 
 ## 2. Inicializa dependencias y ejecuta el asistente de configuración
 
-Los comandos npm anteriores ejecutan el mismo inicializador que la instalación desde clon. Para un clon, ejecuta:
+En una instalación npm, no ejecutes `./scripts/install.sh` directamente; no hay un checkout del repositorio en tu directorio actual. Usa en su lugar el wrapper CLI empaquetado:
+
+```bash
+vc setup --yes
+```
+
+`vc setup` ejecuta el `scripts/install.sh` incluido dentro del paquete npm instalado. Usa `./scripts/install.sh --yes` solo cuando estés dentro de un clon de GitHub:
 
 ```bash
 ./scripts/install.sh --yes

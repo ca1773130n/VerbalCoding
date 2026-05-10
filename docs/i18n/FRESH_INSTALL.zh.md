@@ -32,7 +32,13 @@ cd VerbalCoding
 
 ## 2. 引导依赖并运行设置向导
 
-上面的 npm 命令会运行与克隆安装相同的引导程序。对于克隆仓库，运行：
+通过 npm 安装时，当前目录中没有仓库检出，因此不要直接运行 `./scripts/install.sh`。请改用打包好的 CLI 包装器：
+
+```bash
+vc setup --yes
+```
+
+`vc setup` 会运行已安装 npm 包内部的 `scripts/install.sh`。只有在 GitHub 克隆目录中时才使用 `./scripts/install.sh --yes`：
 
 ```bash
 ./scripts/install.sh --yes

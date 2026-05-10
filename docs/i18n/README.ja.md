@@ -70,7 +70,7 @@ vc doctor
 ./run.sh
 ```
 
-`vc setup --yes` と `./scripts/install.sh --yes` は、可能な範囲でローカル前提条件をブートストラップします。Node/npm 依存関係、`ffmpeg`、`whisper-cli`、デフォルトの whisper.cpp モデル、ローカル `.venv-tts` Edge TTS ヘルパー、クローンインストール用の短い `vc` シェルコマンドをセットアップします。macOS/Homebrew と一般的な Linux パッケージマネージャー（`apt`、`dnf`、`pacman`）をサポートします。依存関係だけをセットアップするには `--no-wizard` を付けて再実行し、OS パッケージを自分でインストールしたい場合は `--skip-system` を使います。
+`vc setup --yes` は、npm パッケージに同梱されたインストーラーからローカル前提条件をブートストラップします。`./scripts/install.sh --yes` は GitHub クローン内で同じ処理を行います。どちらも可能な範囲で Node/npm 依存関係、`ffmpeg`、`whisper-cli`、デフォルトの whisper.cpp モデル、ローカル `.venv-tts` Edge TTS ヘルパー、セットアップウィザード設定を処理します。macOS/Homebrew と一般的な Linux パッケージマネージャー（`apt`、`dnf`、`pacman`）をサポートします。依存関係だけをセットアップするには `--no-wizard` を付けて再実行し、OS パッケージを自分でインストールしたい場合は `--skip-system` を使います。
 
 クリーンインストールの手順が必要ですか？ [新規インストール](FRESH_INSTALL.ja.md) から始めてください。
 

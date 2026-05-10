@@ -69,7 +69,7 @@ vc doctor
 ./run.sh
 ```
 
-`vc setup --yes`와 `./scripts/install.sh --yes`는 가능한 경우 로컬 필수 구성요소를 부트스트랩합니다: Node/npm 의존성, `ffmpeg`, `whisper-cli`, 기본 whisper.cpp 모델, 로컬 `.venv-tts` Edge TTS 헬퍼, 클론 설치용 짧은 `vc` 셸 명령. macOS/Homebrew와 일반적인 Linux 패키지 관리자(`apt`, `dnf`, `pacman`)를 지원합니다. 의존성만 설정하려면 `--no-wizard`로 다시 실행하고, OS 패키지를 직접 설치하려면 `--skip-system`을 사용하세요.
+`vc setup --yes`는 npm 패키지 안에 포함된 설치 스크립트로 로컬 필수 구성요소를 부트스트랩합니다. `./scripts/install.sh --yes`는 GitHub 클론 안에서 같은 작업을 수행합니다. 둘 다 가능한 경우 Node/npm 의존성, `ffmpeg`, `whisper-cli`, 기본 whisper.cpp 모델, 로컬 `.venv-tts` Edge TTS 헬퍼, 설정 마법사를 처리합니다. macOS/Homebrew와 일반적인 Linux 패키지 관리자(`apt`, `dnf`, `pacman`)를 지원합니다. 의존성만 설정하려면 `--no-wizard`로 다시 실행하고, OS 패키지를 직접 설치하려면 `--skip-system`을 사용하세요.
 
 깨끗한 설치 안내가 필요하다면 [Fresh Install](FRESH_INSTALL.ko.md)부터 시작하세요.
 

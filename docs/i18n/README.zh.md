@@ -69,7 +69,7 @@ vc doctor
 ./run.sh
 ```
 
-`vc setup --yes` 和 `./scripts/install.sh --yes` 会在可行时引导安装本地前置依赖：Node/npm 依赖、`ffmpeg`、`whisper-cli`、默认 whisper.cpp 模型、本地 `.venv-tts` Edge TTS 辅助环境，以及用于克隆安装的简短 `vc` shell 命令。它们支持 macOS/Homebrew 以及常见 Linux 包管理器（`apt`、`dnf`、`pacman`）；如只想安装依赖而不运行向导，可用 `--no-wizard` 重新运行；如果想自行安装 OS 软件包，可用 `--skip-system`。
+`vc setup --yes` 会通过 npm 包内置的安装器引导安装本地前置依赖。`./scripts/install.sh --yes` 只在 GitHub 克隆目录中执行同样的流程。两者都会在可行时处理 Node/npm 依赖、`ffmpeg`、`whisper-cli`、默认 whisper.cpp 模型、本地 `.venv-tts` Edge TTS 辅助环境以及设置向导配置。它们支持 macOS/Homebrew 以及常见 Linux 包管理器（`apt`、`dnf`、`pacman`）；如只想安装依赖而不运行向导，可用 `--no-wizard` 重新运行；如果想自行安装 OS 软件包，可用 `--skip-system`。
 
 需要干净安装演练？从[全新安装](FRESH_INSTALL.zh.md)开始。
 
