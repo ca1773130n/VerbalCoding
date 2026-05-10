@@ -26,6 +26,7 @@ export function normalizeInstallAnswers(input = {}) {
   const out = {
     AGENT_BACKEND: normalizedHarness,
     DISCORD_BOT_TOKEN: clean(input.discordBotToken || input.DISCORD_BOT_TOKEN),
+    DISCORD_CLIENT_ID: clean(input.discordClientId || input.DISCORD_CLIENT_ID || input.applicationId || input.APPLICATION_ID),
     DISCORD_ALLOWED_USERS: clean(input.allowedUsers || input.DISCORD_ALLOWED_USERS),
     AUTO_JOIN_VOICE_CHANNELS: clean(input.autoJoinVoiceChannels || input.AUTO_JOIN_VOICE_CHANNELS, '일반,General,general'),
     TRANSCRIPT_CHANNEL_ID: clean(input.transcriptChannelId || input.TRANSCRIPT_CHANNEL_ID),
@@ -101,6 +102,7 @@ export function slugifyInstanceName(name) {
 export function buildEnvFile(values = {}) {
   const ordered = [
     'DISCORD_BOT_TOKEN',
+    'DISCORD_CLIENT_ID',
     'DISCORD_ALLOWED_USERS',
     'AUTO_JOIN_VOICE_CHANNELS',
     'TRANSCRIPT_CHANNEL_ID',
@@ -243,8 +245,16 @@ export function parseKeyValueEnv(text) {
 
 export function renderInstallSummary(values = {}) {
   const backend = values.AGENT_BACKEND || 'hermes';
+  const inviteUrl = values.DISCORD_CLIENT_ID ? buildDiscordBotInviteUrl({ clientId: values.DISCORD_CLIENT_ID }) : '';
   return [
     `Configured Discord voice bridge for harness: ${backend}`,
+    '',
+    'Discord app setup:',
+    '  1. Create an app: https://discord.com/developers/applications',
+    '  2. Bot tab: Add Bot, enable Message Content Intent, copy/reset the token.',
+    '  3. Put the token in .env as DISCORD_BOT_TOKEN="...".',
+    inviteUrl ? `  4. Invite URL: ${inviteUrl}` : '  4. Invite URL: vc bot invite <client-id>',
+    '  5. Make sure the bot can read/send text and connect/speak in voice.',
     '',
     'Next commands:',
     '  vc doctor',

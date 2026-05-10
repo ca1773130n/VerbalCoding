@@ -82,7 +82,24 @@ test('doctor auto-bootstraps fixable prerequisites by default', () => {
   assert.match(doctor, /--no-fix/);
   assert.match(doctor, /WHISPER_CPP_BIN/);
   assert.match(doctor, /EDGE_TTS_COMMAND/);
+  assert.match(doctor, /installHermesCliIfNeeded/);
+  assert.match(doctor, /NousResearch\/hermes-agent\/main\/scripts\/install\.sh/);
+  assert.match(doctor, /VERBALCODING_DOCTOR_INSTALL_HERMES/);
+  assert.match(doctor, /Discord bot setup:/);
+  assert.match(doctor, /discord\.com\/developers\/applications/);
   assert.match(cli, /doctor\.mjs'\), \.\.\.argv\.slice\(1\)/);
+});
+
+test('setup summary guides Discord app creation and records client id', () => {
+  const installer = fs.readFileSync(path.join(ROOT, 'scripts', 'install.mjs'), 'utf8');
+  const config = fs.readFileSync(path.join(ROOT, 'app-node', 'install_config.mjs'), 'utf8');
+
+  assert.match(installer, /Discord application\/client ID for invite URL/);
+  assert.match(config, /DISCORD_CLIENT_ID/);
+  assert.match(config, /Discord app setup:/);
+  assert.match(config, /https:\/\/discord\.com\/developers\/applications/);
+  assert.match(config, /vc bot invite <client-id>/);
+  assert.match(config, /buildDiscordBotInviteUrl\(\{ clientId: values\.DISCORD_CLIENT_ID \}\)/);
 });
 
 test('Ubuntu Docker smoke script validates clean install without secrets', () => {

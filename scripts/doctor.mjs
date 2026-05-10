@@ -61,10 +61,14 @@ function isExecutable(file) {
 }
 
 function commandExists(command) {
+  const extraPath = [
+    path.join(ROOT, '.local', 'bin'),
+    path.join(process.env.HOME || '', '.local', 'bin'),
+  ].filter(Boolean).join(':');
   const result = spawnSync('bash', ['-lc', `command -v ${JSON.stringify(command)}`], {
     cwd: ROOT,
     encoding: 'utf8',
-    env: { ...process.env, PATH: `${path.join(ROOT, '.local', 'bin')}:${process.env.PATH || ''}` },
+    env: { ...process.env, PATH: `${extraPath}:${process.env.PATH || ''}` },
   });
   return result.status === 0 ? result.stdout.trim() : '';
 }
@@ -90,6 +94,7 @@ function note(label, detail = '') {
 
 function fixablePrerequisites(env) {
   const ttsBackend = (env.TTS_BACKEND || 'edge').toLowerCase();
+  const backend = (env.AGENT_BACKEND || 'hermes').toLowerCase();
   const missing = [];
   if (!commandExists('ffmpeg')) missing.push('ffmpeg');
   if (!resolveCommand(env.WHISPER_CPP_BIN || 'whisper-cli', [path.join(ROOT, '.local', 'bin', 'whisper-cli')])) missing.push('whisper-cli');
@@ -99,7 +104,51 @@ function fixablePrerequisites(env) {
     const edgeCommand = env.EDGE_TTS_COMMAND || env.TTS_EDGE_COMMAND || 'edge-tts';
     if (!resolveCommand(edgeCommand, [path.join(ROOT, '.venv-tts', 'bin', 'edge-tts')])) missing.push('edge-tts');
   }
+  if (backend === 'hermes' && !commandExists('hermes')) missing.push('hermes CLI');
   return missing;
+}
+
+function installHermesCliIfNeeded(env) {
+  const backend = (env.AGENT_BACKEND || 'hermes').toLowerCase();
+  if (backend !== 'hermes' || commandExists('hermes')) return false;
+  if (process.platform === 'win32') {
+    console.log('Skipping Hermes CLI auto-install: Windows is not supported by VerbalCoding yet.');
+    return false;
+  }
+  if (['0', 'false', 'no', 'off'].includes(String(process.env.VERBALCODING_DOCTOR_INSTALL_HERMES || '1').toLowerCase())) {
+    console.log('Skipping Hermes CLI auto-install because VERBALCODING_DOCTOR_INSTALL_HERMES is off.');
+    return false;
+  }
+  if (!commandExists('curl')) {
+    console.log('Skipping Hermes CLI auto-install: curl is missing.');
+    return false;
+  }
+  console.log('VerbalCoding doctor: missing hermes CLI; installing Hermes Agent...');
+  const result = spawnSync('bash', ['-lc', 'curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash'], {
+    cwd: ROOT,
+    stdio: 'inherit',
+    env: process.env,
+  });
+  if (result.status !== 0) {
+    console.log(`Hermes installer exited with status ${result.status}. Continuing with checks.`);
+  }
+  return true;
+}
+
+function discordSetupGuidance(env) {
+  const clientId = env.DISCORD_CLIENT_ID || env.APPLICATION_ID || '';
+  const lines = [
+    'Discord bot setup:',
+    '  1. Open https://discord.com/developers/applications and create an application.',
+    '  2. Bot tab: Add Bot, enable Message Content Intent, then Reset/Copy Token.',
+    `  3. Save it in ${path.join(ROOT, '.env')} as DISCORD_BOT_TOKEN="...".`,
+    '  4. OAuth2 tab: copy the Application/Client ID.',
+    clientId
+      ? `  5. Invite the bot: vc bot invite ${clientId}`
+      : '  5. Invite the bot: vc bot invite <client-id>',
+    '  6. Give it text channel send/read plus voice connect/speak permissions, then rerun vc doctor.',
+  ];
+  return lines.join('\n');
 }
 
 function persistDiscoveredLocalHelpers(env) {
@@ -141,6 +190,13 @@ if (autoFixEnabled && missingBeforeFix.length > 0) {
   console.log('');
   env = mergeEnv();
 }
+if (autoFixEnabled) {
+  const hermesAttempted = installHermesCliIfNeeded(env);
+  if (hermesAttempted) {
+    console.log('');
+    env = mergeEnv();
+  }
+}
 
 const backend = (env.AGENT_BACKEND || 'hermes').toLowerCase();
 const ttsBackend = (env.TTS_BACKEND || 'edge').toLowerCase();
@@ -166,6 +222,9 @@ ok = check('whisper-cli', whisperCommand, whisperCommand || 'missing') && ok;
 const modelPath = path.resolve(ROOT, env.WHISPER_CPP_MODEL || 'models/ggml-small-q5_1.bin');
 ok = check('whisper.cpp model', fs.existsSync(modelPath), path.relative(ROOT, modelPath)) && ok;
 ok = check('Discord bot token configured', Boolean(env.DISCORD_BOT_TOKEN || env.DISCORD_TOKEN), (env.DISCORD_BOT_TOKEN || env.DISCORD_TOKEN) ? '[REDACTED]' : 'missing DISCORD_BOT_TOKEN') && ok;
+if (!(env.DISCORD_BOT_TOKEN || env.DISCORD_TOKEN)) {
+  console.log(discordSetupGuidance(env));
+}
 note('Allowed users configured', env.DISCORD_ALLOWED_USERS ? '[REDACTED]' : 'not set; bot may accept all users depending on config');
 note('Auto-join channels', env.AUTO_JOIN_VOICE_CHANNELS || 'default: 일반,General,general');
 note('Verbose progress default', ['1', 'true', 'yes', 'on'].includes(String(env.AGENT_VERBOSE_PROGRESS || env.VERBALCODING_VERBOSE_PROGRESS || '0').toLowerCase()) ? 'on' : 'off');

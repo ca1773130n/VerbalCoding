@@ -53,6 +53,7 @@ async function main() {
     }
     const existingDiscordBotToken = process.env.DISCORD_BOT_TOKEN || '';
     const discordBotToken = await ask('Discord bot token (DISCORD_BOT_TOKEN)', existingDiscordBotToken, { fallbackLabel: existingDiscordBotToken ? 'keep existing' : '' });
+    const discordClientId = await ask('Discord application/client ID for invite URL', process.env.DISCORD_CLIENT_ID || '');
     const allowedUsers = await ask('Allowed Discord user IDs, comma-separated', process.env.DISCORD_ALLOWED_USERS || '');
     const autoJoinVoiceChannels = await ask('Auto-join voice channel names', process.env.AUTO_JOIN_VOICE_CHANNELS || '일반,General,general');
     const transcriptChannelId = await ask('Transcript text channel/thread ID', process.env.TRANSCRIPT_CHANNEL_ID || '');
@@ -80,6 +81,7 @@ async function main() {
       agentLabel,
       agentCommand,
       discordBotToken,
+      discordClientId,
       allowedUsers,
       autoJoinVoiceChannels,
       transcriptChannelId,
