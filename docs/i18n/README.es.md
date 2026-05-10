@@ -77,8 +77,8 @@ services:
 
 | Guía | Enlace |
 |---|---|
-| Fresh install | [FRESH_INSTALL](../FRESH_INSTALL.md) |
-| Usage | [USAGE](../USAGE.md) |
-| Configuration | [CONFIGURATION](../CONFIGURATION.md) |
-| Troubleshooting | [TROUBLESHOOTING](../TROUBLESHOOTING.md) |
-| Multi-instance | [MULTI_INSTANCE](../MULTI_INSTANCE.md) |
+| Fresh install | [FRESH_INSTALL](FRESH_INSTALL.es.md) |
+| Usage | [USAGE](USAGE.es.md) |
+| Configuration | [CONFIGURATION](CONFIGURATION.es.md) |
+| Troubleshooting | [TROUBLESHOOTING](TROUBLESHOOTING.es.md) |
+| Multi-instance | [MULTI_INSTANCE](MULTI_INSTANCE.es.md) |

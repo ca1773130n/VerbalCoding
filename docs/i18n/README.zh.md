@@ -77,8 +77,8 @@ services:
 
 | 指南 | 链接 |
 |---|---|
-| Fresh install | [FRESH_INSTALL](../FRESH_INSTALL.md) |
-| Usage | [USAGE](../USAGE.md) |
-| Configuration | [CONFIGURATION](../CONFIGURATION.md) |
-| Troubleshooting | [TROUBLESHOOTING](../TROUBLESHOOTING.md) |
-| Multi-instance | [MULTI_INSTANCE](../MULTI_INSTANCE.md) |
+| Fresh install | [FRESH_INSTALL](FRESH_INSTALL.zh.md) |
+| Usage | [USAGE](USAGE.zh.md) |
+| Configuration | [CONFIGURATION](CONFIGURATION.zh.md) |
+| Troubleshooting | [TROUBLESHOOTING](TROUBLESHOOTING.zh.md) |
+| Multi-instance | [MULTI_INSTANCE](MULTI_INSTANCE.zh.md) |

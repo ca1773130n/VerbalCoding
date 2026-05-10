@@ -77,8 +77,8 @@ services:
 
 | 가이드 | 링크 |
 |---|---|
-| Fresh install | [FRESH_INSTALL](../FRESH_INSTALL.md) |
-| Usage | [USAGE](../USAGE.md) |
-| Configuration | [CONFIGURATION](../CONFIGURATION.md) |
-| Troubleshooting | [TROUBLESHOOTING](../TROUBLESHOOTING.md) |
-| Multi-instance | [MULTI_INSTANCE](../MULTI_INSTANCE.md) |
+| Fresh install | [FRESH_INSTALL](FRESH_INSTALL.ko.md) |
+| Usage | [USAGE](USAGE.ko.md) |
+| Configuration | [CONFIGURATION](CONFIGURATION.ko.md) |
+| Troubleshooting | [TROUBLESHOOTING](TROUBLESHOOTING.ko.md) |
+| Multi-instance | [MULTI_INSTANCE](MULTI_INSTANCE.ko.md) |

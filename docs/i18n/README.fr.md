@@ -77,8 +77,8 @@ services:
 
 | Guide | Lien |
 |---|---|
-| Fresh install | [FRESH_INSTALL](../FRESH_INSTALL.md) |
-| Usage | [USAGE](../USAGE.md) |
-| Configuration | [CONFIGURATION](../CONFIGURATION.md) |
-| Troubleshooting | [TROUBLESHOOTING](../TROUBLESHOOTING.md) |
-| Multi-instance | [MULTI_INSTANCE](../MULTI_INSTANCE.md) |
+| Fresh install | [FRESH_INSTALL](FRESH_INSTALL.fr.md) |
+| Usage | [USAGE](USAGE.fr.md) |
+| Configuration | [CONFIGURATION](CONFIGURATION.fr.md) |
+| Troubleshooting | [TROUBLESHOOTING](TROUBLESHOOTING.fr.md) |
+| Multi-instance | [MULTI_INSTANCE](MULTI_INSTANCE.fr.md) |

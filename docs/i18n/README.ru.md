@@ -77,8 +77,8 @@ services:
 
 | Руководство | Ссылка |
 |---|---|
-| Fresh install | [FRESH_INSTALL](../FRESH_INSTALL.md) |
-| Usage | [USAGE](../USAGE.md) |
-| Configuration | [CONFIGURATION](../CONFIGURATION.md) |
-| Troubleshooting | [TROUBLESHOOTING](../TROUBLESHOOTING.md) |
-| Multi-instance | [MULTI_INSTANCE](../MULTI_INSTANCE.md) |
+| Fresh install | [FRESH_INSTALL](FRESH_INSTALL.ru.md) |
+| Usage | [USAGE](USAGE.ru.md) |
+| Configuration | [CONFIGURATION](CONFIGURATION.ru.md) |
+| Troubleshooting | [TROUBLESHOOTING](TROUBLESHOOTING.ru.md) |
+| Multi-instance | [MULTI_INSTANCE](MULTI_INSTANCE.ru.md) |
