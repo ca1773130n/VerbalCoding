@@ -110,7 +110,7 @@ vc bot invite <discord-client-id> --guild <guild-id>
 vc doctor
 ```
 
-`vc doctor` 会脱敏输出：它报告缺失的令牌/命令/模型，但不会打印密钥值。修复每个 `✗` 项，然后重新运行。
+`vc doctor` 会脱敏输出：它报告缺失的令牌/命令/模型，但不会打印密钥值。当可修复的本地前置依赖缺失（`ffmpeg`、`whisper-cli`、默认模型或 Edge TTS 辅助环境）时，它会先自动重新运行打包的引导程序。修复剩余的 `✗` 项，然后重新运行。
 
 预期成功输出包括：
 

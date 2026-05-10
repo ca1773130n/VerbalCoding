@@ -110,7 +110,7 @@ The invite includes bot and slash-command scopes plus text/voice permissions use
 vc doctor
 ```
 
-`vc doctor` is redacted: it reports missing tokens/commands/models without printing secret values. Fix every `✗` item, then rerun it.
+`vc doctor` is redacted: it reports missing tokens/commands/models without printing secret values. When fixable local prerequisites are missing (`ffmpeg`, `whisper-cli`, the default model, or Edge TTS helper), it automatically reruns the packaged bootstrap first. Fix any remaining `✗` items, then rerun it.
 
 Expected success includes:
 

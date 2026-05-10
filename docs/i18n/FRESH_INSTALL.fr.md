@@ -110,7 +110,7 @@ L'invitation inclut les scopes bot et commandes slash ainsi que les permissions 
 vc doctor
 ```
 
-`vc doctor` est expurgé : il signale les jetons/commandes/modèles manquants sans imprimer de valeurs secrètes. Corrigez chaque élément `✗`, puis relancez-le.
+`vc doctor` est expurgé : il signale les jetons/commandes/modèles manquants sans imprimer de valeurs secrètes. Quand des prérequis locaux réparables manquent (`ffmpeg`, `whisper-cli`, le modèle par défaut ou l'assistant Edge TTS), il relance d'abord automatiquement le bootstrap empaqueté. Corrigez les éléments `✗` restants, puis relancez-le.
 
 Un succès attendu ressemble à :
 

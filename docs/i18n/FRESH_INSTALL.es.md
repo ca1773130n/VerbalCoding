@@ -110,7 +110,7 @@ La invitación incluye los scopes de bot y comandos slash, además de los permis
 vc doctor
 ```
 
-`vc doctor` está redactado: informa tokens/comandos/modelos faltantes sin imprimir valores secretos. Corrige cada elemento `✗` y vuelve a ejecutarlo.
+`vc doctor` está redactado: informa tokens/comandos/modelos faltantes sin imprimir valores secretos. Cuando falten prerrequisitos locales reparables (`ffmpeg`, `whisper-cli`, el modelo predeterminado o el asistente Edge TTS), primero vuelve a ejecutar automáticamente el bootstrap empaquetado. Corrige cualquier elemento `✗` restante y vuelve a ejecutarlo.
 
 El éxito esperado incluye:
 

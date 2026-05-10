@@ -292,7 +292,7 @@ async function main(argv = process.argv.slice(2)) {
   }
   if (command === 'doctor') {
     const { spawnSync } = await import('node:child_process');
-    const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'doctor.mjs')], { stdio: 'inherit', cwd: ROOT });
+    const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'doctor.mjs'), ...argv.slice(1)], { stdio: 'inherit', cwd: ROOT });
     process.exitCode = result.status ?? 1;
     return;
   }

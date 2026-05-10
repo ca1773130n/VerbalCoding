@@ -63,11 +63,26 @@ test('bootstrap script installs cross-platform prerequisites and local model hel
 
   assert.match(script, /brew install/);
   assert.match(script, /apt-get install/);
+  assert.match(script, /has_cmd node \|\| packages\+\=\(nodejs\)/);
+  assert.match(script, /has_cmd npm \|\| packages\+\=\(npm\)/);
   assert.match(script, /dnf install/);
   assert.match(script, /pacman -Sy/);
   assert.match(script, /git clone --depth 1 https:\/\/github\.com\/ggml-org\/whisper\.cpp\.git/);
   assert.match(script, /ggml-small-q5_1\.bin/);
   assert.match(script, /\.venv-tts/);
+});
+
+test('doctor auto-bootstraps fixable prerequisites by default', () => {
+  const doctor = fs.readFileSync(path.join(ROOT, 'scripts', 'doctor.mjs'), 'utf8');
+  const cli = fs.readFileSync(path.join(ROOT, 'scripts', 'cli.mjs'), 'utf8');
+
+  assert.match(doctor, /fixablePrerequisites/);
+  assert.match(doctor, /bootstrap_prereqs\.sh'\), '--yes'/);
+  assert.match(doctor, /VERBALCODING_DOCTOR_AUTO_FIX/);
+  assert.match(doctor, /--no-fix/);
+  assert.match(doctor, /WHISPER_CPP_BIN/);
+  assert.match(doctor, /EDGE_TTS_COMMAND/);
+  assert.match(cli, /doctor\.mjs'\), \.\.\.argv\.slice\(1\)/);
 });
 
 test('Ubuntu Docker smoke script validates clean install without secrets', () => {
