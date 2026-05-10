@@ -1,14 +1,14 @@
-# VerbalCoding Мульти-инстансы
+# Многоэкземплярный VerbalCoding
 
-VerbalCoding can run multiple independent Discord voice bridge processes. Each process loads a different `instances/<name>.env` file and uses a different Discord bot token.
+VerbalCoding может запускать несколько независимых процессов голосового bridge Discord. Каждый процесс всё ещё является существующим одноэкземплярным Node bridge, но загружает другой файл `instances/<name>.env` и использует другой токен Discord-бота.
 
-Use this when each project should permanently occupy its own Discord voice channel and write to its own transcript channel/thread.
+Используйте это, когда каждый проект должен постоянно занимать собственный голосовой канал Discord и писать в собственный канал/тред расшифровок.
 
-## Why multiple bot tokens are required
+## Почему требуется несколько токенов ботов
 
-Discord voice residency is effectively one active voice connection per bot account per guild. For simultaneous project rooms, create one Discord application/bot per project.
+Присутствие в голосе Discord фактически ограничено одним активным голосовым подключением на аккаунт бота в пределах guild. Если один токен бота подключается к другому голосовому каналу в той же guild, он не может одновременно оставаться постоянно подключённым к предыдущему каналу. Для одновременных проектных комнат создавайте по одному приложению/боту Discord на проект.
 
-## File layout
+## Структура файлов
 
 ```text
 instances/
@@ -20,31 +20,45 @@ instances/
   llm-wiki.pid        # runtime only, ignored by git
 ```
 
-Real `instances/*.env` files are ignored because they may contain Discord tokens.
+Настоящие файлы `instances/*.env` игнорируются, потому что могут содержать токены Discord. `instances/example.env` — закоммиченный шаблон.
 
-## Instance setup wizard
+## Мастер настройки экземпляра
+
+Пользователям не следует копировать и вручную редактировать env-файлы для обычного использования. Вместо этого запустите мастер:
 
 ```bash
 vc instance setup llm-wiki
+# or through the project setup script:
 ./scripts/install.sh --instance llm-wiki
 ```
 
-The wizard asks for bot token, Discord Application/Client ID, voice channel, transcript target, workdir, project context, and isolated runtime paths. It writes `instances/<name>.env` with mode `0600` and backs up an existing file.
+Мастер запрашивает токен бота, Discord Application/Client ID, голосовой канал, цель расшифровок, workdir, контекст проекта и изолированные runtime-пути. Он записывает `instances/<name>.env` с режимом `0600`, создаёт резервную копию существующего файла перед перезаписью и печатает следующие команды start/status.
 
-Generate invite URLs with:
+Если во время настройки вы введёте Discord Application/Client ID, сводка также напечатает URL приглашения для этого бота. Тот же URL можно сгенерировать в любое время:
 
 ```bash
 vc bot invite <client-id>
 vc bot invite <client-id> --guild <guild-id>
 ```
 
-## Hermes profile isolation
+Discord всё равно требует одно приложение/бота Developer Portal на каждую одновременную голосовую комнату, но это избавляет от ручной сборки OAuth URL или целых чисел разрешений.
 
-Each instance gets its own Hermes home at `~/.hermes/profiles/<name>` so memory, `MEMORY.md`, `SOUL.md`, and learned skills do not leak across projects.
+### Изоляция профилей Hermes
 
-`vc instance setup <name>` creates or reuses the profile, sets `terminal.cwd`, seeds `SOUL.md`, and writes `HERMES_HOME` into the instance env. Instance names must match `^[a-z0-9][a-z0-9_-]{0,63}$`.
+Каждый экземпляр получает собственный home Hermes в `~/.hermes/profiles/<name>`, чтобы память, MEMORY.md, SOUL.md и изученные skills не перетекали между проектами.
 
-## Minimal generated instance env
+`vc instance setup <name>` автоматически:
+
+- запускает `hermes profile create <name> --clone-from default` (переносит API-ключи и модель из текущего `~/.hermes`; сессии и память начинаются заново),
+- задаёт `terminal.cwd` нового профиля в workdir экземпляра,
+- заполняет `<profile>/SOUL.md` из ответа мастеру о контексте проекта,
+- записывает `HERMES_HOME=...` в `instances/<name>.env`.
+
+`vc instance start <name>` самовосстанавливается: если env указывает на директорию профиля Hermes, которой больше нет, команда start пересоздаёт её перед запуском.
+
+Имена экземпляров должны соответствовать `^[a-z0-9][a-z0-9_-]{0,63}$`, потому что Hermes использует имя как директорию и ключ конфигурации.
+
+## Минимальный сгенерированный env экземпляра
 
 ```env
 INSTANCE_NAME=my-project
@@ -62,9 +76,9 @@ AGENT_CWD=/path/to/my-project
 AGENT_PROJECT_CONTEXT=Project session: My Project
 ```
 
-`vc doctor` checks duplicate tokens, colliding runtime paths, missing profile directories, and `terminal.cwd` mismatches without printing secrets.
+Дайте каждому экземпляру уникальные значения для файлов логов/debug/session. `HERMES_HOME` и соответствующая директория `~/.hermes/profiles/<name>` создаются автоматически командой `vc instance setup`. `vc doctor` проверяет повторяющиеся токены, конфликтующие runtime-пути, отсутствующие директории профилей и несоответствия `terminal.cwd` между профилем и экземпляром — всё это без печати секретов.
 
-## Commands
+## Команды
 
 ```bash
 vc instance list
@@ -75,47 +89,91 @@ vc instance stop my-project
 vc instance restart my-project
 ```
 
-## Example: two permanent voice rooms
+`start` запускает `./run.sh instances/<name>.env` в detached-режиме и записывает `.run/instances/<name>.pid`.
 
-1. Create two Discord applications/bots.
-2. Invite both with text and voice permissions. Use `vc bot invite <client-id>`.
-3. Run setup:
+`stop` отправляет `SIGTERM`, ждёт до 10 секунд, затем откатывается к `SIGKILL` и удаляет pid-файл.
+
+## Пример: две постоянные голосовые комнаты
+
+1. Создайте два приложения/бота Discord:
+   - бот VerbalCoding
+   - бот LLM-Wiki
+
+2. Пригласите обоих на сервер с текстовыми и голосовыми разрешениями:
+   - Просмотр канала
+   - Отправка сообщений
+   - Отправка сообщений в тредах
+   - Чтение истории сообщений
+   - Использование команд приложения
+   - Подключение
+   - Речь
+
+   Используйте `vc bot invite <client-id>` после создания каждого приложения Discord, чтобы напечатать точный URL приглашения с этими разрешениями.
+
+3. Запустите мастер настройки для каждого локального экземпляра:
 
 ```bash
 vc instance setup verbalcoding
 vc instance setup llm-wiki
 ```
 
-4. Check and start:
+Мастер записывает игнорируемые файлы `instances/verbalcoding.env` и `instances/llm-wiki.env` с режимом `0600`; он также создаёт резервную копию существующего env экземпляра перед заменой. Каждый запуск также создаёт `~/.hermes/profiles/<name>`, клонированный из вашего стандартного Hermes home, поэтому два экземпляра стартуют с одинаковой аутентификацией/моделью, но накапливают независимую память и skills по мере изучения каждого проекта.
+
+4. Проверьте конфигурацию:
 
 ```bash
 vc doctor
+```
+
+5. Запустите оба:
+
+```bash
 vc instance start verbalcoding
 vc instance start llm-wiki
 vc instance status
 ```
 
-5. Verify logs:
+6. Проверьте логи:
 
 ```bash
 tail -n 50 /tmp/verbalcoding-verbalcoding.log
 tail -n 50 /tmp/verbalcoding-llm-wiki.log
 ```
 
-Expected:
+Ожидаемые строки логов:
 
 ```text
 Listening in voice channel ... / VerbalCoding
 Listening in voice channel ... / LLM-Wiki
 ```
 
-## Short-term single-bot text/voice binding
+7. Остановите оба:
 
-If you only have one bot token, bind a project session to a voice channel instead of simultaneous residency:
+```bash
+vc instance stop verbalcoding
+vc instance stop llm-wiki
+```
+
+## Краткосрочная привязка текста/голоса с одним ботом
+
+Если у вас есть только один токен бота, используйте привязку голоса проектной сессии вместо одновременного присутствия в нескольких каналах.
+
+Выполните это в целевом текстовом канале/треде:
 
 ```text
 !session attach-voice --voice "LLM-Wiki"
+```
+
+Поведение:
+
+- Привязывает выбранный голосовой канал к текущему текстовому каналу/треду.
+- Если в текущем текстовом канале нет проектной сессии, создаёт ad-hoc изолированную сессию.
+- Текст voice STT/result/progress/final-answer направляется в активную цель расшифровок проекта.
+
+Чтобы привязать существующую именованную проектную сессию:
+
+```text
 !session voice llm-wiki --voice "LLM-Wiki"
 ```
 
-This routes text/STT/result/progress/final answer messages correctly, but it does not make one bot stay in two voice channels at the same time.
+Это удобно для маршрутизации, но не заставляет одного бота одновременно оставаться в двух голосовых каналах. Для одновременного постоянного присутствия используйте несколько токенов/процессов ботов.

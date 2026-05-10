@@ -1,21 +1,28 @@
 # Installation propre
 
-This guide mirrors the English fresh-install flow for Français. It is intended for a clean public install and avoids local-only assumptions.
+Ce guide couvre une installation publique propre. Il évite les hypothèses propres à une machine locale et utilise l'installateur pour amorcer autant d'éléments que possible.
 
-## 1. Install the CLI
+## 1. Installer la CLI
+
+Chemin npm recommandé :
 
 ```bash
 npm install -g verbalcoding
-vc setup --yes
 ```
 
-Or run the published package directly:
+Ou exécutez directement le paquet publié :
 
 ```bash
 npx verbalcoding setup --yes
 ```
 
-Contributor clone path:
+Si vous avez utilisé `npm install -g`, continuez avec :
+
+```bash
+vc setup --yes
+```
+
+Chemin de clonage GitHub pour les contributeurs :
 
 ```bash
 git clone https://github.com/ca1773130n/VerbalCoding.git
@@ -23,47 +30,99 @@ cd VerbalCoding
 ./scripts/install.sh --yes
 ```
 
-## 2. Bootstrap dependencies
+## 2. Amorcer les dépendances et lancer l'assistant de configuration
 
-The setup flow installs npm dependencies when needed, links the short `vc` command for clone installs, installs `ffmpeg` / Node / `whisper-cli` where the OS package manager supports it, downloads `models/ggml-small-q5_1.bin`, creates `.venv-tts`, and writes `.env`.
-
-Useful variants:
+Les commandes npm ci-dessus exécutent le même programme d'amorçage que l'installation depuis clone. Pour un clone, exécutez :
 
 ```bash
-vc setup --yes --no-wizard
-./scripts/install.sh --yes --no-wizard
-./scripts/install.sh --skip-system
-./scripts/install.sh --skip-model
-./scripts/install.sh --skip-edge-tts
+./scripts/install.sh --yes
+```
+
+Ce que cela fait :
+
+- installe les dépendances npm quand `node_modules/` est absent,
+- installe la commande shell courte `vc` avec `npm link`,
+- installe `ffmpeg`, Node/npm et `whisper-cli` quand le gestionnaire de paquets de l'OS le permet,
+- télécharge `models/ggml-small-q5_1.bin`,
+- crée `.venv-tts` et installe `edge-tts` quand `edge-tts` n'est pas déjà dans `PATH`,
+- lance l'assistant interactif `.env`.
+
+Chemins d'amorçage système pris en charge :
+
+| OS | Chemin pour les dépendances système |
+|---|---|
+| macOS | Homebrew : `brew install node ffmpeg whisper-cpp` selon les besoins |
+| Debian/Ubuntu | `apt-get` pour Node/npm, ffmpeg, Python, outils de build ; fallback de build whisper.cpp local |
+| Fedora/RHEL | `dnf` pour Node/npm, ffmpeg, Python, outils de build ; fallback de build whisper.cpp local |
+| Arch | `pacman` pour Node/npm, ffmpeg, Python, outils de build ; fallback de build whisper.cpp local |
+
+Variantes utiles de l'installateur :
+
+```bash
+vc setup --yes --no-wizard                   # dépendances/amorcage seulement depuis l'installation npm
+./scripts/install.sh --yes --no-wizard       # dépendances/amorcage seulement depuis un clone
+./scripts/install.sh --skip-system           # ne pas installer de paquets OS
+./scripts/install.sh --skip-model            # ne pas télécharger le modèle STT par défaut
+./scripts/install.sh --skip-edge-tts         # ne pas créer .venv-tts
 VERBALCODING_SKIP_CLI_LINK=1 ./scripts/install.sh --yes
 ```
 
-Supported bootstrap paths: macOS/Homebrew, Debian/Ubuntu `apt`, Fedora/RHEL `dnf`, and Arch `pacman`. If unsupported, manually install Node.js 20+, npm, ffmpeg, Python 3, `whisper-cli`, and an authenticated CLI agent backend.
+Si votre OS n'est pas pris en charge, installez manuellement ces éléments avant de relancer :
 
-## 3. Discord application setup
+- Node.js 20+ et npm
+- ffmpeg
+- Python 3 avec venv/pip
+- `whisper-cli` de whisper.cpp
+- un backend d'agent CLI authentifié, Hermes Agent par défaut
 
-Read the upstream bot guides first:
+## 3. Configuration de l'application Discord
 
-- Hermes Agent Discord guide: <https://hermes-agent.nousresearch.com/docs/user-guide/messaging/discord>
-- Discord official bot overview: <https://docs.discord.com/developers/bots/overview>
-- Discord official getting started guide: <https://docs.discord.com/developers/quick-start/getting-started>
+Lisez d'abord les guides amont de configuration d'un bot Discord si c'est votre premier bot :
 
-Create a Discord application and bot, enable the Message Content privileged intent, put the token in the installer or `.env` as `DISCORD_BOT_TOKEN`, then generate the invite URL:
+- Guide de messagerie Discord de Hermes Agent : <https://hermes-agent.nousresearch.com/docs/user-guide/messaging/discord>
+- Vue d'ensemble officielle des bots Discord : <https://docs.discord.com/developers/bots/overview>
+- Guide officiel de démarrage Discord : <https://docs.discord.com/developers/quick-start/getting-started>
+
+Ces pages montrent comment créer une application Discord, ajouter un utilisateur bot, activer les intents privilégiés et l'inviter sur un serveur. VerbalCoding utilise la même configuration de bot Discord, puis ajoute par-dessus la réception vocale, le STT, l'exécution d'agent CLI et la lecture TTS.
+
+1. Créez une application Discord et un bot dans le portail développeur Discord.
+2. Activez l'intent privilégié Message Content.
+3. Copiez le jeton du bot dans l'invite de l'installateur ou dans `.env` en tant que `DISCORD_BOT_TOKEN`.
+4. Générez une URL d'invitation :
 
 ```bash
 vc bot invite <discord-client-id>
+# or pin it to one server:
 vc bot invite <discord-client-id> --guild <guild-id>
 ```
 
-## 4. Verify
+L'invitation inclut les scopes bot et commandes slash ainsi que les permissions texte/voix utilisées par VerbalCoding.
+
+## 4. Vérifier
 
 ```bash
 vc doctor
 ```
 
-`vc doctor` redacts secrets and reports missing commands/models/tokens without printing sensitive values. Expected success includes Node.js, npm, ffmpeg, whisper-cli, the model, Discord bot token configured, edge-tts, and the selected agent CLI.
+`vc doctor` est expurgé : il signale les jetons/commandes/modèles manquants sans imprimer de valeurs secrètes. Corrigez chaque élément `✗`, puis relancez-le.
 
-## 5. Run
+Un succès attendu ressemble à :
+
+```text
+✓ Node.js
+✓ npm
+✓ ffmpeg
+✓ whisper-cli
+✓ whisper.cpp model
+✓ Discord bot token configured — [REDACTED]
+✓ edge-tts
+✓ hermes CLI
+Doctor passed. Run vc start to start VerbalCoding.
+```
+
+Si l'installateur a créé un assistant Edge TTS local, `.env` doit contenir un chemin `EDGE_TTS_COMMAND` pointant vers `.venv-tts/bin/edge-tts`.
+
+## 5. Lancer le bot par défaut unique
 
 ```bash
 vc start
@@ -71,14 +130,14 @@ vc start
 ./run.sh
 ```
 
-Expected log lines:
+Les journaux d'un démarrage réussi incluent :
 
 ```text
 Logged in as <bot-name>
 Listening in voice channel <server> / <channel>
 ```
 
-In Discord:
+Dans Discord :
 
 ```text
 !ping
@@ -87,11 +146,11 @@ In Discord:
 !verbose on
 ```
 
-Then speak in the configured voice channel. You should see STT text, progress text when verbose mode is on, a final text answer, and hear TTS playback.
+Parlez ensuite dans le salon vocal configuré. Vous devriez voir le texte STT, le texte de progression quand le mode détaillé est activé, une réponse texte finale et entendre la lecture TTS.
 
-## 6. Project-per-room setup
+## 6. Configuration un projet par salon
 
-For one permanent bot per project voice room, create one Discord application per project, then:
+Pour un bot permanent par salon vocal de projet, créez une application Discord par projet, puis :
 
 ```bash
 vc instance setup my-project
@@ -100,9 +159,11 @@ vc instance start my-project
 vc instance status my-project
 ```
 
-## 7. Optional OpenVoice setup
+Chaque instance écrit un fichier ignoré `instances/<name>.env` avec son propre jeton, salon vocal, cible de transcription, chemin de journal, fichier de session Hermes et profil Hermes facultatif.
 
-Keep `TTS_BACKEND=edge` for a fresh install. To enable OpenVoice later:
+## 7. Configuration OpenVoice facultative
+
+Le clonage vocal OpenVoice est facultatif. Gardez `TTS_BACKEND=edge` pour une nouvelle installation publique. Pour activer OpenVoice plus tard :
 
 ```bash
 ./scripts/setup_openvoice.sh
@@ -112,13 +173,29 @@ Keep `TTS_BACKEND=edge` for a fresh install. To enable OpenVoice later:
 python3 integrations/openvoice/synth.py --openvoice-dir vendor/OpenVoice --ref-audio voice-samples/user-reference.wav --text '안녕하세요. 버벌코딩 목소리 복제 테스트입니다.' --output /tmp/verbalcoding-openvoice-smoke.wav
 ```
 
-Then set `TTS_BACKEND=openvoice`, run `vc doctor`, and test `!voice-test <text>` in Discord.
+Définissez ensuite `TTS_BACKEND=openvoice`, exécutez `vc doctor` et testez `!voice-test <text>` dans Discord.
 
-## 8. Maintainer smoke tests
+## 8. Smoke test de clone propre pour les mainteneurs
+
+Smoke test rapide sur l'hôte uniquement :
 
 ```bash
+TMPDIR=$(mktemp -d)
+git clone https://github.com/ca1773130n/VerbalCoding.git "$TMPDIR/VerbalCoding"
+cd "$TMPDIR/VerbalCoding"
 ./scripts/install.sh --yes --no-wizard
 npm pack --dry-run
+cp .env.example .env
+chmod 600 .env
 vc doctor || true
+```
+
+L'échec attendu à ce stade est l'absence de secrets locaux ou d'authentification de la CLI d'agent, et non une fuite de jetons ou des scripts d'installation manquants.
+
+Smoke test d'installation propre Ubuntu basé sur Docker :
+
+```bash
 ./scripts/docker_ubuntu_smoke.sh
 ```
+
+Cela lance `ubuntu:24.04`, copie l'arborescence suivie du dépôt dans un conteneur propre, exécute `./scripts/install.sh --yes --no-wizard`, écrit un `.env` de smoke test sans secret, vérifie `vc`, lance les tests Node et vérifie `vc doctor`. Il ne se connecte pas à la voix Discord ; utilisez une vraie VM Ubuntu ou WSL2 après cela si vous avez besoin d'un test de bout en bout dans un salon vocal.

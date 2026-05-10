@@ -1,21 +1,28 @@
 # 新規インストール
 
-This guide mirrors the English fresh-install flow for 日本語. It is intended for a clean public install and avoids local-only assumptions.
+このガイドは、クリーンな公開インストール向けです。ローカル環境だけに依存する前提を避け、インストーラーで可能な限りブートストラップします。
 
-## 1. Install the CLI
+## 1. CLI をインストールする
+
+推奨 npm 手順:
 
 ```bash
 npm install -g verbalcoding
-vc setup --yes
 ```
 
-Or run the published package directly:
+または公開パッケージを直接実行します:
 
 ```bash
 npx verbalcoding setup --yes
 ```
 
-Contributor clone path:
+`npm install -g` を使った場合は、続けて次を実行します:
+
+```bash
+vc setup --yes
+```
+
+コントリビューター向けの GitHub クローン手順:
 
 ```bash
 git clone https://github.com/ca1773130n/VerbalCoding.git
@@ -23,62 +30,114 @@ cd VerbalCoding
 ./scripts/install.sh --yes
 ```
 
-## 2. Bootstrap dependencies
+## 2. 依存関係をブートストラップし、セットアップウィザードを実行する
 
-The setup flow installs npm dependencies when needed, links the short `vc` command for clone installs, installs `ffmpeg` / Node / `whisper-cli` where the OS package manager supports it, downloads `models/ggml-small-q5_1.bin`, creates `.venv-tts`, and writes `.env`.
-
-Useful variants:
+上記の npm コマンドは、クローンインストールと同じブートストラッパーを実行します。クローンの場合は次を実行します:
 
 ```bash
-vc setup --yes --no-wizard
-./scripts/install.sh --yes --no-wizard
-./scripts/install.sh --skip-system
-./scripts/install.sh --skip-model
-./scripts/install.sh --skip-edge-tts
+./scripts/install.sh --yes
+```
+
+実行される内容:
+
+- `node_modules/` がない場合に npm 依存関係をインストールします。
+- `npm link` で短い `vc` シェルコマンドをインストールします。
+- OS パッケージマネージャーが対応している場合、`ffmpeg`、Node/npm、`whisper-cli` をインストールします。
+- `models/ggml-small-q5_1.bin` をダウンロードします。
+- `edge-tts` がまだ `PATH` にない場合、`.venv-tts` を作成して `edge-tts` をインストールします。
+- 対話式 `.env` ウィザードを実行します。
+
+対応するシステムブートストラップ手順:
+
+| OS | システム依存関係の導入方法 |
+|---|---|
+| macOS | Homebrew: 必要に応じて `brew install node ffmpeg whisper-cpp` |
+| Debian/Ubuntu | Node/npm、ffmpeg、Python、ビルドツールは `apt-get`。ローカル whisper.cpp ビルドにフォールバック |
+| Fedora/RHEL | Node/npm、ffmpeg、Python、ビルドツールは `dnf`。ローカル whisper.cpp ビルドにフォールバック |
+| Arch | Node/npm、ffmpeg、Python、ビルドツールは `pacman`。ローカル whisper.cpp ビルドにフォールバック |
+
+便利なインストーラーのバリエーション:
+
+```bash
+vc setup --yes --no-wizard                   # npm インストールから依存関係/ブートストラップのみ
+./scripts/install.sh --yes --no-wizard       # クローンから依存関係/ブートストラップのみ
+./scripts/install.sh --skip-system           # OS パッケージをインストールしない
+./scripts/install.sh --skip-model            # デフォルト STT モデルをダウンロードしない
+./scripts/install.sh --skip-edge-tts         # .venv-tts を作成しない
 VERBALCODING_SKIP_CLI_LINK=1 ./scripts/install.sh --yes
 ```
 
-Supported bootstrap paths: macOS/Homebrew, Debian/Ubuntu `apt`, Fedora/RHEL `dnf`, and Arch `pacman`. If unsupported, manually install Node.js 20+, npm, ffmpeg, Python 3, `whisper-cli`, and an authenticated CLI agent backend.
+OS が未対応の場合は、再実行する前に次を手動でインストールしてください:
 
-## 3. Discord application setup
+- Node.js 20+ と npm
+- ffmpeg
+- venv/pip 付き Python 3
+- whisper.cpp の `whisper-cli`
+- 認証済み CLI エージェントバックエンドを少なくとも 1 つ（デフォルトは Hermes Agent）
 
-Read the upstream bot guides first:
+## 3. Discord アプリケーションをセットアップする
 
-- Hermes Agent Discord guide: <https://hermes-agent.nousresearch.com/docs/user-guide/messaging/discord>
-- Discord official bot overview: <https://docs.discord.com/developers/bots/overview>
-- Discord official getting started guide: <https://docs.discord.com/developers/quick-start/getting-started>
+初めてボットを作る場合は、まず上流の Discord ボットセットアップガイドを読んでください:
 
-Create a Discord application and bot, enable the Message Content privileged intent, put the token in the installer or `.env` as `DISCORD_BOT_TOKEN`, then generate the invite URL:
+- Hermes Agent の Discord メッセージングガイド: <https://hermes-agent.nousresearch.com/docs/user-guide/messaging/discord>
+- Discord 公式ボット概要: <https://docs.discord.com/developers/bots/overview>
+- Discord 公式はじめにガイド: <https://docs.discord.com/developers/quick-start/getting-started>
+
+これらのページでは、Discord アプリケーションの作成、ボットユーザーの追加、特権インテントの有効化、サーバーへの招待方法を説明しています。VerbalCoding は同じ Discord ボット設定を使い、その上に音声受信、STT、CLI エージェント実行、TTS 再生を追加します。
+
+1. Discord Developer Portal で Discord アプリケーションとボットを作成します。
+2. Message Content 特権インテントを有効にします。
+3. ボットトークンをインストーラーのプロンプト、または `.env` の `DISCORD_BOT_TOKEN` にコピーします。
+4. 招待 URL を生成します:
 
 ```bash
 vc bot invite <discord-client-id>
+# または 1 つのサーバーに固定します:
 vc bot invite <discord-client-id> --guild <guild-id>
 ```
 
-## 4. Verify
+この招待には、VerbalCoding が使うボットおよびスラッシュコマンドのスコープと、テキスト/音声権限が含まれます。
+
+## 4. 検証する
 
 ```bash
 vc doctor
 ```
 
-`vc doctor` redacts secrets and reports missing commands/models/tokens without printing sensitive values. Expected success includes Node.js, npm, ffmpeg, whisper-cli, the model, Discord bot token configured, edge-tts, and the selected agent CLI.
+`vc doctor` は秘密情報を伏せます。トークン/コマンド/モデルの欠落を、秘密値を出力せずに報告します。すべての `✗` 項目を修正してから再実行してください。
 
-## 5. Run
+期待される成功例:
+
+```text
+✓ Node.js
+✓ npm
+✓ ffmpeg
+✓ whisper-cli
+✓ whisper.cpp model
+✓ Discord bot token configured — [REDACTED]
+✓ edge-tts
+✓ hermes CLI
+Doctor passed. Run vc start to start VerbalCoding.
+```
+
+インストーラーがローカル Edge TTS ヘルパーを作成した場合、`.env` には `.venv-tts/bin/edge-tts` を指す `EDGE_TTS_COMMAND` パスが含まれているはずです。
+
+## 5. 単一のデフォルトボットを実行する
 
 ```bash
 vc start
-# or, from a GitHub clone:
+# または GitHub クローンから:
 ./run.sh
 ```
 
-Expected log lines:
+起動に成功すると、ログには次のような行が含まれます:
 
 ```text
 Logged in as <bot-name>
 Listening in voice channel <server> / <channel>
 ```
 
-In Discord:
+Discord 内:
 
 ```text
 !ping
@@ -87,11 +146,11 @@ In Discord:
 !verbose on
 ```
 
-Then speak in the configured voice channel. You should see STT text, progress text when verbose mode is on, a final text answer, and hear TTS playback.
+その後、設定済みの音声チャンネルで話してください。STT テキスト、詳細モードがオンの場合の進捗テキスト、最終テキスト回答が表示され、TTS 再生が聞こえるはずです。
 
-## 6. Project-per-room setup
+## 6. プロジェクトごとのルーム設定
 
-For one permanent bot per project voice room, create one Discord application per project, then:
+プロジェクト音声ルームごとに 1 つの永続ボットを使うには、プロジェクトごとに Discord アプリケーションを 1 つ作成してから、次を実行します:
 
 ```bash
 vc instance setup my-project
@@ -100,25 +159,43 @@ vc instance start my-project
 vc instance status my-project
 ```
 
-## 7. Optional OpenVoice setup
+各インスタンスは、独自のトークン、音声チャンネル、文字起こし先、ログパス、Hermes セッションファイル、任意の Hermes プロファイルを含む、git で無視される `instances/<name>.env` を書き込みます。
 
-Keep `TTS_BACKEND=edge` for a fresh install. To enable OpenVoice later:
+## 7. 任意の OpenVoice セットアップ
+
+OpenVoice の音声クローンは任意です。新規の公開インストールでは `TTS_BACKEND=edge` のままにしてください。後で OpenVoice を有効にするには:
 
 ```bash
 ./scripts/setup_openvoice.sh
-# Download OpenVoice V2 checkpoints into vendor/OpenVoice/checkpoints_v2/
-# Add a permitted local sample at voice-samples/user-reference.wav,
-# or run the bot, say "목소리 샘플 녹음 시작해", then speak 10-30 seconds.
+# OpenVoice V2 checkpoints を vendor/OpenVoice/checkpoints_v2/ にダウンロードします
+# 許可済みのローカルサンプルを voice-samples/user-reference.wav に追加するか、
+# ボットを実行して「목소리 샘플 녹음 시작해」と言い、その後 10〜30 秒話します。
 python3 integrations/openvoice/synth.py --openvoice-dir vendor/OpenVoice --ref-audio voice-samples/user-reference.wav --text '안녕하세요. 버벌코딩 목소리 복제 테스트입니다.' --output /tmp/verbalcoding-openvoice-smoke.wav
 ```
 
-Then set `TTS_BACKEND=openvoice`, run `vc doctor`, and test `!voice-test <text>` in Discord.
+次に `TTS_BACKEND=openvoice` を設定し、`vc doctor` を実行して、Discord で `!voice-test <text>` をテストします。
 
-## 8. Maintainer smoke tests
+## 8. メンテナー向けクリーンクローンのスモークテスト
+
+ホストのみでの高速スモークテスト:
 
 ```bash
+TMPDIR=$(mktemp -d)
+git clone https://github.com/ca1773130n/VerbalCoding.git "$TMPDIR/VerbalCoding"
+cd "$TMPDIR/VerbalCoding"
 ./scripts/install.sh --yes --no-wizard
 npm pack --dry-run
+cp .env.example .env
+chmod 600 .env
 vc doctor || true
+```
+
+この時点で期待される失敗は、ローカル秘密情報の欠落またはエージェント CLI が未認証であることです。トークン漏えいやインストールスクリプトの欠落ではありません。
+
+Docker ベースの Ubuntu クリーンインストールスモークテスト:
+
+```bash
 ./scripts/docker_ubuntu_smoke.sh
 ```
+
+これは `ubuntu:24.04` を実行し、追跡対象のリポジトリツリーをクリーンなコンテナへコピーし、`./scripts/install.sh --yes --no-wizard` を実行し、秘密情報を含まないスモーク用 `.env` を書き、`vc` を確認し、Node テストを実行して、`vc doctor` を検証します。Discord 音声には接続しません。エンドツーエンドの音声チャンネルテストが必要な場合は、この後で実際の Ubuntu VM または WSL2 を使ってください。

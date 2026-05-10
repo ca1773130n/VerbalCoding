@@ -1,21 +1,28 @@
 # Чистая установка
 
-This guide mirrors the English fresh-install flow for Русский. It is intended for a clean public install and avoids local-only assumptions.
+Это руководство предназначено для чистой публичной установки. Оно избегает локальных предположений и использует установщик, чтобы подготовить как можно больше компонентов.
 
-## 1. Install the CLI
+## 1. Установите CLI
+
+Рекомендуемый путь через npm:
 
 ```bash
 npm install -g verbalcoding
-vc setup --yes
 ```
 
-Or run the published package directly:
+Или запустите опубликованный пакет напрямую:
 
 ```bash
 npx verbalcoding setup --yes
 ```
 
-Contributor clone path:
+Если вы использовали `npm install -g`, продолжите так:
+
+```bash
+vc setup --yes
+```
+
+Путь через клон GitHub для контрибьюторов:
 
 ```bash
 git clone https://github.com/ca1773130n/VerbalCoding.git
@@ -23,47 +30,99 @@ cd VerbalCoding
 ./scripts/install.sh --yes
 ```
 
-## 2. Bootstrap dependencies
+## 2. Подготовьте зависимости и запустите мастер настройки
 
-The setup flow installs npm dependencies when needed, links the short `vc` command for clone installs, installs `ffmpeg` / Node / `whisper-cli` where the OS package manager supports it, downloads `models/ggml-small-q5_1.bin`, creates `.venv-tts`, and writes `.env`.
-
-Useful variants:
+Команды npm выше запускают тот же bootstrapper, что и установка из клона. Для клона выполните:
 
 ```bash
-vc setup --yes --no-wizard
-./scripts/install.sh --yes --no-wizard
-./scripts/install.sh --skip-system
-./scripts/install.sh --skip-model
-./scripts/install.sh --skip-edge-tts
+./scripts/install.sh --yes
+```
+
+Что это делает:
+
+- устанавливает npm-зависимости, если отсутствует `node_modules/`,
+- устанавливает короткую shell-команду `vc` через `npm link`,
+- устанавливает `ffmpeg`, Node/npm и `whisper-cli`, когда это поддерживается менеджером пакетов ОС,
+- загружает `models/ggml-small-q5_1.bin`,
+- создаёт `.venv-tts` и устанавливает `edge-tts`, если `edge-tts` ещё не находится в `PATH`,
+- запускает интерактивный мастер `.env`.
+
+Поддерживаемые пути системного bootstrap:
+
+| ОС | Путь системных зависимостей |
+|---|---|
+| macOS | Homebrew: `brew install node ffmpeg whisper-cpp` при необходимости |
+| Debian/Ubuntu | `apt-get` для Node/npm, ffmpeg, Python, инструментов сборки; резервная локальная сборка whisper.cpp |
+| Fedora/RHEL | `dnf` для Node/npm, ffmpeg, Python, инструментов сборки; резервная локальная сборка whisper.cpp |
+| Arch | `pacman` для Node/npm, ffmpeg, Python, инструментов сборки; резервная локальная сборка whisper.cpp |
+
+Полезные варианты установщика:
+
+```bash
+vc setup --yes --no-wizard                   # dependency/bootstrap only from npm install
+./scripts/install.sh --yes --no-wizard       # dependency/bootstrap only from a clone
+./scripts/install.sh --skip-system           # do not install OS packages
+./scripts/install.sh --skip-model            # do not download the default STT model
+./scripts/install.sh --skip-edge-tts         # do not create .venv-tts
 VERBALCODING_SKIP_CLI_LINK=1 ./scripts/install.sh --yes
 ```
 
-Supported bootstrap paths: macOS/Homebrew, Debian/Ubuntu `apt`, Fedora/RHEL `dnf`, and Arch `pacman`. If unsupported, manually install Node.js 20+, npm, ffmpeg, Python 3, `whisper-cli`, and an authenticated CLI agent backend.
+Если ваша ОС не поддерживается, установите это вручную перед повторным запуском:
 
-## 3. Discord application setup
+- Node.js 20+ и npm
+- ffmpeg
+- Python 3 с venv/pip
+- `whisper-cli` из whisper.cpp
+- один аутентифицированный бэкенд CLI-агента, по умолчанию Hermes Agent
 
-Read the upstream bot guides first:
+## 3. Настройка приложения Discord
 
-- Hermes Agent Discord guide: <https://hermes-agent.nousresearch.com/docs/user-guide/messaging/discord>
-- Discord official bot overview: <https://docs.discord.com/developers/bots/overview>
-- Discord official getting started guide: <https://docs.discord.com/developers/quick-start/getting-started>
+Если это ваш первый бот, сначала прочитайте исходные руководства по настройке ботов Discord:
 
-Create a Discord application and bot, enable the Message Content privileged intent, put the token in the installer or `.env` as `DISCORD_BOT_TOKEN`, then generate the invite URL:
+- Руководство Hermes Agent по сообщениям Discord: <https://hermes-agent.nousresearch.com/docs/user-guide/messaging/discord>
+- Официальный обзор ботов Discord: <https://docs.discord.com/developers/bots/overview>
+- Официальное руководство Discord по началу работы: <https://docs.discord.com/developers/quick-start/getting-started>
+
+Эти страницы показывают, как создать приложение Discord, добавить пользователя-бота, включить привилегированные intents и пригласить его на сервер. VerbalCoding использует ту же настройку Discord-бота, а затем добавляет поверх неё приём голоса, STT, выполнение CLI-агента и воспроизведение TTS.
+
+1. Создайте приложение Discord и бота в Discord Developer Portal.
+2. Включите привилегированный intent Message Content.
+3. Скопируйте токен бота в приглашение установщика или в `.env` как `DISCORD_BOT_TOKEN`.
+4. Сгенерируйте URL приглашения:
 
 ```bash
 vc bot invite <discord-client-id>
+# or pin it to one server:
 vc bot invite <discord-client-id> --guild <guild-id>
 ```
 
-## 4. Verify
+Приглашение включает scopes бота и slash-команд, а также текстовые/голосовые разрешения, используемые VerbalCoding.
+
+## 4. Проверьте
 
 ```bash
 vc doctor
 ```
 
-`vc doctor` redacts secrets and reports missing commands/models/tokens without printing sensitive values. Expected success includes Node.js, npm, ffmpeg, whisper-cli, the model, Discord bot token configured, edge-tts, and the selected agent CLI.
+`vc doctor` редактирует чувствительные данные: он сообщает об отсутствующих токенах/командах/моделях, не печатая секретные значения. Исправьте каждый пункт `✗`, затем запустите снова.
 
-## 5. Run
+Ожидаемый успешный результат включает:
+
+```text
+✓ Node.js
+✓ npm
+✓ ffmpeg
+✓ whisper-cli
+✓ whisper.cpp model
+✓ Discord bot token configured — [REDACTED]
+✓ edge-tts
+✓ hermes CLI
+Doctor passed. Run vc start to start VerbalCoding.
+```
+
+Если установщик создал локальный помощник Edge TTS, `.env` должен содержать путь `EDGE_TTS_COMMAND`, указывающий на `.venv-tts/bin/edge-tts`.
+
+## 5. Запустите одного бота по умолчанию
 
 ```bash
 vc start
@@ -71,14 +130,14 @@ vc start
 ./run.sh
 ```
 
-Expected log lines:
+Логи успешного запуска включают:
 
 ```text
 Logged in as <bot-name>
 Listening in voice channel <server> / <channel>
 ```
 
-In Discord:
+В Discord:
 
 ```text
 !ping
@@ -87,11 +146,11 @@ In Discord:
 !verbose on
 ```
 
-Then speak in the configured voice channel. You should see STT text, progress text when verbose mode is on, a final text answer, and hear TTS playback.
+Затем говорите в настроенном голосовом канале. Вы должны увидеть текст STT, текст прогресса при включённом подробном режиме, финальный текстовый ответ и услышать воспроизведение TTS.
 
-## 6. Project-per-room setup
+## 6. Настройка «проект на комнату»
 
-For one permanent bot per project voice room, create one Discord application per project, then:
+Для одного постоянного бота на голосовую комнату проекта создайте по одному приложению Discord на проект, затем:
 
 ```bash
 vc instance setup my-project
@@ -100,9 +159,11 @@ vc instance start my-project
 vc instance status my-project
 ```
 
-## 7. Optional OpenVoice setup
+Каждый экземпляр записывает игнорируемый `instances/<name>.env` со своим токеном, голосовым каналом, целью расшифровок, путём лога, файлом сессии Hermes и необязательным профилем Hermes.
 
-Keep `TTS_BACKEND=edge` for a fresh install. To enable OpenVoice later:
+## 7. Необязательная настройка OpenVoice
+
+Клонирование голоса OpenVoice необязательно. Для свежей публичной установки оставьте `TTS_BACKEND=edge`. Чтобы позже включить OpenVoice:
 
 ```bash
 ./scripts/setup_openvoice.sh
@@ -112,13 +173,29 @@ Keep `TTS_BACKEND=edge` for a fresh install. To enable OpenVoice later:
 python3 integrations/openvoice/synth.py --openvoice-dir vendor/OpenVoice --ref-audio voice-samples/user-reference.wav --text '안녕하세요. 버벌코딩 목소리 복제 테스트입니다.' --output /tmp/verbalcoding-openvoice-smoke.wav
 ```
 
-Then set `TTS_BACKEND=openvoice`, run `vc doctor`, and test `!voice-test <text>` in Discord.
+Затем установите `TTS_BACKEND=openvoice`, запустите `vc doctor` и протестируйте `!voice-test <text>` в Discord.
 
-## 8. Maintainer smoke tests
+## 8. Smoke-тест чистого клона для сопровождающих
+
+Быстрый smoke-тест только на хосте:
 
 ```bash
+TMPDIR=$(mktemp -d)
+git clone https://github.com/ca1773130n/VerbalCoding.git "$TMPDIR/VerbalCoding"
+cd "$TMPDIR/VerbalCoding"
 ./scripts/install.sh --yes --no-wizard
 npm pack --dry-run
+cp .env.example .env
+chmod 600 .env
 vc doctor || true
+```
+
+Ожидаемая ошибка на этом этапе — отсутствующие локальные секреты или неаутентифицированный CLI агента, а не утёкшие токены или отсутствующие установочные скрипты.
+
+Smoke-тест чистой установки Ubuntu на базе Docker:
+
+```bash
 ./scripts/docker_ubuntu_smoke.sh
 ```
+
+Он запускает `ubuntu:24.04`, копирует отслеживаемое дерево репозитория в чистый контейнер, выполняет `./scripts/install.sh --yes --no-wizard`, записывает несекретный smoke `.env`, проверяет `vc`, запускает Node-тесты и проверяет `vc doctor`. Он не подключается к голосу Discord; используйте настоящую Ubuntu VM или WSL2 после этого, если нужен сквозной тест голосового канала.

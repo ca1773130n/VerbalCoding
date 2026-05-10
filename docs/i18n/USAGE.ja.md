@@ -1,71 +1,78 @@
 # VerbalCoding 使い方ガイド
 
-Operational details for 日本語 users.
+このページには、README を長くしすぎていた運用上の詳細をまとめています。
 
-## CLI Commands
+## CLI コマンド
 
 ```bash
-vc status
-vc language en
-vc language ko
-vc language auto
-vc restart auto status
-vc restart auto on
-vc restart auto off
-vc bot invite CLIENT_ID
-vc instance status
-vc instance setup NAME
-vc instance start NAME
-vc instance stop NAME
-vc doctor
-npm run mcp
+vc status                    # STT 言語、進捗言語、TTS 音声を表示
+vc language en               # 英語 STT + 英語の進捗/TTS 音声
+vc language ko               # 韓国語 STT + 韓国語の進捗/TTS 音声
+vc language auto             # Whisper 自動検出 STT + 英語の進捗/TTS 音声
+vc restart auto status       # コミット時の音声ボット自動再起動設定を表示
+vc restart auto on           # コミット時の音声ボット自動再起動を有効化
+vc restart auto off          # 無効化。これがデフォルト
+vc bot invite CLIENT_ID      # 必要な権限付きの Discord 招待 URL を出力
+vc instance status           # インスタンスごとのブリッジ設定とプロセス状態を一覧表示
+vc instance setup NAME       # instances/NAME.env を書き、~/.hermes/profiles/NAME を作成
+vc instance start NAME       # ./run.sh instances/NAME.env をデタッチして起動
+vc instance stop NAME        # デタッチされたインスタンスを停止し pid ファイルを削除
+vc doctor                    # 秘密情報を伏せた doctor チェックを実行
+npm run mcp                  # stdio MCP サーバーを実行
 ```
 
-Language commands update `.env`; restart with `vc start`, `./run.sh`, or your process manager.
+言語変更は `.env` を更新します。反映するには `./run.sh` または利用中のプロセスマネージャーでブリッジを再起動してください。
 
-## Run Modes
+## 実行モード
+
+単一インスタンスのブリッジ:
 
 ```bash
-vc start
 ./run.sh
+```
+
+ローカルの上書き env を使うインスタンス別ブリッジ:
+
+```bash
 ./run.sh instances/my-project.env
+# または
 VERBALCODING_INSTANCE_ENV=instances/my-project.env ./run.sh
 ```
 
-The bot auto-joins the first configured channel name, defaulting to `일반,General,general`.
+ボットは最初に設定されたチャンネル名へ自動参加します。デフォルトは `일반,General,general` です。
 
-## Discord Commands
+## Discord コマンド
 
-Before using commands, set up the Discord application/bot:
+コマンドを接続する前に、上流ガイドに従って Discord アプリケーション/ボットをセットアップしてください:
 
-- Hermes Agent Discord guide: <https://hermes-agent.nousresearch.com/docs/user-guide/messaging/discord>
-- Discord official bot docs: <https://docs.discord.com/developers/bots/overview>
+- Hermes Agent の Discord ガイド: <https://hermes-agent.nousresearch.com/docs/user-guide/messaging/discord>
+- Discord 公式ボットドキュメント: <https://docs.discord.com/developers/bots/overview>
 
-Then run `vc bot invite CLIENT_ID` for the VerbalCoding permissions.
+その後、`vc bot invite CLIENT_ID` を使って、テキストおよび音声権限を持つ VerbalCoding 専用の招待 URL を生成します。
 
-| Command | Purpose |
+| コマンド | 目的 |
 |---|---|
-| `!ping` | Basic bot check |
-| `!join` / `!leave` | Join or leave voice |
-| `!say <text>` | Speak text directly through TTS |
-| `!voice-test <text>` | Test the active TTS backend/voice |
-| `!voice-clone capture` | Save the next valid utterance as an OpenVoice reference sample |
-| `!voice-clone status` / `!voice-clone cancel` | Inspect or cancel capture |
-| `!ask <prompt>` | Send text through the same harness adapter as voice |
-| `!session status` | Show current project/default adapter session |
-| `!session new <name> <workdir> [context] --voice <voice-channel>` | Create a project-scoped Hermes session |
-| `!session attach-voice [sessionName] --voice <voice-channel>` | Bind a text channel/thread to a voice channel |
-| `!session list` | List configured project sessions |
-| `!session reset` / `!reset-session` | Clear the current session file |
-| `!verbose on/off` | Toggle detailed progress updates |
-| `!latency` / `!metrics` | Show recent latency summary |
-| `!sensitivity normal/conservative` | Switch barge-in sensitivity |
+| `!ping` | 基本的なボット確認 |
+| `!join` / `!leave` | 音声に参加または退出 |
+| `!say <text>` | TTS でテキストを直接読み上げ |
+| `!voice-test <text>` | 有効な TTS バックエンド/音声をテスト |
+| `!voice-clone capture` | 次の有効な発話を OpenVoice 参照サンプルとして保存 |
+| `!voice-clone status` / `!voice-clone cancel` | キャプチャ状態を確認またはキャンセル |
+| `!ask <prompt>` | 音声と同じ選択済みハーネスアダプター経由でテキストを送信 |
+| `!session status` | 現在のプロジェクト/デフォルトアダプターセッションを表示 |
+| `!session new <name> <workdir> [context] --voice <voice-channel>` | プロジェクトスコープの Hermes セッションを作成 |
+| `!session attach-voice [sessionName] --voice <voice-channel>` | テキストチャンネル/スレッドを音声チャンネルに紐付け |
+| `!session list` | 設定済みプロジェクトセッションを一覧表示 |
+| `!session reset` / `!reset-session` | 現在のプロジェクト/デフォルトアダプターセッションファイルを消去 |
+| `!verbose on/off` | 詳細な進捗更新を切り替え |
+| `!latency` / `!metrics` | 直近のレイテンシ要約を表示 |
+| `!sensitivity normal/conservative` | 割り込み感度を切り替え |
 
-Voice equivalents such as “외부 모드”, “보수 모드”, “실내”, “기본 감도”, “상세 진행 켜”, and clear stop phrases like “잠깐”, “멈춰”, “그만” are handled by the bridge.
+「외부 모드」「보수 모드」「실내」「기본 감도」などの音声での同等表現や、「잠깐」「멈춰」「그만」のような明確な停止フレーズはブリッジが処理します。また、「상세 진행 켜」/「상세 진행 꺼」と言うことで、音声でも詳細進捗を切り替えられます。
 
-## Changing the Voice
+## 音声を変更する
 
-`vc language ko|en|auto` changes STT language, progress language, and the matching default TTS voice together. Live voice commands can change the speaker without restart:
+`vc language ko|en|auto` は、STT 言語、進捗言語、対応するデフォルト TTS 音声をまとめて変更します。ブリッジの実行中に話者/音声だけを変更したい場合は、Discord 音声で次のように話します:
 
 ```text
 남자 한국어 목소리로 바꿔
@@ -74,9 +81,11 @@ change voice to Korean female
 switch speaker to English
 ```
 
-Built-in Edge types:
+実行中のブリッジはこれらを音声制御コマンドとして認識し、`config/tts-voices.json` を更新し、実行中プロセスの有効な TTS env を更新して、「목소리를 Korean male로 바꿨어。」のような短い確認で応答します。変更直後に `!voice-test <text>` を使うと、現在のバックエンドと音声を聞けます。
 
-| Voice type | Edge voice |
+組み込み Edge 音声タイプ:
+
+| 音声タイプ | Edge 音声 |
 |---|---|
 | `korean_male` | `ko-KR-InJoonNeural` |
 | `korean_female` | `ko-KR-SunHiNeural` |
@@ -84,26 +93,32 @@ Built-in Edge types:
 | `english_male` | `en-US-GuyNeural` |
 | `english_female` | `en-US-AriaNeural` |
 
-Backend voice settings:
+永続的な手動設定では、`.env` に `TTS_BACKEND=edge`、`TTS_VOICE_TYPE=<voice-type>`、必要に応じて `TTS_VOICE=<edge-voice>` を設定するか、カスタム音声カタログ用に `config/tts-voices.json` を編集します。
 
-| Backend | Voice setting | Common choices |
+バックエンド固有の音声ノブ:
+
+| バックエンド | 音声設定 | 一般的な選択肢 |
 |---|---|---|
-| Edge | `TTS_VOICE_TYPE`, `TTS_VOICE` | Built-in types or any Edge voice from `edge-tts --list-voices` |
-| Supertonic | `SUPERTONIC_VOICE` | `M1`–`M5`, `F1`–`F5`; `SUPERTONIC_LANGUAGE=ko|en|es|pt|fr` |
-| OpenVoice | `OPENVOICE_REF_AUDIO`, `OPENVOICE_STYLE` | A permitted reference WAV plus style such as `default` |
-| SpeechSwift / CosyVoice | `SPEECHSWIFT_REF_AUDIO`, `SPEECHSWIFT_ENGINE`, `SPEECHSWIFT_SPEAKER` | Reference WAV or backend speaker/model values |
+| Edge | `TTS_VOICE_TYPE`, `TTS_VOICE` | `korean_male`、`korean_female`、`korean_multilingual_male`、`english_male`、`english_female`。`edge-tts --list-voices` が返す任意の Edge 音声 |
+| Supertonic | `SUPERTONIC_VOICE` | `M1`〜`M5`、`F1`〜`F5`。`SUPERTONIC_LANGUAGE=ko|en|es|pt|fr` を設定 |
+| OpenVoice | `OPENVOICE_REF_AUDIO`, `OPENVOICE_STYLE` | 許可済み参照 WAV と、`default` などのスタイル |
+| SpeechSwift / CosyVoice | `SPEECHSWIFT_REF_AUDIO`, `SPEECHSWIFT_ENGINE`, `SPEECHSWIFT_SPEAKER` | CosyVoice 用の参照 WAV、またはバックエンド対応の話者/モデル値 |
 
-## Long Dictation and Pauses
+Supertonic とローカルクローンバックエンドでは、上記のバックエンド env 変数に加えて `!voice-test <text>` を使い、変更を試聴してください。音声コマンドによる切り替えは、現在は組み込みの Edge 風音声タイプにマッピングされます。より豊富なバックエンドカタログは `config/tts-voices.json` に追加できます。
 
-The default `UTTERANCE_IDLE_MS=4500` waits long enough to keep natural pauses inside one spoken instruction. Lower it for faster short commands or raise it for long dictation:
+## 長いディクテーションとポーズ
+
+VerbalCoding は、音声を STT に送る前に無音ウィンドウを待ちます。デフォルトの `UTTERANCE_IDLE_MS=4500` は意図的に少し余裕を持たせています。長い指示の自然な間で文を分割したり、エージェントターンを早く始めすぎたり、その後の発話を処理中の割り込みとして扱ったりしないためです。
+
+短いコマンドをより速くしたい場合は `.env` で小さくしてください。長い韓国語ディクテーションがまだ分割される場合は大きくしてください:
 
 ```bash
 UTTERANCE_IDLE_MS="6000"
 ```
 
-## Verbose Progress Mode
+## 詳細進捗モード
 
-Enable with `!verbose on`, `AGENT_VERBOSE_PROGRESS=1`, or “상세 진행 켜”. Progress lines look like:
+`AGENT_VERBOSE_PROGRESS=1` が設定されていない限り、詳細進捗はデフォルトでオフです。`!verbose on` または「상세 진행 켜」のような音声コマンドで有効にします。次のような短い進捗行を出力できます:
 
 ```text
 🤖 Hermes Agent 호출 시작
@@ -113,18 +128,28 @@ Enable with `!verbose on`, `AGENT_VERBOSE_PROGRESS=1`, or “상세 진행 켜�
 🤖 Hermes Agent 응답 수신
 ```
 
-Secret-looking fields are redacted and progress lines are removed from final spoken answers.
+このモードは、選択された CLI ハーネスに `VERBALCODING_PROGRESS: ...` 行の出力を求め、利用可能な場合はストリーミング stdout/stderr から一般的なツールマーカーを要約します。秘密情報に見えるフィールドは伏せられ、進捗行は最終的に読み上げられる回答から削除されます。
 
-## Latency Metrics
+## レイテンシ指標
 
-Latency records are written to `./.logs/latency.jsonl`. In Discord, run:
+VerbalCoding はターンごとのレイテンシ記録を JSONL として書き込みます。デフォルトパス:
+
+```text
+./.logs/latency.jsonl
+```
+
+各レコードには、ステータス、合計時間、音声キャプチャ時間、発話アイドル待ち、STT 時間、エージェント時間、TTS 合成/再生時間、チャンク数、文字起こし長、回答長、利用可能な場合の音声レベルが含まれます。
+
+Discord 内:
 
 ```text
 !latency
 !metrics
 ```
 
-## Testing
+要約は最新 200 件のレコードを使い、件数、平均、p95、最大、OK 以外のステータスを表示します。
+
+## テスト
 
 ```bash
 node --check app-node/main.mjs
@@ -132,3 +157,5 @@ npm test
 bash -n run.sh scripts/install.sh
 vc doctor
 ```
+
+`vc doctor` は意図的に秘密情報を伏せ、必要な値が設定されているかだけを報告します。また、`instances/*.env` について、重複するトークンフィンガープリントや衝突するランタイムパスも確認します。

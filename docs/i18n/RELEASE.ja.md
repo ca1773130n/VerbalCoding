@@ -1,58 +1,74 @@
 # VerbalCoding リリースノート
 
-## Current release candidate
+## 現在のリリース候補
 
-VerbalCoding is a Discord voice bridge for controlling CLI-based coding agents by voice. macOS / Apple Silicon is the most tested path; Linux bootstrap is best-effort for common package managers.
+VerbalCoding は、CLI ベースのコーディングエージェントを音声で操作するための Discord 音声ブリッジです。公開リリースを意識しており、最も検証されている経路は macOS / Apple Silicon です。一般的なパッケージマネージャー向けに、Linux のベストエフォートなブートストラップもサポートしています。
 
-## Included
+### 含まれるもの
 
-- Discord voice receive via Node `@discordjs/voice`.
-- Local Korean STT via `whisper.cpp` + Metal.
-- Edge TTS playback with Korean default voice.
-- Generic CLI harness adapter layer: Hermes Agent, Claude Code, Codex CLI, Gemini CLI, OpenCode, OpenClaw, or custom command.
-- Shared voice/text session support for Hermes backend.
-- Long-answer TTS chunking and responsive barge-in.
-- Diff/code/log guardrails so large technical output is not read aloud.
-- Normal and conservative sensitivity modes.
-- Setup wizard, `.env.example`, `vc doctor`, `./scripts/install.sh --yes`, and npm install path.
-- `npm install -g verbalcoding`, `vc setup --yes`, and `vc start`.
-- Verbose progress mode, JSONL latency metrics, and `!latency` / `!metrics`.
-- `UTTERANCE_IDLE_MS=4500` for long spoken instructions with natural pauses.
-- Multi-instance Hermes profile isolation via `vc instance setup <name>` and `HERMES_HOME`.
+- Node `@discordjs/voice` による Discord 音声受信。
+- `whisper.cpp` + Metal によるローカル韓国語 STT。
+- 韓国語デフォルト音声による Edge TTS 再生。
+- 汎用 CLI ハーネスアダプターレイヤー:
+  - Hermes Agent
+  - Claude Code
+  - Codex CLI
+  - Gemini CLI
+  - OpenCode
+  - OpenClaw
+  - カスタムコマンド
+- Hermes バックエンド向けの共有音声/テキストセッション対応。
+- 長い回答の TTS 分割と応答性の高い割り込み発話。
+- 大きな技術出力を読み上げないための diff/code/log ガードレール。
+- 屋内利用と騒音/屋外利用向けの通常および保守的な感度モード。
+- セットアップウィザード、`.env.example`、`vc doctor` 前提条件チェッカー、OS パッケージ、npm 依存関係、Edge TTS ヘルパー、デフォルト whisper.cpp モデルをブートストラップする `./scripts/install.sh --yes`。
+- npm パッケージのインストール手順: `npm install -g verbalcoding`、`vc setup --yes`、`vc start`。
+- 長いエージェント作業中に、テキストのみの中間ステップ更新を出す任意の詳細進捗モード。
+- パイプライン最適化のための常時オン JSONL レイテンシ指標と、`!latency` / `!metrics` 要約。
+- より余裕のある発話アイドル待ち（`UTTERANCE_IDLE_MS=4500`）。自然な間を含む長い音声指示が、部分プロンプトと無視される処理中発話に分割されないようにします。
+- マルチインスタンス Hermes プロファイル分離: `vc instance setup <name>` は、インスタンス作業ディレクトリ付きで Hermes プロファイルを `~/.hermes/profiles/<name>` に自動複製し、SOUL.md を初期化し、インスタンス env に `HERMES_HOME` を書き込みます。これによりプロジェクトごとのメモリとスキルを分離できます。`vc instance start` は欠落したプロファイルを自己修復し、`vc doctor` はプロファイルディレクトリの存在と `terminal.cwd` の整合性を確認します。
 
-## Pre-release checklist
+### プレリリースチェックリスト
+
+リポジトリルートから実行してください:
 
 ```bash
 ./scripts/install.sh --yes --no-wizard
-./scripts/docker_ubuntu_smoke.sh
+./scripts/docker_ubuntu_smoke.sh   # Docker が必要。ubuntu:24.04 のクリーンインストールを検証
 node --check app-node/main.mjs app-node/agent_adapters.mjs app-node/install_config.mjs scripts/install.mjs
 npm test
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/ -q || [ $? -eq 5 ]
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/ -q || [ $? -eq 5 ]  # Python テストが存在しない場合は OK
 bash -n run.sh scripts/install.sh scripts/bootstrap_prereqs.sh scripts/docker_ubuntu_smoke.sh
 npm pack --dry-run
 vc doctor
 git diff --check
 ```
 
-Manual smoke test:
+手動スモークテスト:
 
-1. Start the bridge with `vc start` or `./run.sh`.
-2. Verify `Logged in as <bot-name>`.
-3. Verify `Listening in voice channel ...`.
-4. In Discord, run `!ping`.
-5. Say a short Korean request in voice.
-6. Verify STT transcript, agent response, TTS playback, and barge-in.
+1. `vc start` または `./run.sh` でブリッジを起動します。
+2. ログに `Logged in as <bot-name>` が含まれることを確認します。
+3. ログに `Listening in voice channel ... / 일반` または設定済みのデフォルトチャンネルが含まれることを確認します。
+4. Discord で `!ping` を実行します。
+5. Discord 音声で短い韓国語リクエストを話します。
+6. STT 文字起こし、エージェント応答、TTS 再生、割り込み発話の動作を確認します。
 
-## Known requirements
+### 既知の要件
 
-- macOS with Homebrew, or Linux with `apt`, `dnf`, or `pacman`.
-- `ffmpeg`.
-- `whisper-cli`.
-- `models/ggml-small-q5_1.bin`.
-- Edge TTS CLI or `.venv-tts/bin/edge-tts`.
-- Discord bot token in `.env`, `instances/<name>.env`, `~/.zshrc`, or runtime env.
-- Selected CLI harness installed and authenticated.
+- ベストエフォートのブートストラップには、Homebrew 付き macOS、または `apt`、`dnf`、`pacman` 付き Linux が必要です。
+- `ffmpeg`。インストーラーはこれのインストールを試みます。
+- `whisper-cli`。インストーラーは macOS では Homebrew、Linux ではローカル `vendor/whisper.cpp` ビルドのフォールバックを使います。
+- `models/ggml-small-q5_1.bin` にあるデフォルトモデル。`--skip-model` を使わない限り、インストーラーがダウンロードします。
+- `PATH` 上の Edge TTS CLI、またはローカル `.venv-tts/bin/edge-tts`。必要な場合、インストーラーがローカルヘルパーを作成します。
+- `.env`、`instances/<name>.env`、`~/.zshrc`、または実行時 env 内の Discord ボットトークン。
+- 選択した CLI ハーネスがインストール済みで認証済みであること。
 
-## Not for public release yet
+### まだ公開リリース向けではないもの
 
-Consider adding GitHub Actions CI, demo video/GIF, Discord bot setup screenshots, broader real Linux validation, and security review of logging paths.
+公開リリース前に、次の追加を検討してください:
+
+- GitHub Actions CI。
+- デモ動画 / GIF。
+- Discord ボットセットアップのスクリーンショット。
+- スクリプトレベルのチェックを超えた、実ディストリビューション上でのより広範な Linux 検証。
+- すべてのログパスのセキュリティレビュー。

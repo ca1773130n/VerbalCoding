@@ -1,50 +1,64 @@
-# VerbalCoding マルチインスタンス
+# マルチインスタンス VerbalCoding
 
-VerbalCoding can run multiple independent Discord voice bridge processes. Each process loads a different `instances/<name>.env` file and uses a different Discord bot token.
+VerbalCoding は、複数の独立した Discord 音声ブリッジプロセスを実行できます。各プロセスは既存の単一インスタンス Node ブリッジのままですが、異なる `instances/<name>.env` ファイルを読み込み、異なる Discord ボットトークンを使います。
 
-Use this when each project should permanently occupy its own Discord voice channel and write to its own transcript channel/thread.
+各プロジェクトが専用の Discord 音声チャンネルに常駐し、専用の文字起こしチャンネル/スレッドへ書き込む必要がある場合に使います。
 
-## Why multiple bot tokens are required
+## 複数のボットトークンが必要な理由
 
-Discord voice residency is effectively one active voice connection per bot account per guild. For simultaneous project rooms, create one Discord application/bot per project.
+Discord 音声の常駐は、実質的に 1 つのギルドにつき 1 ボットアカウントあたり 1 つのアクティブな音声接続です。同じギルド内で 1 つのボットトークンが別の音声チャンネルに参加すると、以前のチャンネルに同時に常駐し続けることはできません。同時に使うプロジェクトルームには、プロジェクトごとに 1 つの Discord アプリケーション/ボットを作成してください。
 
-## File layout
+## ファイルレイアウト
 
 ```text
 instances/
   README.md
   example.env
-  llm-wiki.env        # local only, ignored by git
-  verbalcoding.env    # local only, ignored by git
+  llm-wiki.env        # ローカルのみ、git で無視
+  verbalcoding.env    # ローカルのみ、git で無視
 .run/instances/
-  llm-wiki.pid        # runtime only, ignored by git
+  llm-wiki.pid        # 実行時のみ、git で無視
 ```
 
-Real `instances/*.env` files are ignored because they may contain Discord tokens.
+実際の `instances/*.env` ファイルは Discord トークンを含む可能性があるため無視されます。`instances/example.env` がコミット済みテンプレートです。
 
-## Instance setup wizard
+## インスタンスセットアップウィザード
+
+通常利用では、ユーザーが env ファイルをコピーして手動編集すべきではありません。代わりにウィザードを実行してください:
 
 ```bash
 vc instance setup llm-wiki
+# またはプロジェクトセットアップスクリプトから:
 ./scripts/install.sh --instance llm-wiki
 ```
 
-The wizard asks for bot token, Discord Application/Client ID, voice channel, transcript target, workdir, project context, and isolated runtime paths. It writes `instances/<name>.env` with mode `0600` and backs up an existing file.
+ウィザードは、ボットトークン、Discord Application/Client ID、音声チャンネル、文字起こし先、作業ディレクトリ、プロジェクトコンテキスト、分離されたランタイムパスを尋ねます。`instances/<name>.env` をモード `0600` で書き込み、上書き前に既存ファイルをバックアップし、次に使う start/status コマンドを表示します。
 
-Generate invite URLs with:
+セットアップ中に Discord Application/Client ID を入力すると、概要にそのボットの招待 URL も表示されます。同じ URL はいつでも次で生成できます:
 
 ```bash
 vc bot invite <client-id>
 vc bot invite <client-id> --guild <guild-id>
 ```
 
-## Hermes profile isolation
+同時に常駐する音声ルームごとに Discord Developer Portal のアプリケーション/ボットは依然として 1 つ必要ですが、OAuth URL や権限整数を手動で組み立てずに済みます。
 
-Each instance gets its own Hermes home at `~/.hermes/profiles/<name>` so memory, `MEMORY.md`, `SOUL.md`, and learned skills do not leak across projects.
+### Hermes プロファイル分離
 
-`vc instance setup <name>` creates or reuses the profile, sets `terminal.cwd`, seeds `SOUL.md`, and writes `HERMES_HOME` into the instance env. Instance names must match `^[a-z0-9][a-z0-9_-]{0,63}$`.
+各インスタンスには `~/.hermes/profiles/<name>` に独自の Hermes ホームが与えられるため、メモリ、MEMORY.md、SOUL.md、学習済みスキルがプロジェクト間で漏れません。
 
-## Minimal generated instance env
+`vc instance setup <name>` は自動的に次を行います:
+
+- `hermes profile create <name> --clone-from default` を実行します（現在の `~/.hermes` から API キーとモデルを引き継ぎ、セッションとメモリは新規に開始します）。
+- 新しいプロファイルの `terminal.cwd` をインスタンスの作業ディレクトリに設定します。
+- ウィザードのプロジェクトコンテキスト回答から `<profile>/SOUL.md` を初期化します。
+- `instances/<name>.env` に `HERMES_HOME=...` を書き込みます。
+
+`vc instance start <name>` は自己修復します。env が指す Hermes プロファイルディレクトリが存在しない場合、起動前に再作成します。
+
+Hermes は名前をディレクトリおよび設定キーとして使うため、インスタンス名は `^[a-z0-9][a-z0-9_-]{0,63}$` に一致する必要があります。
+
+## 生成される最小インスタンス env
 
 ```env
 INSTANCE_NAME=my-project
@@ -62,9 +76,9 @@ AGENT_CWD=/path/to/my-project
 AGENT_PROJECT_CONTEXT=Project session: My Project
 ```
 
-`vc doctor` checks duplicate tokens, colliding runtime paths, missing profile directories, and `terminal.cwd` mismatches without printing secrets.
+各インスタンスには、ログ/デバッグ/セッションファイル用に一意の値を与えてください。`HERMES_HOME` と対応する `~/.hermes/profiles/<name>` ディレクトリは `vc instance setup` によって自動作成されます。`vc doctor` は、重複トークン、衝突するランタイムパス、存在しないプロファイルディレクトリ、プロファイルとインスタンス間の `terminal.cwd` 不一致を、秘密情報を出力せずに確認します。
 
-## Commands
+## コマンド
 
 ```bash
 vc instance list
@@ -75,47 +89,91 @@ vc instance stop my-project
 vc instance restart my-project
 ```
 
-## Example: two permanent voice rooms
+`start` は `./run.sh instances/<name>.env` をデタッチして実行し、`.run/instances/<name>.pid` を書き込みます。
 
-1. Create two Discord applications/bots.
-2. Invite both with text and voice permissions. Use `vc bot invite <client-id>`.
-3. Run setup:
+`stop` は `SIGTERM` を送り、最大 10 秒待ってから `SIGKILL` にフォールバックし、pid ファイルを削除します。
+
+## 例: 2 つの永続音声ルーム
+
+1. 2 つの Discord アプリケーション/ボットを作成します:
+   - VerbalCoding bot
+   - LLM-Wiki bot
+
+2. テキストおよび音声権限付きで両方をサーバーに招待します:
+   - チャンネルを見る
+   - メッセージを送信
+   - スレッドでメッセージを送信
+   - メッセージ履歴を読む
+   - アプリケーションコマンドを使う
+   - 接続
+   - 発話
+
+   各 Discord アプリケーション作成後に `vc bot invite <client-id>` を使うと、これらの権限を含む正確な招待 URL が出力されます。
+
+3. 各ローカルインスタンスでセットアップウィザードを実行します:
 
 ```bash
 vc instance setup verbalcoding
 vc instance setup llm-wiki
 ```
 
-4. Check and start:
+ウィザードは、git で無視される `instances/verbalcoding.env` と `instances/llm-wiki.env` をモード `0600` で書き込みます。また、既存のインスタンス env を置き換える前にバックアップします。各実行では、デフォルト Hermes ホームから複製された `~/.hermes/profiles/<name>` も作成されるため、2 つのインスタンスは同じ認証/モデルで開始しながら、各プロジェクトの学習に伴って独立したメモリとスキルを蓄積します。
+
+4. 設定を確認します:
 
 ```bash
 vc doctor
+```
+
+5. 両方を起動します:
+
+```bash
 vc instance start verbalcoding
 vc instance start llm-wiki
 vc instance status
 ```
 
-5. Verify logs:
+6. ログを確認します:
 
 ```bash
 tail -n 50 /tmp/verbalcoding-verbalcoding.log
 tail -n 50 /tmp/verbalcoding-llm-wiki.log
 ```
 
-Expected:
+期待されるログ行:
 
 ```text
 Listening in voice channel ... / VerbalCoding
 Listening in voice channel ... / LLM-Wiki
 ```
 
-## Short-term single-bot text/voice binding
+7. 両方を停止します:
 
-If you only have one bot token, bind a project session to a voice channel instead of simultaneous residency:
+```bash
+vc instance stop verbalcoding
+vc instance stop llm-wiki
+```
+
+## 短期的な単一ボットでのテキスト/音声紐付け
+
+ボットトークンが 1 つしかない場合は、同時マルチチャンネル常駐ではなく、プロジェクトセッションの音声紐付けを使ってください。
+
+対象のテキストチャンネル/スレッドで次を実行します:
 
 ```text
 !session attach-voice --voice "LLM-Wiki"
+```
+
+動作:
+
+- 選択した音声チャンネルを現在のテキストチャンネル/スレッドに紐付けます。
+- 現在のテキストチャンネルにプロジェクトセッションがない場合、アドホックな分離セッションを作成します。
+- 音声 STT/結果/進捗/最終回答テキストは、そのアクティブなプロジェクト文字起こし先へルーティングされます。
+
+既存の名前付きプロジェクトセッションを紐付けるには:
+
+```text
 !session voice llm-wiki --voice "LLM-Wiki"
 ```
 
-This routes text/STT/result/progress/final answer messages correctly, but it does not make one bot stay in two voice channels at the same time.
+これはルーティングには便利ですが、1 つのボットを同時に 2 つの音声チャンネルへ常駐させるものではありません。同時に永続常駐させるには、複数のボットトークン/プロセスを使ってください。
