@@ -21,6 +21,8 @@
 
 VerbalCoding 把 Discord 语音房间变成编码代理的免提驾驶舱。你说出需求，让 CLI 代理工作，并收到简短语音回复和文本记录；diff 和日志不会被 TTS 长篇朗读。
 
+> **已经在用 Hermes Agent？** Hermes 本身已经通过 `/voice join` / `/voice channel` 支持 Discord 语音频道：它可以加入你当前所在的 VC，用 Whisper 做语音转文字，并用 TTS 回答。只需要这个基础闭环时，VerbalCoding 不是必需的。VerbalCoding 是加在上面的工作流层：项目/会话路由、语音+文本共享上下文、插话规则、进度语音、语言预设、延迟指标，以及 Hermes 之外的 CLI 后端切换。
+
 ## 体验亮点
 
 | 能力 | 价值 |
@@ -29,6 +31,7 @@ VerbalCoding 把 Discord 语音房间变成编码代理的免提驾驶舱。你�
 | 面向人的引导设置 | `vc setup` 一次引导 prerequisites、Discord token/client ID、voice channel、transcript target、backend 和 TTS 设置。 |
 | 本地语音闭环 | Discord audio → local `whisper-cli` → selected CLI agent → TTS reply。 |
 | 可选代理 | 支持 Hermes Agent、Claude Code、Codex、Gemini CLI、OpenCode、OpenClaw 或 custom command。 |
+| 超越 Hermes 内置语音 | 在同一个 VC 语音闭环上增加项目房间、`!ask` 共享上下文、细粒度打断处理、进度/状态语音和多代理后端控制。 |
 | 真实运维支持 | 内置 doctor auto-fix、Docker UDP 指南、latency metrics、multi-instance rooms 和 redacted config checks。 |
 
 ## 快速开始

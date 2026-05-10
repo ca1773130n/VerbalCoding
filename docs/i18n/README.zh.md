@@ -19,6 +19,7 @@ vc start
 |---|---|
 | [Fresh Install](FRESH_INSTALL.zh.md) | 干净的 npm/global install、Discord app setup、首次 bot invite、首次 voice run。 |
 | [Usage](USAGE.zh.md) | CLI 命令、Discord 命令、运行模式、voice changes、progress、latency metrics。 |
+| [Hermes 内置语音 vs VerbalCoding](HERMES_VOICE.zh.md) | Hermes 内置 Discord 语音已经支持什么，以及 VerbalCoding 增加什么。 |
 | [Configuration](CONFIGURATION.zh.md) | .env、agent backends、MCP server、TTS backends、运维设置。 |
 | [Troubleshooting](TROUBLESHOOTING.zh.md) | Docker UDP、voice join failures、missing token/channel checks、doctor behavior。 |
 | [Multi-Instance](MULTI_INSTANCE.zh.md) | 使用隔离 Hermes profile，让每个项目房间拥有一个固定 Discord voice bot。 |

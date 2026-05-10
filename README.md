@@ -30,6 +30,8 @@
 
 VerbalCoding turns a Discord voice room into a hands-free cockpit for coding agents. Speak a request, let your CLI agent work, and get a concise spoken answer back with text transcripts, progress events, and guardrails that keep diffs/logs out of TTS.
 
+> **Already using Hermes Agent?** Hermes itself has built-in Discord voice-channel support via `/voice join` / `/voice channel`: it can join your current VC, transcribe speech with Whisper, and speak back with TTS. VerbalCoding is not required for that baseline loop. Use VerbalCoding when you want a workflow layer around CLI agents: project/session routing, voice+text context, barge-in rules, progress prompts, language presets, latency metrics, and backend switching beyond Hermes.
+
 ## What feels different
 
 | Capability | Why it matters |
@@ -38,6 +40,7 @@ VerbalCoding turns a Discord voice room into a hands-free cockpit for coding age
 | Guided human setup | `vc setup` handles prerequisites, Discord token/client ID prompts, voice channels, transcript target, backend, and TTS settings in one flow. |
 | Local speech loop | Discord audio is transcribed by local `whisper-cli`, then sent to your selected CLI agent. |
 | Agent choice | Hermes Agent, Claude Code, Codex, Gemini CLI, OpenCode, OpenClaw, or any non-interactive custom command. |
+| Beyond built-in Hermes voice | Keeps the same basic VC loop, then adds project rooms, shared `!ask` context, tuned interruption handling, progress/status speech, and multi-agent backend control. |
 | Shared voice + text context | Voice turns and `!ask` text commands can reuse the same supported agent session. |
 | Real operations support | Doctor auto-fixes, Docker UDP guidance, latency metrics, multi-instance project rooms, and redacted config checks are built in. |
 
@@ -120,6 +123,7 @@ In Discord:
 | [Docs hub](docs/README.md) | One page linking every guide and localized doc set. |
 | [Fresh Install](docs/FRESH_INSTALL.md) | npm/global setup, Discord app setup, token/channel commands, first run. |
 | [Usage Guide](docs/USAGE.md) | CLI commands, Discord commands, run modes, voice changes, latency metrics. |
+| [Hermes Built-in Voice vs VerbalCoding](docs/HERMES_VOICE.md) | What Hermes already supports and when VerbalCoding is worth adding. |
 | [Configuration](docs/CONFIGURATION.md) | `.env`, agent backends, MCP server, TTS backends, operational notes. |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Docker host networking, UDP voice failures, missing token/channel diagnostics. |
 | [Multi-Instance](docs/MULTI_INSTANCE.md) | One permanent Discord voice room per project. |

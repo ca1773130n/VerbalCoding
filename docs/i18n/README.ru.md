@@ -19,6 +19,7 @@ vc start
 |---|---|
 | [Fresh Install](FRESH_INSTALL.ru.md) | чистый npm/global install, Discord app setup, первый bot invite и первый voice run. |
 | [Usage](USAGE.ru.md) | CLI-команды, Discord-команды, режимы запуска, voice changes, progress и latency metrics. |
+| [Встроенный голос Hermes vs VerbalCoding](HERMES_VOICE.ru.md) | Что уже умеет встроенный Discord voice в Hermes и что добавляет VerbalCoding. |
 | [Configuration](CONFIGURATION.ru.md) | .env, agent backends, MCP server, TTS backends и эксплуатационные настройки. |
 | [Troubleshooting](TROUBLESHOOTING.ru.md) | Docker UDP, voice join failures, missing token/channel checks и doctor behavior. |
 | [Multi-Instance](MULTI_INSTANCE.ru.md) | один постоянный Discord voice bot на проектную room с изолированными Hermes profiles. |

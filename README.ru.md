@@ -21,6 +21,8 @@
 
 VerbalCoding превращает голосовую комнату Discord в hands-free кабину для coding agents. Вы произносите задачу, CLI-агент работает, а в ответ получаете короткую озвучку, текстовую расшифровку и события прогресса. Diffs и logs не зачитываются длинным TTS.
 
+> **Уже используете Hermes Agent?** В Hermes уже есть встроенная поддержка голосовых каналов Discord через `/voice join` / `/voice channel`: бот может зайти в текущий VC, распознать речь через Whisper и ответить TTS. Для этого базового цикла VerbalCoding не обязателен. VerbalCoding добавляет workflow-слой: маршрутизацию проектов/сессий, общий контекст голоса+текста, правила прерывания, голосовой прогресс, языковые пресеты, метрики задержки и переключение CLI-бэкендов помимо Hermes.
+
 ## Что ощущается иначе
 
 | Возможность | Зачем это важно |
@@ -29,6 +31,7 @@ VerbalCoding превращает голосовую комнату Discord в h
 | Пошаговая настройка | `vc setup` проводит через prerequisites, Discord token/client ID, voice channel, transcript target, backend и TTS settings за один проход. |
 | Локальный голосовой цикл | Discord audio → local `whisper-cli` → selected CLI agent → TTS reply. |
 | Выбор агента | Hermes Agent, Claude Code, Codex, Gemini CLI, OpenCode, OpenClaw или custom command. |
+| Больше, чем встроенный голос Hermes | Сохраняет тот же VC-голосовой цикл и добавляет проектные комнаты, общий контекст `!ask`, тонкую обработку прерываний, голос прогресса/статуса и управление multi-agent бэкендами. |
 | Готовность к эксплуатации | doctor auto-fix, Docker UDP guide, latency metrics, multi-instance rooms и redacted config checks встроены. |
 
 ## Быстрый старт
@@ -87,6 +90,7 @@ vc instance start NAME                   # запустить этот bot в ba
 | [Центр документации](docs/i18n/README.ru.md) | Индекс локализованных гайдов. |
 | [Fresh Install](docs/i18n/FRESH_INSTALL.ru.md) | npm/global setup, настройка Discord и первый запуск. |
 | [Usage](docs/i18n/USAGE.ru.md) | CLI-команды, Discord-команды, режимы запуска и latency. |
+| [Встроенный голос Hermes vs VerbalCoding](docs/i18n/HERMES_VOICE.ru.md) | Что Hermes уже умеет в Discord voice и чем отличается VerbalCoding. |
 | [Configuration](docs/i18n/CONFIGURATION.ru.md) | .env, agent backends, MCP, TTS и эксплуатация. |
 | [Troubleshooting](docs/i18n/TROUBLESHOOTING.ru.md) | Docker UDP и проверки token/channel. |
 | [Multi-Instance](docs/i18n/MULTI_INSTANCE.ru.md) | Одна постоянная voice room на проект. |

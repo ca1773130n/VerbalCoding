@@ -21,6 +21,8 @@
 
 VerbalCoding convierte una sala de voz de Discord en una cabina manos libres para agentes de programación. Pides algo hablando, dejas trabajar al agente CLI y recibes una respuesta breve por voz con transcripción y eventos de progreso. Los diffs y logs quedan fuera del TTS largo.
 
+> **¿Ya usas Hermes Agent?** Hermes ya trae soporte de canales de voz de Discord con `/voice join` / `/voice channel`: puede unirse al VC actual, transcribir con Whisper y responder por TTS. Para ese bucle básico, VerbalCoding no es obligatorio. VerbalCoding añade una capa de flujo de trabajo: enrutamiento de proyectos/sesiones, contexto compartido de voz+texto, reglas de interrupción, avisos de progreso, presets de idioma, métricas de latencia y cambio de backend CLI más allá de Hermes.
+
 ## Qué lo hace distinto
 
 | Capacidad | Por qué importa |
@@ -29,6 +31,7 @@ VerbalCoding convierte una sala de voz de Discord en una cabina manos libres par
 | Configuración guiada | `vc setup` reúne prerequisites, Discord token/client ID, voice channel, transcript target, backend y TTS settings en un solo flujo. |
 | Bucle de voz local | Discord audio → local `whisper-cli` → selected CLI agent → TTS reply. |
 | Elección de agente | Hermes Agent, Claude Code, Codex, Gemini CLI, OpenCode, OpenClaw o custom command. |
+| Más allá de la voz integrada de Hermes | Mantiene el mismo bucle de voz en VC y añade salas de proyecto, contexto compartido con `!ask`, interrupciones afinadas, voz de progreso/estado y control de backends multiagente. |
 | Operación real | Incluye doctor auto-fix, guía Docker UDP, latency metrics, multi-instance rooms y redacted config checks. |
 
 ## Inicio rápido
@@ -87,6 +90,7 @@ vc instance start NAME                   # ejecutar ese bot en background
 | [Centro de documentación](docs/i18n/README.es.md) | Índice de guías localizadas. |
 | [Fresh Install](docs/i18n/FRESH_INSTALL.es.md) | npm/global setup, configuración de Discord y primera ejecución. |
 | [Usage](docs/i18n/USAGE.es.md) | Comandos CLI, comandos Discord, modos de ejecución y latency. |
+| [Voz integrada de Hermes vs VerbalCoding](docs/i18n/HERMES_VOICE.es.md) | La voz Discord que Hermes ya ofrece y la diferencia de VerbalCoding. |
 | [Configuration](docs/i18n/CONFIGURATION.es.md) | .env, agent backends, MCP, TTS y operación. |
 | [Troubleshooting](docs/i18n/TROUBLESHOOTING.es.md) | Docker UDP y comprobaciones de token/channel. |
 | [Multi-Instance](docs/i18n/MULTI_INSTANCE.es.md) | Una sala de voz fija por proyecto. |

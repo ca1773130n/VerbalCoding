@@ -19,6 +19,7 @@ vc start
 |---|---|
 | [Fresh Install](FRESH_INSTALL.ko.md) | 깨끗한 npm/global install, Discord app setup, 첫 bot invite, 첫 voice run. |
 | [Usage](USAGE.ko.md) | CLI 명령, Discord 명령, 실행 모드, voice changes, progress, latency metrics. |
+| [Hermes 기본 음성 vs VerbalCoding](HERMES_VOICE.ko.md) | Hermes 기본 Discord 음성이 이미 하는 일과 VerbalCoding이 더하는 것. |
 | [Configuration](CONFIGURATION.ko.md) | .env, agent backends, MCP server, TTS backends, 운영 설정. |
 | [Troubleshooting](TROUBLESHOOTING.ko.md) | Docker UDP, voice join failures, missing token/channel checks, doctor behavior. |
 | [Multi-Instance](MULTI_INSTANCE.ko.md) | 격리된 Hermes profile로 프로젝트 방마다 고정 Discord voice bot 하나. |

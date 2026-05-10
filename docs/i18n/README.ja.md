@@ -19,6 +19,7 @@ vc start
 |---|---|
 | [Fresh Install](FRESH_INSTALL.ja.md) | クリーンな npm/global install、Discord app setup、初回 bot invite、初回 voice run。 |
 | [Usage](USAGE.ja.md) | CLI コマンド、Discord コマンド、実行モード、voice changes、progress、latency metrics。 |
+| [Hermes 標準音声 vs VerbalCoding](HERMES_VOICE.ja.md) | Hermes の Discord 標準音声がすでにできることと、VerbalCoding が加えるもの。 |
 | [Configuration](CONFIGURATION.ja.md) | .env、agent backends、MCP server、TTS backends、運用設定。 |
 | [Troubleshooting](TROUBLESHOOTING.ja.md) | Docker UDP、voice join failures、missing token/channel checks、doctor behavior。 |
 | [Multi-Instance](MULTI_INSTANCE.ja.md) | 分離 Hermes profile でプロジェクト room ごとに固定 Discord voice bot を 1 つ。 |
