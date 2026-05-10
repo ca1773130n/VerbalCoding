@@ -76,10 +76,39 @@ async function configureDiscordToken(args) {
   if (clientId) console.log(`Invite URL: vc bot invite ${clientId}`);
 }
 
+async function configureAutoJoinChannels(args) {
+  const envPath = path.join(ROOT, '.env');
+  let channels = args.find((arg, idx) => idx > 0 && !arg.startsWith('--')) || argValue(args, '--channels') || argValue(args, '--voice');
+  if (!channels) {
+    globalThis.__rl = readline.createInterface({ input, output });
+    try {
+      console.log('Discord auto-join voice channel setup');
+      console.log('Enter one or more voice channel names, comma-separated. Example: General,Team Voice,일반');
+      channels = await ask('Auto-join voice channel names', process.env.AUTO_JOIN_VOICE_CHANNELS || 'General,general');
+    } finally {
+      globalThis.__rl.close();
+      globalThis.__rl = null;
+    }
+  }
+  if (!channels) {
+    console.error('No voice channel names provided. Nothing changed.');
+    process.exitCode = 2;
+    return;
+  }
+  upsertEnvFile(envPath, { AUTO_JOIN_VOICE_CHANNELS: channels });
+  console.log(`Updated ${envPath}`);
+  console.log(`Auto-join voice channels: ${channels}`);
+  console.log('Restart the bridge for this to take effect. You can update it anytime with `vc setup channels`.');
+}
+
 async function main() {
   const args = process.argv.slice(2);
   if (args[0] === 'token' || args[0] === 'discord' || args[0] === 'bot-token') {
     await configureDiscordToken(args);
+    return;
+  }
+  if (args[0] === 'channels' || args[0] === 'channel' || args[0] === 'voice') {
+    await configureAutoJoinChannels(args);
     return;
   }
   const yes = args.includes('--yes') || args.includes('-y');

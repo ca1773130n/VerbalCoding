@@ -31,6 +31,7 @@ test('CLI includes npm-friendly setup and start commands', () => {
 
   assert.match(cli, /vc setup \[--yes\]/);
   assert.match(cli, /vc setup token \[bot-token\]/);
+  assert.match(cli, /vc setup channels \[voice-channel/);
   assert.match(cli, /command === 'setup'/);
   assert.match(cli, /install\.mjs'\), \.\.\.argv\.slice\(1\)/);
   assert.match(cli, /VERBALCODING_SKIP_CLI_LINK/);
@@ -56,10 +57,14 @@ test('npm setup supports non-interactive --yes mode', () => {
 
   assert.match(installer, /args\.includes\('--yes'\)/);
   assert.match(installer, /configureDiscordToken/);
+  assert.match(installer, /configureAutoJoinChannels/);
   assert.match(installer, /DISCORD_BOT_TOKEN: token/);
+  assert.match(installer, /AUTO_JOIN_VOICE_CHANNELS: channels/);
   assert.match(installer, /vc setup token/);
+  assert.match(installer, /vc setup channels/);
   assert.match(installer, /normalizeInstallAnswers\(process\.env\)/);
   assert.match(config, /vc start/);
+  assert.match(config, /vc setup channels/);
   assert.doesNotMatch(config, /npm install -g \.\s+#/);
 });
 

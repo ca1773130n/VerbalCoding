@@ -259,6 +259,8 @@ export function renderInstallSummary(values = {}) {
     '',
     'Next commands:',
     '  vc doctor',
+    '  vc setup token      # register/update Discord bot token when ready',
+    '  vc setup channels   # set auto-join voice channel names',
     '  vc start',
     '',
     'Legacy project-local equivalents still work:',
