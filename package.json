@@ -1,6 +1,6 @@
 {
   "name": "verbalcoding",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "Discord voice bridge for CLI coding agents.",
   "license": "MIT",
   "repository": {
