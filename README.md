@@ -21,10 +21,6 @@
   <img alt="Agents" src="https://img.shields.io/badge/Agents-Hermes%20%7C%20Claude%20%7C%20Codex%20%7C%20Gemini%20%7C%20OpenCode-111827">
 </p>
 
-<p align="center">
-  <img src="docs/assets/figures/verbalcoding-flow.svg" alt="VerbalCoding voice-to-agent flow" width="860">
-</p>
-
 ## Why
 
 VerbalCoding turns a Discord voice channel into a hands-free control surface for coding agents. Speak a request, let your CLI agent work, and hear a concise answer back — with text transcripts, progress events, and guardrails for noisy code/log output.
@@ -75,14 +71,9 @@ Need a clean install walkthrough? Start with [Fresh Install](docs/FRESH_INSTALL.
 
 ## How It Works
 
-| Step | What happens |
-|---:|---|
-| 1 | You speak in a Discord voice channel. |
-| 2 | VerbalCoding captures audio with `@discordjs/voice`. |
-| 3 | Audio is cleaned, gated, and converted for local STT. |
-| 4 | `whisper.cpp` turns speech into text. |
-| 5 | The selected CLI agent backend receives the request. |
-| 6 | The bridge sends concise text updates and speaks the answer back with chunked TTS. |
+<p align="center">
+  <img src="docs/assets/figures/verbalcoding-flow.svg" alt="Vertical VerbalCoding voice-to-agent flow" width="760">
+</p>
 
 ## Supported Agent Backends
 
@@ -105,12 +96,6 @@ Need a clean install walkthrough? Start with [Fresh Install](docs/FRESH_INSTALL.
 | [Configuration](docs/CONFIGURATION.md) | `.env`, agent backends, MCP, TTS backends, operational notes |
 | [Multi-Instance](docs/MULTI_INSTANCE.md) | One permanent Discord voice room per project |
 | [Release Notes](docs/RELEASE.md) | Current capabilities and pre-release checklist |
-| [한국어 문서](docs/i18n/README.ko.md) | npm 설치, 사용법, 설정, 멀티 인스턴스 한국어 가이드 |
-| [日本語 docs](docs/i18n/README.ja.md) | npm install, usage, configuration, multi-instance guide in Japanese |
-| [中文文档](docs/i18n/README.zh.md) | npm 安装、使用、配置和多实例中文指南 |
-| [Español docs](docs/i18n/README.es.md) | Instalación npm, uso, configuración y multiinstancia en español |
-| [Français docs](docs/i18n/README.fr.md) | Installation npm, utilisation, configuration et multi-instance en français |
-| [Русская документация](docs/i18n/README.ru.md) | npm установка, использование, конфигурация и мульти-инстансы на русском |
 
 ## Tiny Command Map
 
@@ -126,16 +111,15 @@ vc start                  # start the default bridge
 
 In Discord:
 
-```text
-!join                         # join your current voice channel
-!ask <prompt>                 # send text to the same agent backend
-!verbose on|off               # show/speak short progress updates
-!latency                      # summarize recent voice/STT/agent/TTS latency
-!sensitivity normal           # use normal indoor barge-in sensitivity
-!sensitivity conservative     # use stricter noisy/outdoor sensitivity
-!session new <name> <workdir> [context] --voice <voice-channel>
-                              # bind a project session to a voice room
-```
+| Command | What it does |
+|---|---|
+| `!join` | Join your current voice channel. |
+| `!ask <prompt>` | Send text to the same agent backend. |
+| `!verbose on\|off` | Show/speak short progress updates. |
+| `!latency` | Summarize recent voice/STT/agent/TTS latency. |
+| `!sensitivity normal` | Use normal indoor barge-in sensitivity. |
+| `!sensitivity conservative` | Use stricter noisy/outdoor sensitivity. |
+| `!session new <name> <workdir> [context] --voice <voice-channel>` | Bind a project session to a voice room. |
 
 ## Requirements
 

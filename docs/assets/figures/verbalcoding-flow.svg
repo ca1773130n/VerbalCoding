@@ -1,63 +1,69 @@
-<svg width="1200" height="520" viewBox="0 0 1200 520" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+<svg width="860" height="980" viewBox="0 0 860 980" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
   <title id="title">VerbalCoding voice-to-agent flow</title>
-  <desc id="desc">A stylized pipeline from Discord voice to speech recognition, CLI agent, text answer, and TTS playback.</desc>
+  <desc id="desc">A vertical pipeline showing Discord voice capture, local speech recognition, CLI agent work, and spoken playback.</desc>
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="520" gradientUnits="userSpaceOnUse">
+    <linearGradient id="bg" x1="0" y1="0" x2="860" y2="980" gradientUnits="userSpaceOnUse">
       <stop stop-color="#0F172A"/>
-      <stop offset="0.55" stop-color="#111827"/>
+      <stop offset="0.52" stop-color="#111827"/>
       <stop offset="1" stop-color="#312E81"/>
     </linearGradient>
-    <linearGradient id="card" x1="120" y1="84" x2="1080" y2="436" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#1E293B" stop-opacity="0.92"/>
-      <stop offset="1" stop-color="#020617" stop-opacity="0.86"/>
+    <linearGradient id="panel" x1="80" y1="80" x2="780" y2="900" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1E293B" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#020617" stop-opacity="0.90"/>
     </linearGradient>
     <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#000" flood-opacity="0.35"/>
+      <feDropShadow dx="0" dy="22" stdDeviation="24" flood-color="#000" flood-opacity="0.38"/>
     </filter>
   </defs>
-  <rect width="1200" height="520" rx="34" fill="url(#bg)"/>
-  <circle cx="1030" cy="90" r="190" fill="#6366F1" opacity="0.16"/>
-  <circle cx="170" cy="430" r="210" fill="#06B6D4" opacity="0.13"/>
-  <rect x="70" y="54" width="1060" height="412" rx="32" fill="url(#card)" stroke="#334155" filter="url(#shadow)"/>
-  <text x="110" y="118" fill="#F8FAFC" font-family="Inter, ui-sans-serif, system-ui" font-size="42" font-weight="800">VerbalCoding</text>
-  <text x="110" y="154" fill="#94A3B8" font-family="Inter, ui-sans-serif, system-ui" font-size="20">Discord voice → local STT → CLI coding agent → spoken answer</text>
+  <rect width="860" height="980" rx="38" fill="url(#bg)"/>
+  <circle cx="740" cy="120" r="190" fill="#6366F1" opacity="0.15"/>
+  <circle cx="105" cy="845" r="210" fill="#06B6D4" opacity="0.13"/>
+  <rect x="58" y="52" width="744" height="876" rx="34" fill="url(#panel)" stroke="#334155" filter="url(#shadow)"/>
 
-  <g font-family="Inter, ui-sans-serif, system-ui" font-size="17" font-weight="700">
-    <rect x="110" y="220" width="150" height="92" rx="20" fill="#5865F2"/>
-    <text x="185" y="258" fill="white" text-anchor="middle">Discord</text>
-    <text x="185" y="284" fill="#E0E7FF" text-anchor="middle" font-size="14">voice channel</text>
+  <text x="430" y="116" fill="#F8FAFC" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="42" font-weight="800">VerbalCoding</text>
+  <text x="430" y="151" fill="#94A3B8" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="20">Discord voice to CLI agent to spoken answer</text>
 
-    <rect x="305" y="220" width="150" height="92" rx="20" fill="#0891B2"/>
-    <text x="380" y="258" fill="white" text-anchor="middle">whisper.cpp</text>
-    <text x="380" y="284" fill="#CFFAFE" text-anchor="middle" font-size="14">local STT</text>
-
-    <rect x="500" y="220" width="150" height="92" rx="20" fill="#7C3AED"/>
-    <text x="575" y="258" fill="white" text-anchor="middle">Adapter</text>
-    <text x="575" y="284" fill="#EDE9FE" text-anchor="middle" font-size="14">Hermes / Claude / Codex</text>
-
-    <rect x="695" y="220" width="150" height="92" rx="20" fill="#111827" stroke="#475569"/>
-    <text x="770" y="258" fill="white" text-anchor="middle">CLI Agent</text>
-    <text x="770" y="284" fill="#CBD5E1" text-anchor="middle" font-size="14">does the work</text>
-
-    <rect x="890" y="220" width="150" height="92" rx="20" fill="#0EA5E9"/>
-    <text x="965" y="258" fill="white" text-anchor="middle">TTS</text>
-    <text x="965" y="284" fill="#E0F2FE" text-anchor="middle" font-size="14">chunked playback</text>
+  <g font-family="Inter, ui-sans-serif, system-ui">
+    <g>
+      <rect x="160" y="200" width="540" height="88" rx="22" fill="#5865F2"/>
+      <text x="430" y="237" fill="white" text-anchor="middle" font-size="23" font-weight="800">1. Discord voice</text>
+      <text x="430" y="265" fill="#E0E7FF" text-anchor="middle" font-size="15">You speak in a project voice channel.</text>
+    </g>
+    <g>
+      <rect x="160" y="330" width="540" height="88" rx="22" fill="#0891B2"/>
+      <text x="430" y="367" fill="white" text-anchor="middle" font-size="23" font-weight="800">2. Local STT</text>
+      <text x="430" y="395" fill="#CFFAFE" text-anchor="middle" font-size="15">Audio is cleaned, gated, and transcribed by whisper.cpp.</text>
+    </g>
+    <g>
+      <rect x="160" y="460" width="540" height="88" rx="22" fill="#7C3AED"/>
+      <text x="430" y="497" fill="white" text-anchor="middle" font-size="23" font-weight="800">3. Agent adapter</text>
+      <text x="430" y="525" fill="#EDE9FE" text-anchor="middle" font-size="15">Hermes, Claude Code, Codex, Gemini, OpenCode, or custom CLI.</text>
+    </g>
+    <g>
+      <rect x="160" y="590" width="540" height="88" rx="22" fill="#111827" stroke="#475569"/>
+      <text x="430" y="627" fill="white" text-anchor="middle" font-size="23" font-weight="800">4. CLI does the work</text>
+      <text x="430" y="655" fill="#CBD5E1" text-anchor="middle" font-size="15">The same session can receive voice and text turns.</text>
+    </g>
+    <g>
+      <rect x="160" y="720" width="540" height="88" rx="22" fill="#0EA5E9"/>
+      <text x="430" y="757" fill="white" text-anchor="middle" font-size="23" font-weight="800">5. Text plus TTS</text>
+      <text x="430" y="785" fill="#E0F2FE" text-anchor="middle" font-size="15">Concise progress and final answer are spoken back in Discord.</text>
+    </g>
   </g>
 
   <g stroke="#94A3B8" stroke-width="4" stroke-linecap="round">
-    <path d="M266 266H296"/>
-    <path d="M461 266H491"/>
-    <path d="M656 266H686"/>
-    <path d="M851 266H881"/>
+    <path d="M430 298V320"/>
+    <path d="M430 428V450"/>
+    <path d="M430 558V580"/>
+    <path d="M430 688V710"/>
   </g>
   <g fill="#94A3B8">
-    <path d="M296 266l-10-7v14l10-7z"/>
-    <path d="M491 266l-10-7v14l10-7z"/>
-    <path d="M686 266l-10-7v14l10-7z"/>
-    <path d="M881 266l-10-7v14l10-7z"/>
+    <path d="M430 320l-9-12h18l-9 12z"/>
+    <path d="M430 450l-9-12h18l-9 12z"/>
+    <path d="M430 580l-9-12h18l-9 12z"/>
+    <path d="M430 710l-9-12h18l-9 12z"/>
   </g>
 
-  <rect x="150" y="360" width="900" height="54" rx="17" fill="#020617" stroke="#1F2937"/>
-  <text x="182" y="394" fill="#A7F3D0" font-family="SFMono-Regular, ui-monospace, monospace" font-size="18">$ vc language ko &amp;&amp; vc instance start my-project</text>
-  <text x="1045" y="394" fill="#64748B" text-anchor="end" font-family="Inter, ui-sans-serif, system-ui" font-size="15">hands-free coding loop</text>
+  <rect x="120" y="850" width="620" height="52" rx="17" fill="#020617" stroke="#1F2937"/>
+  <text x="150" y="883" fill="#A7F3D0" font-family="SFMono-Regular, ui-monospace, monospace" font-size="17">$ vc language ko &amp;&amp; vc instance start my-project</text>
 </svg>
