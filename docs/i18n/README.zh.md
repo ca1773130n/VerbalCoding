@@ -2,4 +2,4 @@
 
 This localized README moved to the repository root for GitHub-friendly links.
 
-[中文 README](../../README.md.zh)
+[中文 README](../../README.zh.md)

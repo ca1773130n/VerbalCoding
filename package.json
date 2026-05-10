@@ -38,7 +38,7 @@
     "run.sh",
     ".env.example",
     "README.md",
-    "README.md.*",
+    "README.*.md",
     "LICENSE"
   ],
   "scripts": {

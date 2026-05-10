@@ -5,12 +5,12 @@
 </p>
 
 <p align="center">
-  <a href="./README.md.ko">한국어</a> ·
-  <a href="./README.md.ja">日本語</a> ·
-  <a href="./README.md.zh">中文</a> ·
-  <a href="./README.md.es">Español</a> ·
-  <a href="./README.md.fr">Français</a> ·
-  <a href="./README.md.ru">Русский</a>
+  <a href="./README.ko.md">한국어</a> ·
+  <a href="./README.ja.md">日本語</a> ·
+  <a href="./README.zh.md">中文</a> ·
+  <a href="./README.es.md">Español</a> ·
+  <a href="./README.fr.md">Français</a> ·
+  <a href="./README.ru.md">Русский</a>
 </p>
 
 <p align="center">

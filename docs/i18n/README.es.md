@@ -2,4 +2,4 @@
 
 This localized README moved to the repository root for GitHub-friendly links.
 
-[Español README](../../README.md.es)
+[Español README](../../README.es.md)
