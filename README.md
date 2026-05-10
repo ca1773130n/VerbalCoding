@@ -75,16 +75,14 @@ Need a clean install walkthrough? Start with [Fresh Install](docs/FRESH_INSTALL.
 
 ## How It Works
 
-```mermaid
-flowchart LR
-  A[Discord voice] --> B["@discordjs/voice"]
-  B --> C[PCM cleanup + gates]
-  C --> D["whisper.cpp STT"]
-  D --> E["CLI agent adapter"]
-  E --> F["Concise answer"]
-  F --> G["Chunked TTS"]
-  G --> H["Discord playback"]
-```
+| Step | What happens |
+|---:|---|
+| 1 | You speak in a Discord voice channel. |
+| 2 | VerbalCoding captures audio with `@discordjs/voice`. |
+| 3 | Audio is cleaned, gated, and converted for local STT. |
+| 4 | `whisper.cpp` turns speech into text. |
+| 5 | The selected CLI agent backend receives the request. |
+| 6 | The bridge sends concise text updates and speaks the answer back with chunked TTS. |
 
 ## Supported Agent Backends
 
@@ -129,9 +127,14 @@ vc start                  # start the default bridge
 In Discord:
 
 ```text
-!join        !ask <prompt>       !verbose on/off
-!latency     !sensitivity normal !sensitivity conservative
+!join                         # join your current voice channel
+!ask <prompt>                 # send text to the same agent backend
+!verbose on|off               # show/speak short progress updates
+!latency                      # summarize recent voice/STT/agent/TTS latency
+!sensitivity normal           # use normal indoor barge-in sensitivity
+!sensitivity conservative     # use stricter noisy/outdoor sensitivity
 !session new <name> <workdir> [context] --voice <voice-channel>
+                              # bind a project session to a voice room
 ```
 
 ## Requirements
