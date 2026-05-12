@@ -31,6 +31,15 @@ import { playChunkedTTSWithPrefetch } from './tts_prefetch.mjs';
 import { createSentencer } from './stream_sentencer.mjs';
 import { createStreamingTTSQueue } from './streaming_tts_queue.mjs';
 import { createSmartProgressSummarizer } from './smart_progress.mjs';
+import {
+  isPlanEntryUtterance,
+  parsePlanOutput,
+  parseVoiceCommand as parsePlanVoiceCommand,
+  applyCommand as applyPlanCommand,
+  renderFinalPlan,
+  planModePreamble,
+  planExecutionPreamble,
+} from './plan_mode.mjs';
 import { progressCategory, summarizeProgressEvents, formatProgressMessage } from './progress_speech.mjs';
 import { buildTtsSettings } from './tts_settings.mjs';
 import { createTtsBackend } from './tts_backends.mjs';
@@ -271,6 +280,76 @@ const STREAMING_TTS_ENABLED = ['1', 'true', 'yes', 'on'].includes(String(process
 let activeSentencer = null;
 let activeStreamingQueue = null;
 let streamingSpeechDelivered = false;
+
+const planStates = new Map(); // channelId -> { steps, language }
+
+function planChannelKey() {
+  return activeVoiceChannelId || settings.transcriptChannelId || 'default';
+}
+
+async function dispatchPlanModeUtterance(prompt, signal) {
+  const language = settings.voiceLanguage;
+  const key = planChannelKey();
+  const existing = planStates.get(key);
+  if (existing) {
+    const cmd = parsePlanVoiceCommand(prompt, language);
+    if (cmd.type === 'skip' || cmd.type === 'insert') {
+      const next = applyPlanCommand(existing.steps, cmd);
+      planStates.set(key, { ...existing, steps: next });
+      const narration = planNarrationLines(next, language);
+      await sendText(`📝 ${narration}`);
+      await speakText(narration, signal, null);
+      return { handled: true };
+    }
+    if (cmd.type === 'cancel') {
+      planStates.delete(key);
+      const msg = /^en/i.test(String(language || '')) ? 'Plan cancelled.' : '계획을 취소했어.';
+      await sendText(`❎ ${msg}`);
+      await speakText(msg, signal, null);
+      return { handled: true };
+    }
+    if (cmd.type === 'approve') {
+      const finalPlan = renderFinalPlan(existing.steps);
+      const promptToRun = `${planExecutionPreamble(language)}\n\n${finalPlan}\n\nOriginal user request: ${existing.originalPrompt}`;
+      planStates.delete(key);
+      const note = /^en/i.test(String(language || '')) ? 'Running the plan now.' : '계획대로 실행할게.';
+      await sendText(`▶ ${note}`);
+      await speakText(note, signal, null);
+      return { handled: false, prompt: promptToRun };
+    }
+    planStates.delete(key);
+    return { handled: false, prompt };
+  }
+  if (isPlanEntryUtterance(prompt, language)) {
+    const planPrompt = `${planModePreamble(language)}\n\nUser request: ${prompt}`;
+    const adapter = adapterForProjectSession(resolveProjectSessionForChannel(planChannelKey()));
+    const plan = { task: false, label: adapter.label, verboseProgress: false, language, projectContext: '' };
+    const result = await adapter.run(planPrompt, signal, plan).catch(e => ({ answer: '', error: e }));
+    const steps = parsePlanOutput(result.answer || '');
+    if (!steps.length) {
+      const failMsg = /^en/i.test(String(language || ''))
+        ? 'I could not produce a plan. Continuing as a regular turn.'
+        : '계획을 만들지 못했어. 일반 작업으로 진행할게.';
+      await sendText(`⚠️ ${failMsg}`);
+      return { handled: false, prompt };
+    }
+    planStates.set(planChannelKey(), { steps, language, originalPrompt: prompt });
+    const narration = planNarrationLines(steps, language);
+    await sendText(`📝 ${narration}`);
+    await speakText(narration, signal, null);
+    return { handled: true };
+  }
+  return { handled: false, prompt };
+}
+
+function planNarrationLines(steps, language) {
+  const visible = steps.filter(s => s.status !== 'skipped');
+  const header = /^en/i.test(String(language || ''))
+    ? `Plan with ${visible.length} steps. Say "skip step N", "add X after step N", or "approve" to run.`
+    : `${visible.length}단계 계획. "step N 건너뛰어", "step N 다음에 X 추가", "실행"이라고 말해줘.`;
+  const body = visible.map((s, i) => `${i + 1}. ${s.text}`).join('\n');
+  return `${header}\n${body}`;
+}
 
 let smartProgressEnabled = Boolean(process.env.SMART_PROGRESS_API_KEY);
 let smartProgressSummarizer = null;
@@ -1306,6 +1385,17 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
         return;
       }
     }
+    let promptForAgent = prompt;
+    try {
+      const planOutcome = await dispatchPlanModeUtterance(prompt, signal);
+      if (planOutcome.handled) {
+        metricsTurn?.finish({ status: 'plan_mode' });
+        return;
+      }
+      if (planOutcome.prompt) promptForAgent = planOutcome.prompt;
+    } catch (e) {
+      warn('plan mode dispatch failed', e?.stack || e);
+    }
     const selectedAgentAdapter = adapterForProjectSession(session);
     const projectContext = projectSessionContextText(session);
     const plan = {
@@ -1323,7 +1413,7 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     activeProgressSignal = progressController.signal;
     activeProgressLastEventAt = Date.now();
     const streamingTurnActive = beginStreamingTurn(signal);
-    const agentPromise = selectedAgentAdapter.ask(prompt, signal, plan);
+    const agentPromise = selectedAgentAdapter.ask(promptForAgent, signal, plan);
     let done = false;
     // Status announcements share one queue with verbose progress so they never
     // talk over each other. In verbose mode, skip the generic initial prompt;
