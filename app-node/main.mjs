@@ -40,6 +40,7 @@ import {
   planModePreamble,
   planExecutionPreamble,
 } from './plan_mode.mjs';
+import { createNotifier, buildDiscordDeepLink } from './notify.mjs';
 import { progressCategory, summarizeProgressEvents, formatProgressMessage } from './progress_speech.mjs';
 import { buildTtsSettings } from './tts_settings.mjs';
 import { createTtsBackend } from './tts_backends.mjs';
@@ -280,6 +281,58 @@ const STREAMING_TTS_ENABLED = ['1', 'true', 'yes', 'on'].includes(String(process
 let activeSentencer = null;
 let activeStreamingQueue = null;
 let streamingSpeechDelivered = false;
+
+let notifyUserOptIn = false;
+let notifierInstance = null;
+function ensureNotifier() {
+  if (notifierInstance) return notifierInstance;
+  notifierInstance = createNotifier({
+    provider: (process.env.NOTIFY_PROVIDER || 'ntfy').toLowerCase(),
+    topic: process.env.NTFY_TOPIC || '',
+    pushoverUser: process.env.PUSHOVER_USER || '',
+    pushoverToken: process.env.PUSHOVER_TOKEN || '',
+  });
+  return notifierInstance;
+}
+function notifyStatusText() {
+  const provider = (process.env.NOTIFY_PROVIDER || 'ntfy').toLowerCase();
+  const hasTopic = provider === 'ntfy' ? Boolean(process.env.NTFY_TOPIC) : (provider === 'pushover' ? Boolean(process.env.PUSHOVER_USER && process.env.PUSHOVER_TOKEN) : true);
+  const mode = notifyUserOptIn ? 'always' : 'empty-channel only';
+  const config = hasTopic ? 'configured' : 'NOT configured';
+  return `notify: ${mode} via ${provider} (${config}). Threshold: ${process.env.NOTIFY_MIN_TASK_MS || '60000'}ms.`;
+}
+async function getVoiceChannelHumanCount() {
+  if (!activeVoiceChannelId) return 0;
+  try {
+    const ch = await client.channels.fetch(activeVoiceChannelId).catch(() => null);
+    if (!ch || !ch.members) return 0;
+    let count = 0;
+    for (const [, m] of ch.members) if (!m.user?.bot) count += 1;
+    return count;
+  } catch (e) {
+    warn('humanCount failed', e?.message || e);
+    return 0;
+  }
+}
+async function maybeNotifyTaskComplete({ answer, label, elapsedMs, guildId }) {
+  const provider = (process.env.NOTIFY_PROVIDER || '').toLowerCase();
+  if (!provider || provider === 'noop') return;
+  const minTaskMs = Number(process.env.NOTIFY_MIN_TASK_MS || '60000');
+  const humanCount = await getVoiceChannelHumanCount();
+  const notifier = ensureNotifier();
+  if (!notifier.shouldNotify({ humanCount, taskMs: elapsedMs, minTaskMs, userOptIn: notifyUserOptIn })) return;
+  const text = String(answer || '').trim();
+  const lastSentence = text.split(/(?<=[.!?。！？])\s+/).filter(Boolean).pop() || text;
+  const body = lastSentence.slice(0, 200);
+  const title = label ? `${label} finished` : 'VerbalCoding finished';
+  const deepLink = buildDiscordDeepLink({ guildId, channelId: activeVoiceChannelId });
+  try {
+    const result = await notifier.send({ title, body, deepLink });
+    log('notify sent', 'provider', provider, 'status', result?.status || result?.ok, 'skipped', result?.skipped || false);
+  } catch (e) {
+    warn('notify send failed', e?.message || e);
+  }
+}
 
 const planStates = new Map(); // channelId -> { steps, language }
 
@@ -1477,6 +1530,15 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     } else {
       await speakText(spokenAnswer, signal, metricsTurn, { mirrorText: !answerTextDelivered });
     }
+    try {
+      const guildId = client.channels.cache.get(activeVoiceChannelId)?.guild?.id || '';
+      await maybeNotifyTaskComplete({
+        answer: spokenAnswer || answer,
+        label: selectedAgentAdapter.label,
+        elapsedMs: Date.now() - agentStart,
+        guildId,
+      });
+    } catch (e) { warn('maybeNotifyTaskComplete failed', e?.message || e); }
     metricsTurn?.finish({ status: 'ok' });
   } catch (e) {
     if (isAbortError(e) || interruptedTurns.has(turnId)) {
@@ -1806,6 +1868,15 @@ client.on('messageCreate', async msg => {
   if (['!verbose off', '!verbose false', '!verbose 0', '!verbose 꺼', '!verbose 꺼줘'].includes(content.toLowerCase())) {
     setVerboseProgress(false, 'discord-command');
     return void msg.reply(verboseStatusText());
+  }
+  if (content === '!notify') return void msg.reply(notifyStatusText());
+  if (['!notify on', '!notify always', '!notify 1'].includes(content.toLowerCase())) {
+    notifyUserOptIn = true;
+    return void msg.reply(notifyStatusText());
+  }
+  if (['!notify off', '!notify auto', '!notify 0'].includes(content.toLowerCase())) {
+    notifyUserOptIn = false;
+    return void msg.reply(notifyStatusText());
   }
   if (content === '!smart-progress' || content === '!smart_progress') return void msg.reply(smartProgressStatusText());
   if (['!smart-progress on', '!smart-progress true', '!smart-progress 1', '!smart_progress on'].includes(content.toLowerCase())) {
