@@ -30,6 +30,7 @@ import { splitForTTS } from './tts_chunks.mjs';
 import { playChunkedTTSWithPrefetch } from './tts_prefetch.mjs';
 import { createSentencer } from './stream_sentencer.mjs';
 import { createStreamingTTSQueue } from './streaming_tts_queue.mjs';
+import { createSmartProgressSummarizer } from './smart_progress.mjs';
 import { progressCategory, summarizeProgressEvents, formatProgressMessage } from './progress_speech.mjs';
 import { buildTtsSettings } from './tts_settings.mjs';
 import { createTtsBackend } from './tts_backends.mjs';
@@ -270,6 +271,29 @@ const STREAMING_TTS_ENABLED = ['1', 'true', 'yes', 'on'].includes(String(process
 let activeSentencer = null;
 let activeStreamingQueue = null;
 let streamingSpeechDelivered = false;
+
+let smartProgressEnabled = Boolean(process.env.SMART_PROGRESS_API_KEY);
+let smartProgressSummarizer = null;
+function ensureSmartProgressSummarizer() {
+  if (smartProgressSummarizer) return smartProgressSummarizer;
+  smartProgressSummarizer = createSmartProgressSummarizer({
+    apiKey: process.env.SMART_PROGRESS_API_KEY || '',
+    baseUrl: process.env.SMART_PROGRESS_BASE_URL || 'https://api.groq.com/openai/v1',
+    model: process.env.SMART_PROGRESS_MODEL || 'llama-3.1-8b-instant',
+    language: settings.voiceLanguage,
+  });
+  smartProgressSummarizer.on('summary', summary => {
+    if (!summary || !activeProgressSignal) return;
+    queueVerboseProgressSpeech(summary, activeProgressSignal);
+  });
+  return smartProgressSummarizer;
+}
+function smartProgressStatusText() {
+  const hasKey = Boolean(process.env.SMART_PROGRESS_API_KEY);
+  const mode = smartProgressEnabled && hasKey ? 'on' : 'off';
+  const reason = !hasKey ? ' (no SMART_PROGRESS_API_KEY set)' : '';
+  return `smart-progress: ${mode}${reason}`;
+}
 let activeProgressLastEventAt = 0;
 let lastVerboseProgressText = '';
 let lastVerboseProgressTextAt = 0;
@@ -290,7 +314,12 @@ function createBridgeAgentAdapter(agentSettings) {
       if (!verboseProgress) return;
       activeProgressLastEventAt = Date.now();
       sendVerboseProgressText(event, activeProgressSignal);
-      queueVerboseProgressSpeech(event, activeProgressSignal);
+      if (smartProgressEnabled && process.env.SMART_PROGRESS_API_KEY) {
+        try { ensureSmartProgressSummarizer().ingest(event); }
+        catch (e) { warn('smart progress ingest failed', e?.stack || e); queueVerboseProgressSpeech(event, activeProgressSignal); }
+      } else {
+        queueVerboseProgressSpeech(event, activeProgressSignal);
+      }
     },
     onStdoutChunk: chunk => {
       if (activeSentencer) {
@@ -1687,6 +1716,15 @@ client.on('messageCreate', async msg => {
   if (['!verbose off', '!verbose false', '!verbose 0', '!verbose 꺼', '!verbose 꺼줘'].includes(content.toLowerCase())) {
     setVerboseProgress(false, 'discord-command');
     return void msg.reply(verboseStatusText());
+  }
+  if (content === '!smart-progress' || content === '!smart_progress') return void msg.reply(smartProgressStatusText());
+  if (['!smart-progress on', '!smart-progress true', '!smart-progress 1', '!smart_progress on'].includes(content.toLowerCase())) {
+    smartProgressEnabled = true;
+    return void msg.reply(smartProgressStatusText());
+  }
+  if (['!smart-progress off', '!smart-progress false', '!smart-progress 0', '!smart_progress off'].includes(content.toLowerCase())) {
+    smartProgressEnabled = false;
+    return void msg.reply(smartProgressStatusText());
   }
   if (content === '!sensitivity') return void msg.reply(sensitivityStatusText());
   if (content === '!latency' || content === '!metrics') {
