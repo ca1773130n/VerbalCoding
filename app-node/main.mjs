@@ -28,6 +28,8 @@ import {
 } from './latency_metrics.mjs';
 import { splitForTTS } from './tts_chunks.mjs';
 import { playChunkedTTSWithPrefetch } from './tts_prefetch.mjs';
+import { createSentencer } from './stream_sentencer.mjs';
+import { createStreamingTTSQueue } from './streaming_tts_queue.mjs';
 import { progressCategory, summarizeProgressEvents, formatProgressMessage } from './progress_speech.mjs';
 import { buildTtsSettings } from './tts_settings.mjs';
 import { createTtsBackend } from './tts_backends.mjs';
@@ -263,6 +265,11 @@ let progressSpeechBatch = [];
 let progressSpeechBatchTimer = null;
 let progressSpeechBatchSignal = null;
 let progressSpeechBatchStartedAt = 0;
+
+const STREAMING_TTS_ENABLED = ['1', 'true', 'yes', 'on'].includes(String(process.env.STREAMING_TTS || '0').toLowerCase());
+let activeSentencer = null;
+let activeStreamingQueue = null;
+let streamingSpeechDelivered = false;
 let activeProgressLastEventAt = 0;
 let lastVerboseProgressText = '';
 let lastVerboseProgressTextAt = 0;
@@ -284,6 +291,11 @@ function createBridgeAgentAdapter(agentSettings) {
       activeProgressLastEventAt = Date.now();
       sendVerboseProgressText(event, activeProgressSignal);
       queueVerboseProgressSpeech(event, activeProgressSignal);
+    },
+    onStdoutChunk: chunk => {
+      if (activeSentencer) {
+        try { activeSentencer.push(chunk); } catch (e) { warn('streaming sentencer push failed', e?.stack || e); }
+      }
     },
   });
 }
@@ -762,6 +774,39 @@ async function speakText(text, signal, metricsTurn = null, options = {}) {
   metricsTurn?.stage('tts_synth', synthMs, { ttsChunks: chunks.length, spokenChars: String(text || '').length });
   metricsTurn?.stage('tts_play', playMs);
   metricsTurn?.stage('tts_total', Date.now() - ttsStart);
+}
+
+function beginStreamingTurn(signal) {
+  if (!STREAMING_TTS_ENABLED || !connection) return false;
+  streamingSpeechDelivered = false;
+  const sentencer = createSentencer({ minChars: 40, maxLatencyMs: 800 });
+  const queue = createStreamingTTSQueue({
+    synth: async text => synthTTS(text, signal),
+    play: async file => playAudio(file, { deleteAfter: false }),
+    cleanup: async file => { try { await fs.promises.rm(file, { force: true }); } catch {} },
+    signal,
+    log,
+  });
+  sentencer.on('sentence', text => {
+    if (signal?.aborted) return;
+    queue.enqueue(text);
+  });
+  activeSentencer = sentencer;
+  activeStreamingQueue = queue;
+  log('streaming turn begin');
+  return true;
+}
+
+async function endStreamingTurn() {
+  const sentencer = activeSentencer;
+  const queue = activeStreamingQueue;
+  activeSentencer = null;
+  activeStreamingQueue = null;
+  if (!sentencer || !queue) return;
+  try { sentencer.flush(); } catch (e) { warn('streaming sentencer flush failed', e?.stack || e); }
+  try { await queue.drain(); } catch (e) { warn('streaming queue drain failed', e?.stack || e); }
+  streamingSpeechDelivered = queue.size === 0;
+  log('streaming turn end');
 }
 
 async function speakProgress(text, signal) {
@@ -1248,6 +1293,7 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     activeProgressAbortController = progressController;
     activeProgressSignal = progressController.signal;
     activeProgressLastEventAt = Date.now();
+    const streamingTurnActive = beginStreamingTurn(signal);
     const agentPromise = selectedAgentAdapter.ask(prompt, signal, plan);
     let done = false;
     // Status announcements share one queue with verbose progress so they never
@@ -1292,6 +1338,7 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
       if (!isAbortError(e)) warn('progress loop failed', e?.stack || e);
     });
     const answer = await agentPromise.finally(() => { done = true; });
+    if (streamingTurnActive) await endStreamingTurn();
     metricsTurn?.stage('agent', Date.now() - agentStart, { answerChars: String(answer || '').length, backend: selectedAgentAdapter.backend });
     void progressLoop;
     if (interruptedTurns.has(turnId) || signal.aborted) { metricsTurn?.finish({ status: 'aborted_after_agent' }); return; }
@@ -1306,7 +1353,11 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     }
     log('spoken answer', spokenAnswer.slice(0, 200));
     stopProgressSpeech(progressController.signal, 'agent-answer-ready');
-    await speakText(spokenAnswer, signal, metricsTurn, { mirrorText: !answerTextDelivered });
+    if (streamingTurnActive && streamingSpeechDelivered) {
+      log('skipping post-run speakText; streaming already delivered audio');
+    } else {
+      await speakText(spokenAnswer, signal, metricsTurn, { mirrorText: !answerTextDelivered });
+    }
     metricsTurn?.finish({ status: 'ok' });
   } catch (e) {
     if (isAbortError(e) || interruptedTurns.has(turnId)) {

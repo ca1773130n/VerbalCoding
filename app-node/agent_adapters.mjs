@@ -312,6 +312,7 @@ export function createAgentAdapter(settings, deps = {}) {
   const hermesSessionsDir = deps.hermesSessionsDir || path.join(os.homedir(), '.hermes', 'sessions');
   const spawnProcess = deps.spawn;
   const onProgress = deps.onProgress || (() => {});
+  const onStdoutChunk = deps.onStdoutChunk || null;
   const emittedProgress = new Set();
   let activeProgressLanguage = settings.language;
   const capabilities = agentAdapterCapabilities(settings);
@@ -326,7 +327,7 @@ export function createAgentAdapter(settings, deps = {}) {
   }
 
   function execWithOptionalProgress(cmd, args, options, verbose) {
-    if (!verbose || !spawnProcess) return execFileAsync(cmd, args, options);
+    if ((!verbose && !onStdoutChunk) || !spawnProcess) return execFileAsync(cmd, args, options);
     return new Promise((resolve, reject) => {
       const child = spawnProcess(cmd, args, {
         env: options.env,
@@ -371,7 +372,8 @@ export function createAgentAdapter(settings, deps = {}) {
       child.stdout?.on('data', chunk => {
         const s = chunk.toString();
         stdout += s;
-        emitVerboseProgress(s);
+        if (onStdoutChunk) { try { onStdoutChunk(s); } catch (e) { warn('onStdoutChunk failed', e?.stack || e); } }
+        if (verbose) emitVerboseProgress(s);
         if (stdout.length + stderr.length > options.maxBuffer) {
           const err = new Error('maxBuffer exceeded');
           err.code = 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER';
@@ -382,7 +384,7 @@ export function createAgentAdapter(settings, deps = {}) {
       child.stderr?.on('data', chunk => {
         const s = chunk.toString();
         stderr += s;
-        emitVerboseProgress(s);
+        if (verbose) emitVerboseProgress(s);
         if (stdout.length + stderr.length > options.maxBuffer) {
           const err = new Error('maxBuffer exceeded');
           err.code = 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER';
