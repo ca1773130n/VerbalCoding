@@ -1,7 +1,7 @@
 # VerbalCoding
 
 <p align="center">
-  <strong>Talk to CLI coding agents through Discord voice — like a phone call for software work.</strong>
+  <strong>The voice layer for any coding agent — real barge-in, streaming latency, and the agents you already use.</strong>
 </p>
 
 <p align="center">
@@ -28,27 +28,34 @@
 
 ## Why it exists
 
-VerbalCoding turns a Discord voice room into a hands-free cockpit for coding agents. Speak a request, let your CLI agent work, and get a concise spoken answer back with text transcripts, progress events, and guardrails that keep diffs/logs out of TTS.
+VerbalCoding turns a Discord voice channel into a hands-free cockpit for **any** CLI coding agent. Hermes ships its own `/voice join` for Hermes; VerbalCoding is a thin, agent-agnostic layer that puts the same loop on top of Hermes, Claude Code, Codex, Gemini, OpenCode, OpenClaw, Aider, Cursor CLI, or any non-interactive shell command — with the rough edges other voice frontends still have on their roadmap:
 
-> **Already using Hermes Agent?** Hermes itself has built-in Discord voice-channel support via `/voice join` / `/voice channel`: it can join your current VC, transcribe speech with Whisper, and speak back with TTS. VerbalCoding is not required for that baseline loop. Use VerbalCoding when you want a workflow layer around CLI agents: project/session routing, voice+text context, barge-in rules, progress prompts, language presets, latency metrics, and backend switching beyond Hermes.
+- **True audio barge-in** — interrupt the agent mid-sentence; Hermes' built-in voice pauses its listener during TTS.
+- **Streaming pipeline** — first sentence plays while the agent is still writing (Hermes lists this as a future Phase-4 item).
+- **Smart progress narration** — describes intent ("wiring the new login route"), not file lists.
+- **Voice plan mode** — say "plan it first", edit by voice ("skip step 3"), say "approve" to execute.
+- **Phone-down mode** — push notification with a voice summary when a long task completes and the room is empty.
 
 ## What feels different
 
 | Capability | Why it matters |
 |---|---|
-| Phone-call workflow | Stay in one Discord voice channel: speak, listen, interrupt, continue. |
-| Guided human setup | `vc setup` handles prerequisites, Discord token/client ID prompts, voice channels, transcript target, backend, and TTS settings in one flow. |
-| Local speech loop | Discord audio is transcribed by local `whisper-cli`, then sent to your selected CLI agent. |
-| Agent choice | Hermes Agent, Claude Code, Codex, Gemini CLI, OpenCode, OpenClaw, or any non-interactive custom command. |
-| Beyond built-in Hermes voice | Keeps the same basic VC loop, then adds project rooms, shared `!ask` context, tuned interruption handling, progress/status speech, and multi-agent backend control. |
-| Shared voice + text context | Voice turns and `!ask` text commands can reuse the same supported agent session. |
-| Real operations support | Doctor auto-fixes, Docker UDP guidance, latency metrics, multi-instance project rooms, and redacted config checks are built in. |
+| Agent choice, first-class | Hermes Agent, Claude Code, Codex, Gemini CLI, OpenCode, OpenClaw, Aider, Cursor CLI, or any custom command. `vc setup` auto-detects what's installed. |
+| Real barge-in | VAD thresholds tuned for indoor and noisy rooms; cut in mid-utterance and resume the conversation. |
+| Streaming end-to-end | `STREAMING_TTS=1` plays sentences as the agent produces them; first audio in well under a second on a warm cache. |
+| Smart progress | Optional LLM summarizer collapses raw events into one human sentence; falls back to the existing regex labels when no key is set. |
+| Plan-mode by voice | Narrated, editable, voice-driven plans without touching the keyboard. |
+| Phone-down handoff | Long task + empty VC = push notification (`ntfy`/`pushover`) with a redacted one-line summary and tap-to-rejoin link. |
+| Local speech loop | Discord audio is transcribed by local `whisper-cli`; TTS via Edge, OpenVoice, SpeechSwift/CosyVoice, or Supertonic. |
+| Real operations support | Doctor auto-fixes, Docker UDP guidance, latency metrics, multi-instance project rooms, redacted config checks. |
+
+> **Already using Hermes Agent?** Hermes itself has a working Discord voice loop via `/voice join` / `/voice channel`. Use VerbalCoding when you want it agent-agnostic, want barge-in and streaming today, or want plan-mode, push handoff, and smart narration on top of the same loop. The two coexist — VerbalCoding can drive Hermes as its backend.
 
 ## Quick Start
 
 ```bash
 npm install -g verbalcoding@latest
-vc setup
+vc setup       # detects installed agents and lets you pick
 vc doctor
 vc start
 ```
@@ -92,17 +99,17 @@ Secrets are stored in ignored local env files with mode `0600` and are not print
 ## Tiny command map
 
 ```bash
-vc setup                               # guided setup: prerequisites, Discord, backend, voice
+vc setup                               # guided setup with agent auto-detection
 vc setup --yes                         # non-interactive bootstrap/starter config
 vc setup token                         # rotate or add Discord bot token/client ID later
 vc setup channels "General,Team Voice" # update auto-join voice channel names
-vc bot invite CLIENT_ID                 # generate a Discord bot invite URL
-vc status                               # show active language, TTS, and bridge settings
-vc language ko|en|auto                  # switch STT/progress/TTS language preset
-vc doctor                               # redacted health check and supported auto-fixes
-vc start                                # start the default bridge
-vc instance setup NAME                  # create an isolated project voice bot
-vc instance start NAME                  # run that bot in the background
+vc bot invite CLIENT_ID                # generate a Discord bot invite URL
+vc status                              # show active language, TTS, bridge settings, and resolved backend
+vc language ko|en|auto                 # switch STT/progress/TTS language preset
+vc doctor                              # redacted health check with auto-fix suggestions
+vc start                               # start the default bridge
+vc instance setup NAME                 # create an isolated project voice bot
+vc instance start NAME                 # run that bot in the background
 ```
 
 In Discord:
@@ -116,11 +123,24 @@ In Discord:
 | `!sensitivity normal\|conservative` | Tune barge-in for indoor or noisy environments. |
 | `!session new <name> <workdir> [context] --voice <voice-channel>` | Bind a project session to a voice room. |
 
+## Roadmap
+
+The differentiation push is tracked in [docs/ROADMAP.md](./docs/ROADMAP.md). Five phases land the claims above:
+
+| # | Phase | What it adds |
+|---|---|---|
+| 1 | Streaming pipeline | Sentence-by-sentence TTS while the agent is still writing. |
+| 2 | Agent-agnostic adapters | First-class Aider + Cursor CLI; `vc setup` auto-detects. |
+| 6 | Smart progress | LLM-summarized narration. Falls back to today's regex labels. |
+| 7 | Voice plan mode | Narrate plan, voice-edit, approve to execute. |
+| 10 | Push notification handoff | ntfy/Pushover when a long task ends and the room is empty. |
+
 ## Learn more
 
 | Guide | What you get |
 |---|---|
 | [Docs hub](docs/README.md) | One page linking every guide and localized doc set. |
+| [Roadmap](docs/ROADMAP.md) | Differentiation plan and per-phase implementation plans. |
 | [Fresh Install](docs/FRESH_INSTALL.md) | npm/global setup, Discord app setup, token/channel commands, first run. |
 | [Usage Guide](docs/USAGE.md) | CLI commands, Discord commands, run modes, voice changes, latency metrics. |
 | [Hermes Built-in Voice vs VerbalCoding](docs/HERMES_VOICE.md) | What Hermes already supports and when VerbalCoding is worth adding. |
@@ -138,7 +158,7 @@ In Discord:
 | Speech recognition | Local `whisper-cli` from whisper.cpp plus `models/ggml-small-q5_1.bin`. |
 | TTS | Edge TTS by default; optional OpenVoice, SpeechSwift/CosyVoice, and Supertonic paths. |
 | Discord | Bot token, Message Content intent, voice permissions, matching auto-join channel names. |
-| Agent | At least one authenticated CLI harness; Hermes Agent is the default. |
+| Agent | At least one CLI harness installed; `vc setup` auto-detects Hermes, Claude Code, Codex, Gemini, OpenCode, OpenClaw, Aider, Cursor CLI. |
 | Platform focus | macOS / Apple Silicon most tested; Linux bootstrap is best-effort; Windows unsupported for now. |
 
 ## Docker / container note
@@ -167,4 +187,4 @@ vc doctor
 
 ## Status
 
-VerbalCoding is public-release oriented but still early. Demo video/GIF, broader Linux validation, CI, and deeper security review are still TODOs.
+Public-release oriented but still early. The roadmap above tracks live differentiation work. Demo video/GIF, broader Linux validation, CI, and deeper security review are still TODOs.

@@ -251,6 +251,24 @@ export function buildAgentSettings({ ROOT, env = process.env } = {}) {
       sessionFile: env.AGENT_SESSION_FILE || path.join(root, '.agent-sessions', 'openclaw'),
       supportsHermesSession: false,
     },
+    aider: {
+      label: 'Aider',
+      command: env.AIDER_COMMAND || 'aider --no-pretty --yes-always --message',
+      sessionFile: env.AGENT_SESSION_FILE || path.join(root, '.agent-sessions', 'aider'),
+      supportsHermesSession: false,
+    },
+    cursor: {
+      label: 'Cursor CLI',
+      command: env.CURSOR_COMMAND || 'cursor-agent --print --prompt',
+      sessionFile: env.AGENT_SESSION_FILE || path.join(root, '.agent-sessions', 'cursor'),
+      supportsHermesSession: false,
+    },
+    'cursor-cli': {
+      label: 'Cursor CLI',
+      command: env.CURSOR_COMMAND || 'cursor-agent --print --prompt',
+      sessionFile: env.AGENT_SESSION_FILE || path.join(root, '.agent-sessions', 'cursor'),
+      supportsHermesSession: false,
+    },
     custom: {
       label: env.AGENT_LABEL || 'Custom Agent',
       command: env.AGENT_COMMAND || '',

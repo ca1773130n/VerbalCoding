@@ -288,6 +288,8 @@ test('Claude, Codex, and Gemini adapters use backend-specific default commands w
     { backend: 'gemini', command: ['gemini', '-p'], label: 'Gemini' },
     { backend: 'opencode', command: ['opencode', 'run'], label: 'OpenCode' },
     { backend: 'openclaw', command: ['openclaw', 'run'], label: 'OpenClaw' },
+    { backend: 'aider', command: ['aider', '--no-pretty', '--yes-always', '--message'], label: 'Aider' },
+    { backend: 'cursor', command: ['cursor-agent', '--print', '--prompt'], label: 'Cursor CLI' },
   ];
 
   for (const item of cases) {
