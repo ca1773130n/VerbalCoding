@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { parseKeyValueEnv } from '../app-node/install_config.mjs';
 import { checkInstanceConfigs, formatInstanceDoctor } from '../app-node/instance_doctor.mjs';
 import { autoRestartVoiceBotEnabled } from '../app-node/restart_policy.mjs';
+import { detectInstalledAgents, formatAgentDetectionReport } from '../app-node/agent_detect.mjs';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const args = process.argv.slice(2);
@@ -209,6 +210,16 @@ console.log(`TTS backend: ${ttsBackend}`);
 if (!autoFixEnabled) note('Automatic prerequisite bootstrap', 'off');
 if (autoFixAttempted) note('Automatic prerequisite bootstrap', 'attempted');
 console.log('');
+
+try {
+  const detection = await detectInstalledAgents(env);
+  console.log(formatAgentDetectionReport(detection));
+  const selected = detection.find(r => r.backend === backend || r.backend === backend.replace(/-/g, ''));
+  if (selected && !selected.present) note(`Selected backend "${backend}"`, `binary ${selected.bin} not on PATH`);
+  console.log('');
+} catch (e) {
+  note('Agent backend detection', `skipped: ${e?.message || e}`);
+}
 
 const nodeCommand = commandExists('node');
 const npmCommand = commandExists('npm');

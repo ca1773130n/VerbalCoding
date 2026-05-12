@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { detectInstalledAgents, listKnownBackends } from './agent_detect.mjs';
+import { detectInstalledAgents, listKnownBackends, pickDefaultBackend, formatAgentDetectionReport } from './agent_detect.mjs';
 
 test('detectInstalledAgents marks present when which resolves', async () => {
   const fakeWhich = async (bin) => (bin === 'hermes' ? '/usr/local/bin/hermes' : null);
@@ -39,4 +39,39 @@ test('detectInstalledAgents default which uses PATH iteration', async () => {
   const result = await detectInstalledAgents({ PATH: '/nonexistent/dir' }, {});
   assert.ok(Array.isArray(result));
   for (const r of result) assert.equal(r.present, false);
+});
+
+test('pickDefaultBackend respects preferred when present', () => {
+  const detection = [
+    { backend: 'hermes', present: false },
+    { backend: 'claude', present: true },
+    { backend: 'aider', present: true },
+  ];
+  assert.equal(pickDefaultBackend(detection, 'aider'), 'aider');
+});
+
+test('pickDefaultBackend falls back to first present when preferred missing', () => {
+  const detection = [
+    { backend: 'hermes', present: false },
+    { backend: 'claude', present: true },
+    { backend: 'aider', present: true },
+  ];
+  assert.equal(pickDefaultBackend(detection, 'codex'), 'claude');
+});
+
+test('pickDefaultBackend returns hermes when nothing detected', () => {
+  const detection = [{ backend: 'hermes', present: false }, { backend: 'claude', present: false }];
+  assert.equal(pickDefaultBackend(detection, ''), 'hermes');
+});
+
+test('formatAgentDetectionReport marks present and missing', () => {
+  const detection = [
+    { backend: 'hermes', label: 'Hermes Agent', bin: 'hermes', present: true, path: '/usr/local/bin/hermes' },
+    { backend: 'claude', label: 'Claude Code', bin: 'claude', present: false, path: null },
+  ];
+  const out = formatAgentDetectionReport(detection);
+  assert.match(out, /1\/2 present/);
+  assert.match(out, /✓ Hermes Agent/);
+  assert.match(out, /· Claude Code/);
+  assert.match(out, /not found/);
 });

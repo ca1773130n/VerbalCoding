@@ -8,6 +8,9 @@ export const SUPPORTED_HARNESSES = [
   'gemini',
   'opencode',
   'openclaw',
+  'aider',
+  'cursor',
+  'cursor-cli',
   'custom',
 ];
 

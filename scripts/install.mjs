@@ -4,6 +4,7 @@ import path from 'node:path';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { buildEnvFile, normalizeInstallAnswers, renderInstallSummary, SUPPORTED_HARNESSES } from '../app-node/install_config.mjs';
+import { detectInstalledAgents, pickDefaultBackend, formatAgentDetectionReport } from '../app-node/agent_detect.mjs';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 
@@ -141,7 +142,17 @@ async function main() {
     console.log('Discord setup: keep https://discord.com/developers/applications open.');
     console.log('Create an application/bot, enable Message Content intent, then paste the bot token and application/client ID below.');
     console.log('If you are not ready, press Enter to skip and run `vc setup token` / `vc setup channels` later.');
-    const harness = await ask('Harness/backend', 'hermes');
+    let detectionDefault = 'hermes';
+    try {
+      const detection = await detectInstalledAgents(process.env);
+      console.log('');
+      console.log(formatAgentDetectionReport(detection));
+      detectionDefault = pickDefaultBackend(detection, process.env.AGENT_BACKEND);
+      console.log('');
+    } catch (e) {
+      console.log(`(agent detection skipped: ${e?.message || e})`);
+    }
+    const harness = await ask('Harness/backend', detectionDefault);
     let agentCommand = '';
     let agentLabel = '';
     if (harness.toLowerCase() === 'custom') {

@@ -47,3 +47,27 @@ export async function detectInstalledAgents(env = process.env, { which } = {}) {
 export function listKnownBackends() {
   return PROBES.map(p => ({ backend: p.backend, label: p.label, bin: p.bin }));
 }
+
+export function pickDefaultBackend(detection, preferred = '') {
+  const list = Array.isArray(detection) ? detection : [];
+  const pref = String(preferred || '').toLowerCase();
+  if (pref) {
+    const match = list.find(r => r.backend === pref && r.present);
+    if (match) return match.backend;
+  }
+  const firstPresent = list.find(r => r.present);
+  if (firstPresent) return firstPresent.backend;
+  return 'hermes';
+}
+
+export function formatAgentDetectionReport(detection) {
+  const list = Array.isArray(detection) ? detection : [];
+  if (!list.length) return 'No agent backends probed.';
+  const rows = list.map(r => {
+    const marker = r.present ? '✓' : '·';
+    const pathPart = r.present ? r.path : 'not found';
+    return `  ${marker} ${r.label.padEnd(14)} ${r.bin.padEnd(14)} ${pathPart}`;
+  });
+  const presentCount = list.filter(r => r.present).length;
+  return `Agent backends (${presentCount}/${list.length} present):\n${rows.join('\n')}`;
+}
