@@ -39,6 +39,9 @@ import {
   renderFinalPlan,
   planModePreamble,
   planExecutionPreamble,
+  parseDecisionAnswer,
+  renderDecisionPrompt,
+  renderResolvedDecisions,
 } from './plan_mode.mjs';
 import { createNotifier, buildDiscordDeepLink } from './notify.mjs';
 import { progressCategory, summarizeProgressEvents, formatProgressMessage } from './progress_speech.mjs';
@@ -340,18 +343,60 @@ function planChannelKey() {
   return activeVoiceChannelId || settings.transcriptChannelId || 'default';
 }
 
+async function askNextDecision(state, signal) {
+  const decision = state.decisions[state.pendingDecisionIndex];
+  if (!decision) return;
+  const text = renderDecisionPrompt(decision, state.language);
+  await sendText(`❓ ${text}`);
+  await speakText(text, signal, null);
+}
+
+async function finalizePlanReady(state, signal) {
+  const language = state.language;
+  const resolvedLine = renderResolvedDecisions(state.resolvedDecisions, language);
+  const plan = planNarrationLines(state.steps, language);
+  const tail = /^en/i.test(String(language || ''))
+    ? `${plan}\n${resolvedLine}\nSay "approve" to run, or edit with skip/insert.`
+    : `${plan}\n${resolvedLine}\n"실행"이라고 하면 시작할게. skip/insert로 수정도 돼.`;
+  await sendText(`📝 ${tail}`);
+  await speakText(tail, signal, null);
+}
+
 async function dispatchPlanModeUtterance(prompt, signal) {
   const language = settings.voiceLanguage;
   const key = planChannelKey();
   const existing = planStates.get(key);
+
+  if (existing && existing.pendingDecisionIndex < existing.decisions.length) {
+    const decision = existing.decisions[existing.pendingDecisionIndex];
+    const answer = parseDecisionAnswer(prompt, decision, language);
+    if (answer.type === 'unknown') {
+      await sendText(/^en/i.test(String(language || ''))
+        ? '⚠️ I did not catch that. Please pick an option.'
+        : '⚠️ 못 알아들었어. 옵션 중에 하나 골라줘.');
+      await askNextDecision(existing, signal);
+      return { handled: true };
+    }
+    const next = {
+      ...existing,
+      resolvedDecisions: { ...existing.resolvedDecisions, [decision.slot]: answer.choice },
+      pendingDecisionIndex: existing.pendingDecisionIndex + 1,
+    };
+    planStates.set(key, next);
+    if (next.pendingDecisionIndex < next.decisions.length) {
+      await askNextDecision(next, signal);
+    } else {
+      await finalizePlanReady(next, signal);
+    }
+    return { handled: true };
+  }
+
   if (existing) {
     const cmd = parsePlanVoiceCommand(prompt, language);
     if (cmd.type === 'skip' || cmd.type === 'insert') {
-      const next = applyPlanCommand(existing.steps, cmd);
-      planStates.set(key, { ...existing, steps: next });
-      const narration = planNarrationLines(next, language);
-      await sendText(`📝 ${narration}`);
-      await speakText(narration, signal, null);
+      const nextSteps = applyPlanCommand(existing.steps, cmd);
+      planStates.set(key, { ...existing, steps: nextSteps });
+      await finalizePlanReady({ ...existing, steps: nextSteps }, signal);
       return { handled: true };
     }
     if (cmd.type === 'cancel') {
@@ -363,7 +408,15 @@ async function dispatchPlanModeUtterance(prompt, signal) {
     }
     if (cmd.type === 'approve') {
       const finalPlan = renderFinalPlan(existing.steps);
-      const promptToRun = `${planExecutionPreamble(language)}\n\n${finalPlan}\n\nOriginal user request: ${existing.originalPrompt}`;
+      const resolvedLine = renderResolvedDecisions(existing.resolvedDecisions, language);
+      const promptToRun = [
+        planExecutionPreamble(language),
+        '',
+        finalPlan,
+        resolvedLine,
+        '',
+        `Original user request: ${existing.originalPrompt}`,
+      ].filter(Boolean).join('\n');
       planStates.delete(key);
       const note = /^en/i.test(String(language || '')) ? 'Running the plan now.' : '계획대로 실행할게.';
       await sendText(`▶ ${note}`);
@@ -373,12 +426,13 @@ async function dispatchPlanModeUtterance(prompt, signal) {
     planStates.delete(key);
     return { handled: false, prompt };
   }
+
   if (isPlanEntryUtterance(prompt, language)) {
     const planPrompt = `${planModePreamble(language)}\n\nUser request: ${prompt}`;
     const adapter = adapterForProjectSession(resolveProjectSessionForChannel(planChannelKey()));
     const plan = { task: false, label: adapter.label, verboseProgress: false, language, projectContext: '' };
     const result = await adapter.run(planPrompt, signal, plan).catch(e => ({ answer: '', error: e }));
-    const steps = parsePlanOutput(result.answer || '');
+    const { steps, decisions } = parsePlanOutput(result.answer || '');
     if (!steps.length) {
       const failMsg = /^en/i.test(String(language || ''))
         ? 'I could not produce a plan. Continuing as a regular turn.'
@@ -386,10 +440,23 @@ async function dispatchPlanModeUtterance(prompt, signal) {
       await sendText(`⚠️ ${failMsg}`);
       return { handled: false, prompt };
     }
-    planStates.set(planChannelKey(), { steps, language, originalPrompt: prompt });
+    const state = {
+      steps,
+      decisions,
+      resolvedDecisions: {},
+      pendingDecisionIndex: 0,
+      originalPrompt: prompt,
+      language,
+    };
+    planStates.set(planChannelKey(), state);
     const narration = planNarrationLines(steps, language);
     await sendText(`📝 ${narration}`);
     await speakText(narration, signal, null);
+    if (decisions.length) {
+      await askNextDecision(state, signal);
+    } else {
+      await finalizePlanReady(state, signal);
+    }
     return { handled: true };
   }
   return { handled: false, prompt };
