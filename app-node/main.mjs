@@ -62,6 +62,7 @@ import { createBridgeState } from './bridge_state.mjs';
 import { sendDiscordText, splitDiscordMessage } from './discord_text.mjs';
 import { progressTtsCacheFileName } from './progress_cache.mjs';
 import { shouldPassWhisperLanguage, voiceLanguageCommandFromTranscript, languagePreset } from './language_config.mjs';
+import { whisperFailureMessage, whisperTimeoutMs } from './stt_whisper.mjs';
 import { formatRestartCompleteNotice, formatRestartShutdownNotice } from './restart_notice.mjs';
 import {
   appendRecentDiscordText,
@@ -190,6 +191,7 @@ const settings = {
   whisperBin: process.env.WHISPER_CPP_BIN || 'whisper-cli',
   whisperModel: process.env.WHISPER_CPP_MODEL || path.join(ROOT, 'models', 'ggml-small-q5_1.bin'),
   whisperLanguage: process.env.WHISPER_CPP_LANGUAGE || process.env.STT_LANGUAGE || 'ko',
+  whisperTimeoutMs: whisperTimeoutMs(process.env),
   voiceLanguage: process.env.VOICE_LANGUAGE || process.env.WHISPER_CPP_LANGUAGE || process.env.STT_LANGUAGE || 'ko',
   tts: buildTtsSettings(process.env, ROOT),
   requireWakeWord: ['1', 'true', 'yes'].includes((process.env.REQUIRE_WAKE_WORD || '0').toLowerCase()),
@@ -804,9 +806,9 @@ async function transcribeOnce(wavPath, input16k, outBase) {
   if (shouldPassWhisperLanguage(settings.whisperLanguage)) args.push('-l', settings.whisperLanguage);
   args.push('-nt', '-otxt', '-of', outBase, '-sns', '-nf', '-nth', '0.35', '-et', '2.2', '-lpt', '-0.8');
   try {
-    await execFileAsync(settings.whisperBin, args, { timeout: 25000, maxBuffer: 2 * 1024 * 1024 });
+    await execFileAsync(settings.whisperBin, args, { timeout: settings.whisperTimeoutMs, maxBuffer: 4 * 1024 * 1024 });
   } catch (e) {
-    throw new Error(`whisper failed: ${e.stderr || e.message}`);
+    throw new Error(`whisper failed: ${whisperFailureMessage(e)}`);
   }
   const txtPath = `${outBase}.txt`;
   const raw = fs.existsSync(txtPath) ? fs.readFileSync(txtPath, 'utf8') : '';
