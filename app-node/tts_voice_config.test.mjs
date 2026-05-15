@@ -40,8 +40,8 @@ test('effectiveTtsVoiceSelection falls back to backend voice when env voice type
   assert.equal(selected.voice.voice, 'ko-KR-InJoonNeural');
 });
 
-test('effectiveTtsVoiceSelection accepts Q13/Qwen3 backend aliases from env', () => {
-  const selected = effectiveTtsVoiceSelection(defaultTtsVoiceConfig(), { TTS_BACKEND: 'q13tts' });
+test('effectiveTtsVoiceSelection accepts Qwen3 backend aliases from env', () => {
+  const selected = effectiveTtsVoiceSelection(defaultTtsVoiceConfig(), { TTS_BACKEND: 'qwen3' });
 
   assert.equal(selected.backend, 'qwen3tts');
   assert.equal(selected.voiceType, 'korean_preset');
@@ -76,7 +76,7 @@ test('voiceCommandFromTranscript detects TTS backend changes', () => {
   assert.deepEqual(voiceCommandFromTranscript('change TTS backend to OmniVoice'), { backend: 'omnivoice' });
   assert.deepEqual(voiceCommandFromTranscript('음성 백엔드 옴니보이스로 바꿔'), { backend: 'omnivoice' });
   assert.deepEqual(voiceCommandFromTranscript('TTS를 Edge로 바꿔'), { backend: 'edge' });
-  assert.deepEqual(voiceCommandFromTranscript('TTS를 Q13으로 바꿔'), { backend: 'qwen3tts' });
+  assert.deepEqual(voiceCommandFromTranscript('TTS를 qwen3로 바꿔'), { backend: 'qwen3tts' });
   assert.deepEqual(voiceCommandFromTranscript('음성 백엔드 큐웬으로 바꿔'), { backend: 'qwen3tts' });
 });
 
@@ -86,7 +86,7 @@ test('applyTtsVoiceSelectionToEnv maps Qwen3 voice types to CLI mode env', () =>
     TTS_BACKEND: 'qwen3tts',
     TTS_VOICE_TYPE: 'korean_preset',
     QWEN3TTS_MODE: 'custom',
-    QWEN3TTS_SPEAKER: 'Cherry',
+    QWEN3TTS_SPEAKER: 'sohee',
     VOICE_LANGUAGE: 'ko',
   });
 

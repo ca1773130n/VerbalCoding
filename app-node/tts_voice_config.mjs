@@ -44,7 +44,7 @@ export const DEFAULT_TTS_VOICE_CONFIG = {
     qwen3tts: {
       currentVoiceType: 'korean_preset',
       voices: {
-        korean_preset: { label: 'Qwen3 TTS Korean preset', language: 'ko', voice: 'Cherry' },
+        korean_preset: { label: 'Qwen3 TTS Korean preset', language: 'ko', voice: 'sohee' },
         cloned_reference: { label: 'Qwen3 TTS reference sample', language: 'ko', voice: 'voice-samples/user-reference.wav' },
         designed_speaker: { label: 'Qwen3 TTS designed speaker', language: 'ko', voice: 'calm conversational Korean voice' },
       },
@@ -63,8 +63,7 @@ export function defaultTtsVoiceConfig() {
 function normalizeBackend(value, config) {
   const key = String(value || '').trim().toLowerCase();
   const aliases = new Map([
-    ['q13', 'qwen3tts'],
-    ['q13tts', 'qwen3tts'],
+    ['q3', 'qwen3tts'],
     ['qwen3', 'qwen3tts'],
     ['qwen3-tts', 'qwen3tts'],
     ['qtts', 'qwen3tts'],
@@ -153,13 +152,13 @@ export function voiceCommandFromTranscript(text) {
   const compact = raw.toLowerCase().replace(/\s+/g, '');
   const looksLikeBackend = /\b(tts|voice|speech|audio)\b.*\bbackend\b|\bbackend\b.*\b(tts|voice|speech|audio)\b/i.test(raw)
     || /(tts|음성|목소리).*(백엔드|백앤드|backend).*(바꿔|변경|설정|해줘|로)/iu.test(raw)
-    || /(백엔드|백앤드|backend).*(옴니보이스|오픈보이스|엣지|수퍼토닉|슈퍼토닉|스피치스위프트|큐원|큐웬|qwen|q13|qtts|speechswift|omnivoice|openvoice|edge|supertonic)/iu.test(raw)
-    || /tts를.*(옴니보이스|오픈보이스|엣지|수퍼토닉|슈퍼토닉|스피치스위프트|큐원|큐웬|qwen|q13|qtts|omnivoice|openvoice|edge|supertonic|speechswift).*바꿔/iu.test(raw);
+    || /(백엔드|백앤드|backend).*(옴니보이스|오픈보이스|엣지|수퍼토닉|슈퍼토닉|스피치스위프트|큐원|큐웬|qwen|q3|qtts|speechswift|omnivoice|openvoice|edge|supertonic)/iu.test(raw)
+    || /tts를.*(옴니보이스|오픈보이스|엣지|수퍼토닉|슈퍼토닉|스피치스위프트|큐원|큐웬|qwen|q3|qtts|omnivoice|openvoice|edge|supertonic|speechswift).*바꿔/iu.test(raw);
   if (looksLikeBackend) {
     if (/(omnivoice|omni voice|옴니보이스|업니보이스|옴니|업니)/iu.test(raw)) return { backend: 'omnivoice' };
     if (/(openvoice|open voice|오픈보이스|오픈 보이스)/iu.test(raw)) return { backend: 'openvoice' };
     if (/(speechswift|speech swift|스피치스위프트|스피치 스위프트|cosyvoice|코지보이스)/iu.test(raw)) return { backend: 'speechswift' };
-    if (/(qwen3|qwen|q13|qtts|큐원|큐웬|큐엔|큐13|큐삼)/iu.test(raw)) return { backend: 'qwen3tts' };
+    if (/(qwen3|qwen|q3|qtts|큐원|큐웬|큐엔|큐3|큐삼)/iu.test(raw)) return { backend: 'qwen3tts' };
     if (/(supertonic|수퍼토닉|슈퍼토닉)/iu.test(raw)) return { backend: 'supertonic' };
     if (/(edge|엣지)/iu.test(raw)) return { backend: 'edge' };
   }

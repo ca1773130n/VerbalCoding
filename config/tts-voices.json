@@ -1,6 +1,6 @@
 {
-  "currentBackend": "edge",
-  "currentVoiceType": "korean_male",
+  "currentBackend": "qwen3tts",
+  "currentVoiceType": "korean_preset",
   "backends": {
     "edge": {
       "currentVoiceType": "korean_male",
@@ -93,7 +93,7 @@
         "korean_preset": {
           "label": "Qwen3 TTS Korean preset",
           "language": "ko",
-          "voice": "Cherry"
+          "voice": "sohee"
         },
         "cloned_reference": {
           "label": "Qwen3 TTS reference sample",

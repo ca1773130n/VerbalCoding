@@ -18,8 +18,7 @@ function resolveUnderRoot(root, value, fallback) {
 export function buildTtsSettings(env = process.env, root = process.cwd()) {
   const requestedBackend = String(env.TTS_BACKEND || 'edge').trim().toLowerCase();
   const aliases = new Map([
-    ['q13', 'qwen3tts'],
-    ['q13tts', 'qwen3tts'],
+    ['q3', 'qwen3tts'],
     ['qwen3', 'qwen3tts'],
     ['qwen3-tts', 'qwen3tts'],
     ['qtts', 'qwen3tts'],
@@ -89,13 +88,15 @@ export function buildTtsSettings(env = process.env, root = process.cwd()) {
       useForProgress: boolEnv(env.OMNIVOICE_PROGRESS, false),
     },
     qwen3tts: {
-      command: env.QWEN3TTS_COMMAND || env.QTTS_COMMAND || 'qtts',
+      command: env.QWEN3TTS_COMMAND || env.QTTS_COMMAND || 'audio',
       mode: env.QWEN3TTS_MODE || 'custom',
-      language: env.QWEN3TTS_LANGUAGE || env.VOICE_LANGUAGE || 'Korean',
-      speaker: env.QWEN3TTS_SPEAKER || 'Cherry',
+      model: env.QWEN3TTS_MODEL || '',
+      language: env.QWEN3TTS_LANGUAGE || env.VOICE_LANGUAGE || 'korean',
+      speaker: env.QWEN3TTS_SPEAKER || 'sohee',
       instruct: env.QWEN3TTS_INSTRUCT || '',
       refAudio: env.QWEN3TTS_REF_AUDIO ? resolveUnderRoot(root, env.QWEN3TTS_REF_AUDIO, '') : '',
       refText: env.QWEN3TTS_REF_TEXT || '',
+      stream: boolEnv(env.QWEN3TTS_STREAM, true),
       timeoutMs: positiveNumber(env.QWEN3TTS_TIMEOUT_MS, 120000),
       useForProgress: boolEnv(env.QWEN3TTS_PROGRESS, false),
     },

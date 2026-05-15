@@ -73,15 +73,17 @@ function omniVoiceArgs(text, out, omnivoice) {
 }
 
 function qwen3TtsArgs(text, out, qwen3tts) {
-  const args = [text, '--output', out];
-  if (qwen3tts.mode) args.push('--mode', qwen3tts.mode);
+  const args = ['speak', text, '--engine', 'qwen3', '--output', out];
   if (qwen3tts.language) args.push('--language', qwen3tts.language);
+  if (qwen3tts.stream) args.push('--stream');
   if (qwen3tts.mode === 'clone') {
-    if (qwen3tts.refAudio) args.push('--ref-audio', qwen3tts.refAudio);
-    if (qwen3tts.refText) args.push('--ref-text', qwen3tts.refText);
+    args.push('--model', qwen3tts.model || 'base');
+    if (qwen3tts.refAudio) args.push('--voice-sample', qwen3tts.refAudio);
   } else if (qwen3tts.mode === 'design') {
+    args.push('--model', qwen3tts.model || 'customVoice');
     if (qwen3tts.instruct) args.push('--instruct', qwen3tts.instruct);
   } else {
+    args.push('--model', qwen3tts.model || 'customVoice');
     if (qwen3tts.speaker) args.push('--speaker', qwen3tts.speaker);
     if (qwen3tts.instruct) args.push('--instruct', qwen3tts.instruct);
   }
