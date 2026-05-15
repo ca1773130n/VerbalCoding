@@ -23,12 +23,14 @@ export function voiceBridgePrompt(text, options = {}) {
   const english = /^en/i.test(String(options.language || ''));
   const lines = english ? [
     'This is a user utterance from a Discord voice call.',
+    'Consider Discord voice-channel speech and text-channel messages as one shared conversation context when inferring intent.',
     'Answer in English. For simple conversation/status questions, do not use tools; answer directly in 1-3 sentences.',
     'Use tools only for real work requests such as file edits, command execution, log checks, or web/search tasks.',
     'If code changes are made, do not read diffs or full code aloud; summarize outcome and next checks briefly.',
     'Do not include CLI metadata or session_id in the answer.',
   ] : [
     'Discord 음성 대화로 들어온 사용자 발화다.',
+    '의도를 판단할 때 음성 채널 발화와 텍스트 채널 메시지를 같은 대화 맥락으로 함께 고려해라.',
     '단순 대화/상태 질문이면 도구를 쓰지 말고 1~3문장으로 바로 한국어 답변해라.',
     '파일 수정, 실행, 로그 확인, 검색 같은 실제 작업 지시일 때만 필요한 도구를 사용해라.',
     '코드 변경을 수행했다면 음성 답변에는 diff나 코드 전문을 읽지 말고, 작업 결과와 다음 확인 사항만 짧게 말해라.',
@@ -56,6 +58,10 @@ export function voiceBridgePrompt(text, options = {}) {
   if (options.projectContext) {
     lines.push(english ? 'Route this turn through the following project/session context:' : '이 턴은 아래 프로젝트/세션 컨텍스트로 처리해라.');
     lines.push(String(options.projectContext).trim());
+  }
+  if (options.recentDiscordContext) {
+    lines.push(english ? 'Recent Discord text-channel context to consider with this voice utterance:' : '이 음성 발화와 함께 고려할 최근 Discord 텍스트 채널 맥락:');
+    lines.push(String(options.recentDiscordContext).trim());
   }
   return lines.concat(['', text]).join('\n');
 }
@@ -487,7 +493,12 @@ export function createAgentAdapter(settings, deps = {}) {
   function buildArgs(text, options = {}) {
     const argv = shellSplit(settings.command);
     const cmd = argv[0];
-    const query = voiceBridgePrompt(text, { verboseProgress: options.verboseProgress, language: options.language, projectContext: options.projectContext });
+    const query = voiceBridgePrompt(text, {
+      verboseProgress: options.verboseProgress,
+      language: options.language,
+      projectContext: options.projectContext,
+      recentDiscordContext: options.recentDiscordContext,
+    });
     let args = argv.slice(1);
     if (settings.backend === 'hermes' && options.verboseProgress) {
       // Hermes quiet mode intentionally suppresses tool previews.  In verbose
@@ -511,8 +522,9 @@ export function createAgentAdapter(settings, deps = {}) {
     const language = plan.language || settings.language;
     activeProgressLanguage = language;
     const projectContext = plan.projectContext || settings.projectContext || '';
+    const recentDiscordContext = plan.recentDiscordContext || '';
     emittedProgress.clear();
-    const { cmd, args, sessionId } = buildArgs(text, { verboseProgress, language, projectContext });
+    const { cmd, args, sessionId } = buildArgs(text, { verboseProgress, language, projectContext, recentDiscordContext });
     const start = Date.now();
     const label = plan.label || settings.label;
     const { args: finalArgs, outputPath } = addCodexOutputCapture(args);

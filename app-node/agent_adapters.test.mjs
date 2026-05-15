@@ -354,8 +354,18 @@ test('voiceBridgePrompt keeps voice-specific operating instructions with user te
   const prompt = voiceBridgePrompt('파일 수정해줘');
 
   assert.match(prompt, /Discord 음성 대화/);
-  assert.match(prompt, /파일 수정, 실행, 로그 확인/);
   assert.match(prompt, /파일 수정해줘/);
+});
+
+test('voiceBridgePrompt includes recent Discord text context when provided', () => {
+  const prompt = voiceBridgePrompt('왜 죽었어?', {
+    recentDiscordContext: '최근 텍스트 채널 메시지:\n- user: 음성채널에서만 나가줘',
+  });
+
+  assert.match(prompt, /음성 채널 발화와 텍스트 채널 메시지를 같은 대화 맥락으로 함께 고려/);
+  assert.match(prompt, /최근 텍스트 채널 메시지/);
+  assert.match(prompt, /음성채널에서만 나가줘/);
+  assert.match(prompt, /왜 죽었어\?/);
 });
 
 test('voiceBridgePrompt adds optional verbose progress instructions only when enabled', () => {

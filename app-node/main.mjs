@@ -63,7 +63,11 @@ import { sendDiscordText, splitDiscordMessage } from './discord_text.mjs';
 import { progressTtsCacheFileName } from './progress_cache.mjs';
 import { shouldPassWhisperLanguage, voiceLanguageCommandFromTranscript, languagePreset } from './language_config.mjs';
 import { formatRestartCompleteNotice, formatRestartShutdownNotice } from './restart_notice.mjs';
-import { shouldRouteDiscordTextToAgent } from './text_routing.mjs';
+import {
+  appendRecentDiscordText,
+  formatRecentDiscordContext,
+  shouldRouteDiscordTextToAgent,
+} from './text_routing.mjs';
 import {
   bindProjectSessionToChannel,
   createProjectSession,
@@ -209,6 +213,7 @@ const voiceCloneCapture = createVoiceCloneCaptureState({ defaultTargetPath: sett
 let connection = null;
 let activeVoiceChannelId = '';
 let activeTranscriptChannelId = '';
+const recentDiscordTextByChannel = new Map();
 let player = createAudioPlayer();
 let speaking = false;
 let processing = false;
@@ -1156,6 +1161,9 @@ async function handleTextAgentMessage(msg, text, { speakResponse = false } = {})
   activeTranscriptChannelId = session?.transcriptChannelId || msg.channelId;
   const selectedAgentAdapter = adapterForProjectSession(session);
   const projectContext = projectSessionContextText(session);
+  const recentDiscordContext = formatRecentDiscordContext(recentDiscordTextByChannel, {
+    channelId: activeTranscriptChannelId,
+  });
   const plan = {
     task: true,
     label: selectedAgentAdapter.label,
@@ -1163,6 +1171,7 @@ async function handleTextAgentMessage(msg, text, { speakResponse = false } = {})
     language: settings.voiceLanguage,
     cwd: session?.workdir,
     projectContext,
+    recentDiscordContext,
   };
   const sessionBefore = selectedAgentAdapter.readSessionId?.();
   log('text agent request start', selectedAgentAdapter.label, sessionBefore ? 'resume-existing-session' : 'new-session', 'verbose', verboseProgress, session ? `project=${session.slug}` : 'project=default');
@@ -1518,6 +1527,9 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     }
     const selectedAgentAdapter = adapterForProjectSession(session);
     const projectContext = projectSessionContextText(session);
+    const recentDiscordContext = formatRecentDiscordContext(recentDiscordTextByChannel, {
+      channelId: activeTranscriptChannelId,
+    });
     const plan = {
       task: true,
       label: selectedAgentAdapter.label,
@@ -1525,6 +1537,7 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
       language: settings.voiceLanguage,
       cwd: session?.workdir,
       projectContext,
+      recentDiscordContext,
     };
     log('Agent plan', plan.label, 'backend', selectedAgentAdapter.backend, 'task', plan.task, 'language', plan.language, session ? `project=${session.slug}` : 'project=default');
     const agentStart = Date.now();
@@ -1916,6 +1929,11 @@ client.on('messageCreate', async msg => {
   if (msg.author.bot) return;
   if (!isAllowed(msg.author.id)) return;
   const content = msg.content.trim();
+  appendRecentDiscordText(recentDiscordTextByChannel, {
+    channelId: msg.channelId,
+    authorLabel: msg.member?.displayName || msg.author?.username || 'user',
+    content,
+  });
   const projectSessionCommand = parseProjectSessionCommand(content);
   if (projectSessionCommand) {
     try {
