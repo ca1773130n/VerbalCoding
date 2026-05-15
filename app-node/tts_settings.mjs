@@ -17,7 +17,7 @@ function resolveUnderRoot(root, value, fallback) {
 
 export function buildTtsSettings(env = process.env, root = process.cwd()) {
   const requestedBackend = String(env.TTS_BACKEND || 'edge').trim().toLowerCase();
-  const supportedBackends = new Set(['edge', 'openvoice', 'speechswift', 'supertonic']);
+  const supportedBackends = new Set(['edge', 'openvoice', 'speechswift', 'supertonic', 'omnivoice']);
   const backend = supportedBackends.has(requestedBackend) ? requestedBackend : 'edge';
   return {
     backend,
@@ -67,6 +67,18 @@ export function buildTtsSettings(env = process.env, root = process.cwd()) {
       cacheDir: env.SUPERTONIC_CACHE_DIR ? resolveUnderRoot(root, env.SUPERTONIC_CACHE_DIR, '') : '',
       intraOpThreads: env.SUPERTONIC_INTRA_OP_THREADS || '',
       interOpThreads: env.SUPERTONIC_INTER_OP_THREADS || '',
+    },
+    omnivoice: {
+      python: resolveUnderRoot(root, env.OMNIVOICE_PYTHON, path.join('.venv-omnivoice', 'bin', 'python')),
+      model: env.OMNIVOICE_MODEL || 'k2-fsa/OmniVoice',
+      device: env.OMNIVOICE_DEVICE || 'mps',
+      dtype: env.OMNIVOICE_DTYPE || 'float16',
+      refAudio: resolveUnderRoot(root, env.OMNIVOICE_REF_AUDIO || env.OPENVOICE_REF_AUDIO, path.join('voice-samples', 'user-reference.wav')),
+      refText: env.OMNIVOICE_REF_TEXT || '',
+      language: env.OMNIVOICE_LANGUAGE || env.VOICE_LANGUAGE || 'ko',
+      speaker: env.OMNIVOICE_SPEAKER || '',
+      timeoutMs: positiveNumber(env.OMNIVOICE_TIMEOUT_MS, 180000),
+      useForProgress: boolEnv(env.OMNIVOICE_PROGRESS, false),
     },
   };
 }

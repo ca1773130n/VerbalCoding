@@ -246,8 +246,8 @@ note('Progress/voice language', env.VOICE_LANGUAGE || env.WHISPER_CPP_LANGUAGE |
 note('Latency log path', env.LATENCY_LOG_PATH || './.logs/latency.jsonl');
 note('TTS voice fallback', env.TTS_VOICE || 'ko-KR-SunHiNeural');
 
-if (!['edge', 'openvoice', 'speechswift', 'supertonic'].includes(ttsBackend)) {
-  ok = check('TTS_BACKEND value', false, 'must be edge, openvoice, speechswift, or supertonic') && ok;
+if (!['edge', 'openvoice', 'speechswift', 'supertonic', 'omnivoice'].includes(ttsBackend)) {
+  ok = check('TTS_BACKEND value', false, 'must be edge, openvoice, speechswift, supertonic, or omnivoice') && ok;
 }
 if (ttsBackend === 'edge') {
   const edgeCommand = env.EDGE_TTS_COMMAND || env.TTS_EDGE_COMMAND || 'edge-tts';
@@ -272,6 +272,15 @@ if (ttsBackend === 'edge') {
   ok = check('supertonic CLI', commandExists(supertonicCommand), commandExists(supertonicCommand) || 'install with: python3 -m pip install supertonic') && ok;
   note('Supertonic voice/lang/steps', `${env.SUPERTONIC_VOICE || 'M1'} / ${env.SUPERTONIC_LANGUAGE || 'ko'} / ${env.SUPERTONIC_STEPS || '2'}`);
   note('Supertonic progress prompts', ['1', 'true', 'yes', 'on'].includes(String(env.SUPERTONIC_PROGRESS || '0').toLowerCase()) ? 'supertonic' : 'edge fallback');
+} else if (ttsBackend === 'omnivoice') {
+  const omniPython = env.OMNIVOICE_PYTHON || path.join(ROOT, '.venv-omnivoice', 'bin', 'python');
+  const resolvedOmniPython = path.isAbsolute(omniPython) ? omniPython : path.resolve(ROOT, omniPython);
+  const refAudio = path.resolve(ROOT, env.OMNIVOICE_REF_AUDIO || env.OPENVOICE_REF_AUDIO || './voice-samples/user-reference.wav');
+  ok = check('OmniVoice Python', fs.existsSync(resolvedOmniPython) || commandExists(omniPython), fs.existsSync(resolvedOmniPython) ? path.relative(ROOT, resolvedOmniPython) : 'install with: python -m venv .venv-omnivoice && .venv-omnivoice/bin/pip install torch torchaudio soundfile omnivoice') && ok;
+  ok = check('OmniVoice reference audio', fs.existsSync(refAudio), path.relative(ROOT, refAudio)) && ok;
+  ok = check('OmniVoice synth wrapper help', spawnSync(fs.existsSync(resolvedOmniPython) ? resolvedOmniPython : 'python3', ['integrations/omnivoice/synth.py', '--help'], { cwd: ROOT, encoding: 'utf8' }).status === 0, 'integrations/omnivoice/synth.py') && ok;
+  note('OmniVoice model/device', `${env.OMNIVOICE_MODEL || 'k2-fsa/OmniVoice'} / ${env.OMNIVOICE_DEVICE || 'mps'}`);
+  note('OmniVoice progress prompts', ['1', 'true', 'yes', 'on'].includes(String(env.OMNIVOICE_PROGRESS || '0').toLowerCase()) ? 'omnivoice' : 'edge fallback');
 }
 
 const backendCommand = {

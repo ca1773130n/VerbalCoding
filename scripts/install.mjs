@@ -166,7 +166,7 @@ async function main() {
     const autoJoinVoiceChannels = await ask('Auto-join voice channel names', process.env.AUTO_JOIN_VOICE_CHANNELS || '일반,General,general');
     const transcriptChannelId = await ask('Transcript text channel/thread ID', process.env.TRANSCRIPT_CHANNEL_ID || '');
     const language = await ask('Default voice language: ko/en/auto', process.env.VOICE_LANGUAGE || process.env.WHISPER_CPP_LANGUAGE || process.env.STT_LANGUAGE || 'ko');
-    const ttsBackend = await ask('TTS backend: edge/openvoice/speechswift/supertonic', process.env.TTS_BACKEND || 'edge');
+    const ttsBackend = await ask('TTS backend: edge/openvoice/speechswift/supertonic/omnivoice', process.env.TTS_BACKEND || 'edge');
     const edgeTtsCommand = await ask('Edge TTS command', process.env.EDGE_TTS_COMMAND || process.env.TTS_EDGE_COMMAND || 'edge-tts');
     const ttsVoice = await ask('TTS voice', process.env.TTS_VOICE || 'ko-KR-SunHiNeural');
     const ttsRate = await ask('TTS rate', process.env.TTS_RATE || '+10%');
@@ -179,6 +179,8 @@ async function main() {
     const openvoiceDir = await ask('OpenVoice repo dir', process.env.OPENVOICE_DIR || './vendor/OpenVoice');
     const openvoiceVenv = await ask('OpenVoice venv dir', process.env.OPENVOICE_VENV || './.venv-openvoice');
     const openvoiceRefAudio = await ask('OpenVoice reference audio path', process.env.OPENVOICE_REF_AUDIO || './voice-samples/user-reference.wav');
+    const omnivoicePython = await ask('OmniVoice Python', process.env.OMNIVOICE_PYTHON || './.venv-omnivoice/bin/python');
+    const omnivoiceRefAudio = await ask('OmniVoice reference audio path', process.env.OMNIVOICE_REF_AUDIO || process.env.OPENVOICE_REF_AUDIO || './voice-samples/user-reference.wav');
     const requireWake = (await ask('Require wake word? 1/0', process.env.REQUIRE_WAKE_WORD || '0')) === '1';
     const verboseProgress = (await ask('Verbose progress by default? 1/0', process.env.AGENT_VERBOSE_PROGRESS || process.env.VERBALCODING_VERBOSE_PROGRESS || '0')) === '1';
     const utteranceIdleMs = await ask('Utterance idle wait before STT, ms', process.env.UTTERANCE_IDLE_MS || '4500');
@@ -207,6 +209,8 @@ async function main() {
       openvoiceDir,
       openvoiceVenv,
       openvoiceRefAudio,
+      omnivoicePython,
+      omnivoiceRefAudio,
       requireWakeWord: requireWake,
       verboseProgress,
       utteranceIdleMs,

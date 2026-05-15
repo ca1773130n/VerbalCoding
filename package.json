@@ -35,6 +35,7 @@
     "scripts/*.mjs",
     "scripts/*.sh",
     "integrations/openvoice/*.py",
+    "integrations/omnivoice/*.py",
     "run.sh",
     ".env.example",
     "README.md",

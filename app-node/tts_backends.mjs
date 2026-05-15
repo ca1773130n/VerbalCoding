@@ -56,6 +56,22 @@ function supertonicEnv(baseEnv, supertonic) {
   return env;
 }
 
+function omniVoiceArgs(text, out, omnivoice) {
+  const args = [
+    path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', 'integrations', 'omnivoice', 'synth.py'),
+    '--text', text,
+    '--output', out,
+    '--model', omnivoice.model,
+    '--device', omnivoice.device,
+    '--dtype', omnivoice.dtype,
+  ];
+  if (omnivoice.refAudio) args.push('--ref-audio', omnivoice.refAudio);
+  if (omnivoice.refText) args.push('--ref-text', omnivoice.refText);
+  if (omnivoice.language) args.push('--language', omnivoice.language);
+  if (omnivoice.speaker) args.push('--speaker', omnivoice.speaker);
+  return args;
+}
+
 async function speechSwiftServerRequest({ fetchImpl, speechswift, text, signal }) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), speechswift.timeoutMs);
@@ -243,9 +259,47 @@ export function createSupertonicBackend(settings, deps = {}) {
   };
 }
 
+export function createOmniVoiceBackend(settings, deps = {}) {
+  const execFileAsync = deps.execFileAsync;
+  if (!execFileAsync) throw new Error('execFileAsync dependency is required');
+  const tmpdir = deps.tmpdir || os.tmpdir();
+  const warn = deps.warn || (() => {});
+  const fsApi = {
+    existsSync: deps.existsSync || fs.existsSync,
+    statSync: deps.statSync || fs.statSync,
+  };
+  const edge = createEdgeTtsBackend(settings, deps);
+  const omnivoice = settings.omnivoice;
+  return {
+    name: 'omnivoice',
+    outputExtension: omnivoice.useForProgress ? 'wav' : 'mp3',
+    cacheKeyParts() {
+      return ['omnivoice', omnivoice.model, omnivoice.device, omnivoice.dtype, omnivoice.refAudio, omnivoice.refText, omnivoice.language, omnivoice.speaker];
+    },
+    async synthesize(text, { signal, kind = 'final' } = {}) {
+      if (kind === 'progress' && !omnivoice.useForProgress) {
+        return edge.synthesize(text, { signal, kind });
+      }
+      const out = uniquePath(tmpdir, 'verbalcoding-omnivoice', 'wav');
+      try {
+        await execFileAsync(omnivoice.python || 'python3', omniVoiceArgs(text, out, omnivoice), execOptions({
+          timeout: omnivoice.timeoutMs,
+          maxBuffer: 4 * 1024 * 1024,
+        }, signal));
+        return validateOutput(out, fsApi);
+      } catch (error) {
+        fs.rm(out, { force: true }, () => {});
+        warn('omnivoice failed; falling back to edge', error?.message || error);
+        return edge.synthesize(text, { signal, kind });
+      }
+    },
+  };
+}
+
 export function createTtsBackend(settings, deps = {}) {
   if (settings.backend === 'openvoice') return createOpenVoiceBackend(settings, deps);
   if (settings.backend === 'speechswift') return createSpeechSwiftBackend(settings, deps);
   if (settings.backend === 'supertonic') return createSupertonicBackend(settings, deps);
+  if (settings.backend === 'omnivoice') return createOmniVoiceBackend(settings, deps);
   return createEdgeTtsBackend(settings, deps);
 }

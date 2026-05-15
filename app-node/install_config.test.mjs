@@ -61,6 +61,10 @@ test('normalizeInstallAnswers maps supported harnesses to backend env', () => {
   assert.equal(answers.SUPERTONIC_COMMAND, 'supertonic');
   assert.equal(answers.SUPERTONIC_SPEED, '1.0');
   assert.equal(answers.SUPERTONIC_LANGUAGE, 'ko');
+  assert.equal(answers.OMNIVOICE_PYTHON, './.venv-omnivoice/bin/python');
+  assert.equal(answers.OMNIVOICE_MODEL, 'k2-fsa/OmniVoice');
+  assert.equal(answers.OMNIVOICE_REF_AUDIO, './voice-samples/user-reference.wav');
+  assert.equal(answers.OMNIVOICE_LANGUAGE, 'ko');
   assert.equal(answers.OPENVOICE_LANGUAGE, 'KR');
   assert.equal(answers.REQUIRE_WAKE_WORD, '0');
   assert.equal(answers.UTTERANCE_IDLE_MS, '4500');
@@ -87,6 +91,8 @@ test('buildEnvFile writes configurable CLI harness and Discord settings without 
     TTS_VOLUME: '1.6',
     REQUIRE_WAKE_WORD: '0',
     OPENVOICE_REF_AUDIO: './voice-samples/me.wav',
+    OMNIVOICE_PYTHON: './.venv-omnivoice/bin/python',
+    OMNIVOICE_REF_AUDIO: './voice-samples/omni.wav',
   });
   const parsed = parseKeyValueEnv(envText);
 
@@ -102,6 +108,8 @@ test('buildEnvFile writes configurable CLI harness and Discord settings without 
   assert.equal(parsed.SUPERTONIC_STEPS, '3');
   assert.equal(parsed.TTS_VOLUME, '1.6');
   assert.equal(parsed.OPENVOICE_REF_AUDIO, './voice-samples/me.wav');
+  assert.equal(parsed.OMNIVOICE_PYTHON, './.venv-omnivoice/bin/python');
+  assert.equal(parsed.OMNIVOICE_REF_AUDIO, './voice-samples/omni.wav');
   assert.equal(parsed.DISCORD_BOT_TOKEN, 'token-abc');
   assert.equal(parsed.REQUIRE_WAKE_WORD, '0');
 });

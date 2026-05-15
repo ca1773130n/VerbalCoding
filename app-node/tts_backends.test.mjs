@@ -47,6 +47,18 @@ function baseSettings() {
       intraOpThreads: '',
       interOpThreads: '',
     },
+    omnivoice: {
+      python: '/project/.venv-omnivoice/bin/python',
+      model: 'k2-fsa/OmniVoice',
+      device: 'mps',
+      dtype: 'float16',
+      refAudio: '/project/voice-samples/me.wav',
+      refText: '테스트 기준 음성입니다.',
+      language: 'ko',
+      speaker: 'warm korean male voice',
+      timeoutMs: 180000,
+      useForProgress: false,
+    },
   };
 }
 
@@ -382,6 +394,71 @@ test('Supertonic falls back to Edge when local CLI fails', async () => {
   assert.ok(calls.some(call => call.cmd === 'supertonic'));
   assert.ok(calls.some(call => call.cmd === 'edge-tts'));
   assert.ok(calls.some(call => /supertonic failed; falling back to edge/i.test(call.warn || '')));
+});
+
+test('OmniVoice backend calls Python wrapper with model, reference sample, and output path', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'omnivoice' };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 999 }),
+    execFileAsync: async (cmd, args, options) => calls.push({ cmd, args, options }),
+  });
+
+  const out = await backend.synthesize('옴니보이스 테스트', { kind: 'final' });
+
+  assert.equal(calls[0].cmd, '/project/.venv-omnivoice/bin/python');
+  assert.ok(calls[0].args.some(arg => String(arg).endsWith('integrations/omnivoice/synth.py')));
+  assert.ok(calls[0].args.includes('--model'));
+  assert.ok(calls[0].args.includes('k2-fsa/OmniVoice'));
+  assert.ok(calls[0].args.includes('--ref-audio'));
+  assert.ok(calls[0].args.includes('/project/voice-samples/me.wav'));
+  assert.ok(calls[0].args.includes('--ref-text'));
+  assert.ok(calls[0].args.includes('테스트 기준 음성입니다.'));
+  assert.ok(calls[0].args.includes('--speaker'));
+  assert.ok(calls[0].args.includes('warm korean male voice'));
+  assert.ok(calls[0].args.includes('--text'));
+  assert.ok(calls[0].args.includes('옴니보이스 테스트'));
+  assert.equal(calls[0].options.timeout, 180000);
+  assert.match(out, /^\/tmp\/verbalcoding-omnivoice-/);
+  assert.deepEqual(backend.cacheKeyParts(), ['omnivoice', 'k2-fsa/OmniVoice', 'mps', 'float16', '/project/voice-samples/me.wav', '테스트 기준 음성입니다.', 'ko', 'warm korean male voice']);
+});
+
+test('OmniVoice progress uses Edge fallback unless explicitly enabled', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'omnivoice' };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 123 }),
+    execFileAsync: async (cmd, args) => calls.push({ cmd, args }),
+  });
+
+  await backend.synthesize('진행 안내', { kind: 'progress' });
+
+  assert.equal(calls[0].cmd, 'edge-tts');
+});
+
+test('OmniVoice falls back to Edge when Python wrapper fails', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'omnivoice' };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 123 }),
+    warn: (...args) => calls.push({ warn: args.join(' ') }),
+    execFileAsync: async (cmd, args) => {
+      calls.push({ cmd, args });
+      if (cmd.includes('.venv-omnivoice')) throw new Error('omnivoice missing');
+    },
+  });
+
+  await backend.synthesize('fallback', { kind: 'final' });
+
+  assert.ok(calls.some(call => call.cmd?.includes('.venv-omnivoice')));
+  assert.ok(calls.some(call => call.cmd === 'edge-tts'));
+  assert.ok(calls.some(call => /omnivoice failed; falling back to edge/i.test(call.warn || '')));
 });
 
 test('TTS backends omit signal option when no AbortSignal is provided', async () => {

@@ -200,8 +200,9 @@ Edge TTS remains the default and fallback. Optional local backends are configure
 | Supertonic | `SUPERTONIC_VOICE`, `SUPERTONIC_LANGUAGE` | `M1`–`M5`, `F1`–`F5`; language `ko`, `en`, `es`, `pt`, `fr` |
 | OpenVoice | `OPENVOICE_REF_AUDIO`, `OPENVOICE_STYLE`, `OPENVOICE_LANGUAGE` | User-provided permitted reference WAV; style defaults to `default` |
 | SpeechSwift / CosyVoice | `SPEECHSWIFT_REF_AUDIO`, `SPEECHSWIFT_ENGINE`, `SPEECHSWIFT_SPEAKER`, `SPEECHSWIFT_MODEL_ID` | Reference-sample voices for CosyVoice, or backend-supported speaker/model IDs |
+| OmniVoice | `OMNIVOICE_PYTHON`, `OMNIVOICE_MODEL`, `OMNIVOICE_REF_AUDIO`, `OMNIVOICE_REF_TEXT`, `OMNIVOICE_LANGUAGE`, `OMNIVOICE_SPEAKER` | k2-fsa/OmniVoice reference-sample cloning or optional voice-design attributes |
 
-Only clone voices you own or have permission to use. If a local backend fails or times out, VerbalCoding falls back to Edge TTS.
+Only clone voices you own or have permission to use. For OmniVoice, install it in a separate Python environment such as `.venv-omnivoice` (`pip install torch torchaudio soundfile omnivoice`) and set `TTS_BACKEND=omnivoice`. If a local backend fails or times out, VerbalCoding falls back to Edge TTS.
 
 ## Operational Notes
 

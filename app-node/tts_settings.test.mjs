@@ -121,6 +121,35 @@ test('buildTtsSettings normalizes Supertonic local backend settings', () => {
   assert.equal(settings.supertonic.interOpThreads, '1');
 });
 
+test('buildTtsSettings normalizes OmniVoice local backend settings', () => {
+  const root = '/project';
+  const settings = buildTtsSettings({
+    TTS_BACKEND: 'omnivoice',
+    OMNIVOICE_PYTHON: './.venv-omnivoice/bin/python',
+    OMNIVOICE_MODEL: 'k2-fsa/OmniVoice',
+    OMNIVOICE_DEVICE: 'mps',
+    OMNIVOICE_DTYPE: 'float16',
+    OMNIVOICE_REF_AUDIO: './voice-samples/me.wav',
+    OMNIVOICE_REF_TEXT: '테스트 기준 음성입니다.',
+    OMNIVOICE_LANGUAGE: 'ko',
+    OMNIVOICE_SPEAKER: 'warm korean male voice',
+    OMNIVOICE_TIMEOUT_MS: '180000',
+    OMNIVOICE_PROGRESS: '1',
+  }, root);
+
+  assert.equal(settings.backend, 'omnivoice');
+  assert.equal(settings.omnivoice.python, path.join(root, '.venv-omnivoice', 'bin', 'python'));
+  assert.equal(settings.omnivoice.model, 'k2-fsa/OmniVoice');
+  assert.equal(settings.omnivoice.device, 'mps');
+  assert.equal(settings.omnivoice.dtype, 'float16');
+  assert.equal(settings.omnivoice.refAudio, path.join(root, 'voice-samples', 'me.wav'));
+  assert.equal(settings.omnivoice.refText, '테스트 기준 음성입니다.');
+  assert.equal(settings.omnivoice.language, 'ko');
+  assert.equal(settings.omnivoice.speaker, 'warm korean male voice');
+  assert.equal(settings.omnivoice.timeoutMs, 180000);
+  assert.equal(settings.omnivoice.useForProgress, true);
+});
+
 test('buildTtsSettings falls back to edge for unsupported backend', () => {
   const settings = buildTtsSettings({ TTS_BACKEND: 'unknown' }, '/project');
   assert.equal(settings.backend, 'edge');

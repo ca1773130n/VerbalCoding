@@ -71,6 +71,21 @@
           "voice": "M1"
         }
       }
+    },
+    "omnivoice": {
+      "currentVoiceType": "cloned_reference",
+      "voices": {
+        "cloned_reference": {
+          "label": "OmniVoice reference sample",
+          "language": "ko",
+          "voice": "voice-samples/user-reference.wav"
+        },
+        "designed_speaker": {
+          "label": "OmniVoice designed speaker",
+          "language": "ko",
+          "voice": "warm korean male voice"
+        }
+      }
     }
   }
 }
