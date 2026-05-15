@@ -156,7 +156,7 @@ The differentiation push is tracked in [docs/ROADMAP.md](./docs/ROADMAP.md). Fiv
 | Runtime | Node.js 20+ and npm; setup can install via Homebrew/apt/dnf/pacman where supported. |
 | Audio | `ffmpeg`; setup/doctor can install it on supported OSes. |
 | Speech recognition | Local `whisper-cli` from whisper.cpp plus `models/ggml-small-q5_1.bin`. |
-| TTS | Edge TTS by default; optional OpenVoice, SpeechSwift/CosyVoice, Supertonic, OmniVoice, and Qwen3/Q13 TTS CLI paths. |
+| TTS | Edge TTS by default; optional OpenVoice, SpeechSwift/CosyVoice, Supertonic, OmniVoice, and Qwen3 TTS CLI paths. |
 | Discord | Bot token, Message Content intent, voice permissions, matching auto-join channel names. |
 | Agent | At least one CLI harness installed; `vc setup` auto-detects Hermes, Claude Code, Codex, Gemini, OpenCode, OpenClaw, Aider, Cursor CLI. |
 | Platform focus | macOS / Apple Silicon most tested; Linux bootstrap is best-effort; Windows unsupported for now. |

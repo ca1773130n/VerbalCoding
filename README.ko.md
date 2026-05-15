@@ -101,7 +101,7 @@ vc instance start NAME                   # 해당 bot을 background로 실행
 |---|---|
 | Runtime | Node.js 20+와 npm. |
 | Audio | `ffmpeg`와 local `whisper-cli`. |
-| TTS | 기본 Edge TTS, 선택 OpenVoice, SpeechSwift/CosyVoice, Supertonic, OmniVoice, Qwen3/Q13 TTS CLI. |
+| TTS | 기본 Edge TTS, 선택 OpenVoice, SpeechSwift/CosyVoice, Supertonic, OmniVoice, Qwen3 TTS CLI. |
 | Discord | Bot token, Message Content intent, voice permissions, 일치하는 channel names. |
 | Agent | 인증된 CLI harness 하나 이상, 기본은 Hermes Agent. |
 

@@ -181,10 +181,6 @@ test('buildTtsSettings normalizes Qwen3 TTS CLI settings and aliases qwen3', () 
   assert.equal(settings.qwen3tts.useForProgress, true);
 });
 
-test('buildTtsSettings does not accept nonexistent Q13 aliases', () => {
-  assert.equal(buildTtsSettings({ TTS_BACKEND: 'q13tts' }, '/project').backend, 'edge');
-});
-
 test('buildTtsSettings falls back to edge for unsupported backend', () => {
   const settings = buildTtsSettings({ TTS_BACKEND: 'unknown' }, '/project');
   assert.equal(settings.backend, 'edge');
