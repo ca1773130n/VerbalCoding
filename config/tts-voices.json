@@ -86,6 +86,26 @@
           "voice": "warm korean male voice"
         }
       }
+    },
+    "qwen3tts": {
+      "currentVoiceType": "korean_preset",
+      "voices": {
+        "korean_preset": {
+          "label": "Qwen3 TTS Korean preset",
+          "language": "ko",
+          "voice": "Cherry"
+        },
+        "cloned_reference": {
+          "label": "Qwen3 TTS reference sample",
+          "language": "ko",
+          "voice": "voice-samples/user-reference.wav"
+        },
+        "designed_speaker": {
+          "label": "Qwen3 TTS designed speaker",
+          "language": "ko",
+          "voice": "calm conversational Korean voice"
+        }
+      }
     }
   }
 }

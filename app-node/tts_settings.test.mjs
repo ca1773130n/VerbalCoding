@@ -150,6 +150,33 @@ test('buildTtsSettings normalizes OmniVoice local backend settings', () => {
   assert.equal(settings.omnivoice.useForProgress, true);
 });
 
+test('buildTtsSettings normalizes Qwen3 TTS CLI settings and aliases Q13', () => {
+  const root = '/project';
+  const settings = buildTtsSettings({
+    TTS_BACKEND: 'q13tts',
+    QWEN3TTS_COMMAND: './vendor/qtts/qtts.py',
+    QWEN3TTS_MODE: 'clone',
+    QWEN3TTS_LANGUAGE: 'Korean',
+    QWEN3TTS_SPEAKER: 'Cherry',
+    QWEN3TTS_INSTRUCT: 'calm conversational Korean',
+    QWEN3TTS_REF_AUDIO: './voice-samples/me.wav',
+    QWEN3TTS_REF_TEXT: '테스트 기준 음성입니다.',
+    QWEN3TTS_TIMEOUT_MS: '90000',
+    QWEN3TTS_PROGRESS: '1',
+  }, root);
+
+  assert.equal(settings.backend, 'qwen3tts');
+  assert.equal(settings.qwen3tts.command, './vendor/qtts/qtts.py');
+  assert.equal(settings.qwen3tts.mode, 'clone');
+  assert.equal(settings.qwen3tts.language, 'Korean');
+  assert.equal(settings.qwen3tts.speaker, 'Cherry');
+  assert.equal(settings.qwen3tts.instruct, 'calm conversational Korean');
+  assert.equal(settings.qwen3tts.refAudio, path.join(root, 'voice-samples', 'me.wav'));
+  assert.equal(settings.qwen3tts.refText, '테스트 기준 음성입니다.');
+  assert.equal(settings.qwen3tts.timeoutMs, 90000);
+  assert.equal(settings.qwen3tts.useForProgress, true);
+});
+
 test('buildTtsSettings falls back to edge for unsupported backend', () => {
   const settings = buildTtsSettings({ TTS_BACKEND: 'unknown' }, '/project');
   assert.equal(settings.backend, 'edge');

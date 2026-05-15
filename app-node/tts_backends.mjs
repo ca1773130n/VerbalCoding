@@ -72,6 +72,22 @@ function omniVoiceArgs(text, out, omnivoice) {
   return args;
 }
 
+function qwen3TtsArgs(text, out, qwen3tts) {
+  const args = [text, '--output', out];
+  if (qwen3tts.mode) args.push('--mode', qwen3tts.mode);
+  if (qwen3tts.language) args.push('--language', qwen3tts.language);
+  if (qwen3tts.mode === 'clone') {
+    if (qwen3tts.refAudio) args.push('--ref-audio', qwen3tts.refAudio);
+    if (qwen3tts.refText) args.push('--ref-text', qwen3tts.refText);
+  } else if (qwen3tts.mode === 'design') {
+    if (qwen3tts.instruct) args.push('--instruct', qwen3tts.instruct);
+  } else {
+    if (qwen3tts.speaker) args.push('--speaker', qwen3tts.speaker);
+    if (qwen3tts.instruct) args.push('--instruct', qwen3tts.instruct);
+  }
+  return args;
+}
+
 async function speechSwiftServerRequest({ fetchImpl, speechswift, text, signal }) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), speechswift.timeoutMs);
@@ -296,10 +312,48 @@ export function createOmniVoiceBackend(settings, deps = {}) {
   };
 }
 
+export function createQwen3TtsBackend(settings, deps = {}) {
+  const execFileAsync = deps.execFileAsync;
+  if (!execFileAsync) throw new Error('execFileAsync dependency is required');
+  const tmpdir = deps.tmpdir || os.tmpdir();
+  const warn = deps.warn || (() => {});
+  const fsApi = {
+    existsSync: deps.existsSync || fs.existsSync,
+    statSync: deps.statSync || fs.statSync,
+  };
+  const edge = createEdgeTtsBackend(settings, deps);
+  const qwen3tts = settings.qwen3tts;
+  return {
+    name: 'qwen3tts',
+    outputExtension: qwen3tts.useForProgress ? 'mp3' : 'mp3',
+    cacheKeyParts() {
+      return ['qwen3tts', qwen3tts.command, qwen3tts.mode, qwen3tts.language, qwen3tts.speaker, qwen3tts.instruct, qwen3tts.refAudio, qwen3tts.refText];
+    },
+    async synthesize(text, { signal, kind = 'final' } = {}) {
+      if (kind === 'progress' && !qwen3tts.useForProgress) {
+        return edge.synthesize(text, { signal, kind });
+      }
+      const out = uniquePath(tmpdir, 'verbalcoding-qwen3tts', 'mp3');
+      try {
+        await execFileAsync(qwen3tts.command, qwen3TtsArgs(text, out, qwen3tts), execOptions({
+          timeout: qwen3tts.timeoutMs,
+          maxBuffer: 4 * 1024 * 1024,
+        }, signal));
+        return validateOutput(out, fsApi);
+      } catch (error) {
+        fs.rm(out, { force: true }, () => {});
+        warn('qwen3tts failed; falling back to edge', error?.message || error);
+        return edge.synthesize(text, { signal, kind });
+      }
+    },
+  };
+}
+
 export function createTtsBackend(settings, deps = {}) {
   if (settings.backend === 'openvoice') return createOpenVoiceBackend(settings, deps);
   if (settings.backend === 'speechswift') return createSpeechSwiftBackend(settings, deps);
   if (settings.backend === 'supertonic') return createSupertonicBackend(settings, deps);
   if (settings.backend === 'omnivoice') return createOmniVoiceBackend(settings, deps);
+  if (settings.backend === 'qwen3tts') return createQwen3TtsBackend(settings, deps);
   return createEdgeTtsBackend(settings, deps);
 }

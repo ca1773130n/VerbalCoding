@@ -59,6 +59,17 @@ function baseSettings() {
       timeoutMs: 180000,
       useForProgress: false,
     },
+    qwen3tts: {
+      command: 'qtts',
+      mode: 'custom',
+      language: 'Korean',
+      speaker: 'Cherry',
+      instruct: 'calm conversational Korean',
+      refAudio: '/project/voice-samples/me.wav',
+      refText: '테스트 기준 음성입니다.',
+      timeoutMs: 120000,
+      useForProgress: false,
+    },
   };
 }
 
@@ -459,6 +470,88 @@ test('OmniVoice falls back to Edge when Python wrapper fails', async () => {
   assert.ok(calls.some(call => call.cmd?.includes('.venv-omnivoice')));
   assert.ok(calls.some(call => call.cmd === 'edge-tts'));
   assert.ok(calls.some(call => /omnivoice failed; falling back to edge/i.test(call.warn || '')));
+});
+
+test('Qwen3 TTS backend calls qtts CLI with speaker, language, and output path', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'qwen3tts' };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 999 }),
+    execFileAsync: async (cmd, args, options) => calls.push({ cmd, args, options }),
+  });
+
+  const out = await backend.synthesize('큐웬 티티에스 테스트', { kind: 'final' });
+
+  assert.equal(calls[0].cmd, 'qtts');
+  assert.deepEqual(calls[0].args.slice(0, 2), ['큐웬 티티에스 테스트', '--output']);
+  assert.ok(calls[0].args.includes('--mode'));
+  assert.ok(calls[0].args.includes('custom'));
+  assert.ok(calls[0].args.includes('--language'));
+  assert.ok(calls[0].args.includes('Korean'));
+  assert.ok(calls[0].args.includes('--speaker'));
+  assert.ok(calls[0].args.includes('Cherry'));
+  assert.ok(calls[0].args.includes('--instruct'));
+  assert.ok(calls[0].args.includes('calm conversational Korean'));
+  assert.equal(calls[0].options.timeout, 120000);
+  assert.match(out, /^\/tmp\/verbalcoding-qwen3tts-/);
+  assert.deepEqual(backend.cacheKeyParts(), ['qwen3tts', 'qtts', 'custom', 'Korean', 'Cherry', 'calm conversational Korean', '/project/voice-samples/me.wav', '테스트 기준 음성입니다.']);
+});
+
+test('Qwen3 TTS clone mode passes reference audio and text', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'qwen3tts', qwen3tts: { ...baseSettings().qwen3tts, mode: 'clone' } };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 999 }),
+    execFileAsync: async (cmd, args) => calls.push({ cmd, args }),
+  });
+
+  await backend.synthesize('복제 음성 테스트', { kind: 'final' });
+
+  assert.ok(calls[0].args.includes('--ref-audio'));
+  assert.ok(calls[0].args.includes('/project/voice-samples/me.wav'));
+  assert.ok(calls[0].args.includes('--ref-text'));
+  assert.ok(calls[0].args.includes('테스트 기준 음성입니다.'));
+  assert.equal(calls[0].args.includes('--speaker'), false);
+});
+
+test('Qwen3 TTS progress uses Edge fallback unless explicitly enabled', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'qwen3tts' };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 123 }),
+    execFileAsync: async (cmd, args) => calls.push({ cmd, args }),
+  });
+
+  await backend.synthesize('진행 안내', { kind: 'progress' });
+
+  assert.equal(calls[0].cmd, 'edge-tts');
+});
+
+test('Qwen3 TTS falls back to Edge when local CLI fails', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'qwen3tts' };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 123 }),
+    warn: (...args) => calls.push({ warn: args.join(' ') }),
+    execFileAsync: async (cmd, args) => {
+      calls.push({ cmd, args });
+      if (cmd === 'qtts') throw new Error('qtts missing');
+    },
+  });
+
+  await backend.synthesize('fallback', { kind: 'final' });
+
+  assert.ok(calls.some(call => call.cmd === 'qtts'));
+  assert.ok(calls.some(call => call.cmd === 'edge-tts'));
+  assert.ok(calls.some(call => /qwen3tts failed; falling back to edge/i.test(call.warn || '')));
 });
 
 test('TTS backends omit signal option when no AbortSignal is provided', async () => {
