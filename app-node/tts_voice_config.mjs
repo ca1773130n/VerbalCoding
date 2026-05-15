@@ -34,6 +34,13 @@ export const DEFAULT_TTS_VOICE_CONFIG = {
         m1: { label: 'Supertonic M1', language: 'ko', voice: 'M1' },
       },
     },
+    omnivoice: {
+      currentVoiceType: 'cloned_reference',
+      voices: {
+        cloned_reference: { label: 'OmniVoice reference sample', language: 'ko', voice: 'voice-samples/user-reference.wav' },
+        designed_speaker: { label: 'OmniVoice designed speaker', language: 'ko', voice: 'warm korean male voice' },
+      },
+    },
   },
 };
 
@@ -113,6 +120,17 @@ export function voiceCommandFromTranscript(text) {
   const raw = String(text || '').trim();
   if (!raw) return null;
   const compact = raw.toLowerCase().replace(/\s+/g, '');
+  const looksLikeBackend = /\b(tts|voice|speech|audio)\b.*\bbackend\b|\bbackend\b.*\b(tts|voice|speech|audio)\b/i.test(raw)
+    || /(tts|음성|목소리).*(백엔드|백앤드|backend).*(바꿔|변경|설정|해줘|로)/iu.test(raw)
+    || /(백엔드|백앤드|backend).*(옴니보이스|오픈보이스|엣지|수퍼토닉|슈퍼토닉|스피치스위프트|speechswift|omnivoice|openvoice|edge|supertonic)/iu.test(raw)
+    || /tts를.*(옴니보이스|오픈보이스|엣지|수퍼토닉|슈퍼토닉|스피치스위프트|omnivoice|openvoice|edge|supertonic|speechswift).*바꿔/iu.test(raw);
+  if (looksLikeBackend) {
+    if (/(omnivoice|omni voice|옴니보이스|업니보이스|옴니|업니)/iu.test(raw)) return { backend: 'omnivoice' };
+    if (/(openvoice|open voice|오픈보이스|오픈 보이스)/iu.test(raw)) return { backend: 'openvoice' };
+    if (/(speechswift|speech swift|스피치스위프트|스피치 스위프트|cosyvoice|코지보이스)/iu.test(raw)) return { backend: 'speechswift' };
+    if (/(supertonic|수퍼토닉|슈퍼토닉)/iu.test(raw)) return { backend: 'supertonic' };
+    if (/(edge|엣지)/iu.test(raw)) return { backend: 'edge' };
+  }
   const looksLikeVoice = /\b(change|switch|set)\b.*\b(voice|speaker)\b/i.test(raw)
     || /\b(voice|speaker)\b.*\b(to|as)\b/i.test(raw)
     || /(목소리|음성).*(바꿔|변경|설정|해줘)|목소리.*로|음성.*로/u.test(compact);

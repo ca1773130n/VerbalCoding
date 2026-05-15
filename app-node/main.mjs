@@ -161,7 +161,7 @@ function ensureTtsVoiceConfig() {
   return readTtsVoiceConfig(TTS_VOICE_CONFIG_PATH);
 }
 function applyVoiceConfigToProcessEnv(config = ensureTtsVoiceConfig()) {
-  const selection = effectiveTtsVoiceSelection(config, {});
+  const selection = effectiveTtsVoiceSelection(config, process.env);
   const configuredVoiceLanguage = process.env.VOICE_LANGUAGE;
   const nextEnv = applyTtsVoiceSelectionToEnv(process.env, selection);
   if (configuredVoiceLanguage) nextEnv.VOICE_LANGUAGE = configuredVoiceLanguage;
@@ -696,6 +696,7 @@ async function handleTtsVoiceCommand(prompt, signal) {
   settings.tts.backend = selection.backend;
   if (selection.backend === 'edge') settings.tts.edge.voice = selection.voice.voice;
   if (selection.voice?.language) settings.voiceLanguage = selection.voice.language;
+  ttsBackend = createTtsBackend(settings.tts, { execFileAsync, log, warn, voiceProvider: () => settings.tts.edge.voice });
   persistEnvValues({
     TTS_BACKEND: selection.backend,
     TTS_VOICE_TYPE: selection.voiceType,

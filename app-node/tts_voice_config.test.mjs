@@ -52,6 +52,21 @@ test('voiceCommandFromTranscript detects voice type changes', () => {
   assert.equal(voiceCommandFromTranscript('change language to Korean'), null);
 });
 
+test('voiceCommandFromTranscript detects TTS backend changes', () => {
+  assert.deepEqual(voiceCommandFromTranscript('change TTS backend to OmniVoice'), { backend: 'omnivoice' });
+  assert.deepEqual(voiceCommandFromTranscript('음성 백엔드 옴니보이스로 바꿔'), { backend: 'omnivoice' });
+  assert.deepEqual(voiceCommandFromTranscript('TTS를 Edge로 바꿔'), { backend: 'edge' });
+});
+
+test('updateTtsVoiceConfig can switch to OmniVoice backend default voice', () => {
+  const config = updateTtsVoiceConfig(defaultTtsVoiceConfig(), { backend: 'omnivoice' });
+  const selected = effectiveTtsVoiceSelection(config, {});
+
+  assert.equal(selected.backend, 'omnivoice');
+  assert.equal(selected.voiceType, 'cloned_reference');
+  assert.equal(selected.voice.voice, 'voice-samples/user-reference.wav');
+});
+
 test('read and write voice config round trips current selection', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-config-test-'));
   const file = path.join(dir, 'tts-voices.json');

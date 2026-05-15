@@ -10,6 +10,7 @@ node_modules/
 .agent-sessions/
 .verbalcoding-session
 .venv-openvoice/
+.venv-omnivoice/
 .venv-supertonic/
 .venv-tts/
 vendor/OpenVoice/
