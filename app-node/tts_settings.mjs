@@ -1,5 +1,38 @@
 import path from 'node:path';
 
+export const SUPPORTED_TTS_BACKENDS = [
+  'edge',
+  'openvoice',
+  'speechswift',
+  'supertonic',
+  'omnivoice',
+  'qwen3tts',
+  'fireredtts2',
+  'mossttsnano',
+];
+
+export const TTS_BACKEND_ALIASES = new Map([
+  ['q3', 'qwen3tts'],
+  ['qwen3', 'qwen3tts'],
+  ['qwen3-tts', 'qwen3tts'],
+  ['qtts', 'qwen3tts'],
+  ['firered', 'fireredtts2'],
+  ['fireredtts', 'fireredtts2'],
+  ['firered-tts-2', 'fireredtts2'],
+  ['fireredtts-2', 'fireredtts2'],
+  ['moss', 'mossttsnano'],
+  ['moss-tts', 'mossttsnano'],
+  ['mossnano', 'mossttsnano'],
+  ['moss-tts-nano', 'mossttsnano'],
+  ['openmoss', 'mossttsnano'],
+]);
+
+export function normalizeTtsBackendName(value, fallback = 'edge') {
+  const requested = String(value || '').trim().toLowerCase();
+  const normalized = TTS_BACKEND_ALIASES.get(requested) || requested;
+  return SUPPORTED_TTS_BACKENDS.includes(normalized) ? normalized : fallback;
+}
+
 function boolEnv(value, fallback = false) {
   if (value == null || value === '') return fallback;
   return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
@@ -16,23 +49,7 @@ function resolveUnderRoot(root, value, fallback) {
 }
 
 export function buildTtsSettings(env = process.env, root = process.cwd()) {
-  const requestedBackend = String(env.TTS_BACKEND || 'edge').trim().toLowerCase();
-  const aliases = new Map([
-    ['q3', 'qwen3tts'],
-    ['qwen3', 'qwen3tts'],
-    ['qwen3-tts', 'qwen3tts'],
-    ['qtts', 'qwen3tts'],
-    ['firered', 'fireredtts2'],
-    ['fireredtts', 'fireredtts2'],
-    ['fireredtts-2', 'fireredtts2'],
-    ['moss', 'mossttsnano'],
-    ['moss-tts', 'mossttsnano'],
-    ['moss-tts-nano', 'mossttsnano'],
-    ['openmoss', 'mossttsnano'],
-  ]);
-  const normalizedBackend = aliases.get(requestedBackend) || requestedBackend;
-  const supportedBackends = new Set(['edge', 'openvoice', 'speechswift', 'supertonic', 'omnivoice', 'qwen3tts', 'fireredtts2', 'mossttsnano']);
-  const backend = supportedBackends.has(normalizedBackend) ? normalizedBackend : 'edge';
+  const backend = normalizeTtsBackendName(env.TTS_BACKEND || 'edge');
   return {
     backend,
     maxChars: positiveNumber(env.TTS_MAX_CHARS, 495),
@@ -108,8 +125,8 @@ export function buildTtsSettings(env = process.env, root = process.cwd()) {
       useForProgress: boolEnv(env.QWEN3TTS_PROGRESS, false),
     },
     fireredtts2: {
-      command: env.FIREREDTTS2_COMMAND || 'fireredtts2',
-      pretrainedDir: env.FIREREDTTS2_PRETRAINED_DIR ? resolveUnderRoot(root, env.FIREREDTTS2_PRETRAINED_DIR, '') : '',
+      command: env.FIREREDTTS2_COMMAND || './.local/bin/fireredtts2',
+      pretrainedDir: resolveUnderRoot(root, env.FIREREDTTS2_PRETRAINED_DIR, path.join('pretrained_models', 'FireRedTTS2')),
       device: env.FIREREDTTS2_DEVICE || 'auto',
       genType: env.FIREREDTTS2_GEN_TYPE || 'monologue',
       speaker: env.FIREREDTTS2_SPEAKER || 'S1',
@@ -120,8 +137,8 @@ export function buildTtsSettings(env = process.env, root = process.cwd()) {
       useForProgress: boolEnv(env.FIREREDTTS2_PROGRESS, false),
     },
     mossttsnano: {
-      command: env.MOSSTTSNANO_COMMAND || 'python3',
-      script: env.MOSSTTSNANO_SCRIPT ? resolveUnderRoot(root, env.MOSSTTSNANO_SCRIPT, '') : 'infer.py',
+      command: env.MOSSTTSNANO_COMMAND || './.venv-mossttsnano/bin/python',
+      script: resolveUnderRoot(root, env.MOSSTTSNANO_SCRIPT, path.join('vendor', 'MOSS-TTS-Nano', 'infer.py')),
       checkpoint: env.MOSSTTSNANO_CHECKPOINT || env.MOSS_TTS_NANO_CHECKPOINT || 'OpenMOSS-Team/MOSS-TTS-Nano',
       audioTokenizer: env.MOSSTTSNANO_AUDIO_TOKENIZER || env.MOSS_TTS_NANO_AUDIO_TOKENIZER || '',
       mode: env.MOSSTTSNANO_MODE || 'continuation',

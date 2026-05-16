@@ -36,6 +36,7 @@
     "scripts/*.sh",
     "integrations/openvoice/*.py",
     "integrations/omnivoice/*.py",
+    "integrations/fireredtts2/*.py",
     "run.sh",
     ".env.example",
     "README.md",
@@ -43,6 +44,7 @@
     "LICENSE"
   ],
   "scripts": {
+    "postinstall": "node scripts/postinstall.mjs",
     "start": "node app-node/main.mjs",
     "setup": "node scripts/install.mjs",
     "doctor": "node scripts/doctor.mjs",

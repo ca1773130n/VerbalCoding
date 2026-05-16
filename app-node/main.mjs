@@ -59,6 +59,7 @@ import {
 } from './tts_voice_config.mjs';
 import { createBridgeLogger, createTransientErrorReporter, isTransientNetworkError } from './bridge_logger.mjs';
 import { createBridgeState } from './bridge_state.mjs';
+import { pickOccupiedUserVoiceChannel, shouldFollowUserVoiceChannel } from './voice_autojoin.mjs';
 import { sendDiscordText, splitDiscordMessage } from './discord_text.mjs';
 import { progressTtsCacheFileName } from './progress_cache.mjs';
 import { shouldPassWhisperLanguage, voiceLanguageCommandFromTranscript, languagePreset } from './language_config.mjs';
@@ -168,6 +169,12 @@ function applyVoiceConfigToProcessEnv(config = ensureTtsVoiceConfig()) {
   if (configuredVoiceLanguage) nextEnv.VOICE_LANGUAGE = configuredVoiceLanguage;
   for (const [key, value] of Object.entries(nextEnv)) process.env[key] = value;
   return { config, selection };
+}
+function rebuildTtsRuntimeSettings(selection = null) {
+  settings.tts = buildTtsSettings(process.env, ROOT);
+  if (selection?.backend === 'edge' && selection.voice?.voice) settings.tts.edge.voice = selection.voice.voice;
+  ttsBackend = createTtsBackend(settings.tts, { execFileAsync, log, warn, voiceProvider: () => settings.tts.edge.voice });
+  return settings.tts;
 }
 function reloadRuntimeLanguageFromEnv() {
   const previousWhisperLanguage = settings?.whisperLanguage;
@@ -636,7 +643,7 @@ function persistEnvValues(values) {
   } catch (e) {
     warn('read .env for update failed', e?.stack || e);
   }
-  const pending = new Map(Object.entries(values));
+  const pending = new Map(Object.entries(values).filter(([, value]) => value !== undefined));
   const updated = lines.map(line => {
     const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=.*$/);
     if (!match || !pending.has(match[1])) return line;
@@ -658,8 +665,8 @@ function applyRuntimeLanguage(language) {
   config = updateTtsVoiceConfig(config, { voiceType: preferredVoiceTypeForLanguage(config, preset.voiceLanguage) });
   writeTtsVoiceConfig(TTS_VOICE_CONFIG_PATH, config);
   const { selection } = applyVoiceConfigToProcessEnv(config);
-  settings.tts.backend = selection.backend;
-  settings.tts.edge.voice = selection.backend === 'edge' ? selection.voice.voice : preset.ttsVoice;
+  rebuildTtsRuntimeSettings(selection);
+  if (selection.backend !== 'edge') settings.tts.edge.voice = preset.ttsVoice;
   process.env.VOICE_LANGUAGE = preset.voiceLanguage;
   process.env.WHISPER_CPP_LANGUAGE = preset.sttLanguage;
   process.env.STT_LANGUAGE = preset.sttLanguage;
@@ -688,6 +695,62 @@ function voiceChangedText(selection) {
   return `Voice changed to ${selection.voice?.label || selection.voiceType}.`;
 }
 
+async function ensureSelectedTtsBackendInstalled(selection, signal) {
+  if (selection.backend === 'fireredtts2') {
+    const fireCommand = process.env.FIREREDTTS2_COMMAND || './.local/bin/fireredtts2';
+    const firePath = path.isAbsolute(fireCommand) ? fireCommand : path.resolve(ROOT, fireCommand);
+    const fireModel = path.resolve(ROOT, process.env.FIREREDTTS2_PRETRAINED_DIR || 'pretrained_models/FireRedTTS2');
+    if (fs.existsSync(firePath) && fs.existsSync(fireModel)) return { ok: true, installed: false };
+    await speakText('FireRedTTS-2가 아직 설치 안 돼 있어서 지금 설치할게. 모델 다운로드 때문에 오래 걸릴 수 있어.', signal, { mirrorText: true });
+    try {
+      await execFileAsync('bash', [path.join(ROOT, 'scripts', 'install_fireredtts2.sh'), '--yes'], {
+        cwd: ROOT,
+        timeout: Number(process.env.FIREREDTTS2_INSTALL_TIMEOUT_MS || '3600000'),
+        maxBuffer: 1024 * 1024,
+      });
+      process.env.FIREREDTTS2_COMMAND = './.local/bin/fireredtts2';
+      process.env.FIREREDTTS2_PRETRAINED_DIR = 'pretrained_models/FireRedTTS2';
+      persistEnvValues({
+        FIREREDTTS2_COMMAND: './.local/bin/fireredtts2',
+        FIREREDTTS2_PRETRAINED_DIR: 'pretrained_models/FireRedTTS2',
+      });
+      return { ok: true, installed: true };
+    } catch (error) {
+      const tail = String(error?.stderr || error?.stdout || error?.message || error).slice(-900);
+      warn('FireRedTTS-2 auto-install failed', tail);
+      await speakText(`FireRedTTS-2 자동 설치가 실패했어. Edge fallback은 유지할게. 로그 꼬리: ${tail}`, signal, { mirrorText: true });
+      return { ok: false, installed: false, error };
+    }
+  }
+  if (selection.backend === 'mossttsnano') {
+    const mossCommand = process.env.MOSSTTSNANO_COMMAND || './.local/bin/mossttsnano';
+    const mossPath = path.isAbsolute(mossCommand) ? mossCommand : path.resolve(ROOT, mossCommand);
+    const mossScript = path.resolve(ROOT, process.env.MOSSTTSNANO_SCRIPT || 'vendor/MOSS-TTS-Nano/infer.py');
+    if (fs.existsSync(mossPath) && fs.existsSync(mossScript)) return { ok: true, installed: false };
+    await speakText('MOSS-TTS-Nano가 아직 설치 안 돼 있어서 지금 설치할게. 처음엔 모델 다운로드가 걸릴 수 있어.', signal, { mirrorText: true });
+    try {
+      await execFileAsync('bash', [path.join(ROOT, 'scripts', 'install_mossttsnano.sh'), '--yes'], {
+        cwd: ROOT,
+        timeout: Number(process.env.MOSSTTSNANO_INSTALL_TIMEOUT_MS || '1800000'),
+        maxBuffer: 1024 * 1024,
+      });
+      process.env.MOSSTTSNANO_COMMAND = './.venv-mossttsnano/bin/python';
+      process.env.MOSSTTSNANO_SCRIPT = 'vendor/MOSS-TTS-Nano/infer.py';
+      persistEnvValues({
+        MOSSTTSNANO_COMMAND: './.venv-mossttsnano/bin/python',
+        MOSSTTSNANO_SCRIPT: 'vendor/MOSS-TTS-Nano/infer.py',
+      });
+      return { ok: true, installed: true };
+    } catch (error) {
+      const tail = String(error?.stderr || error?.stdout || error?.message || error).slice(-900);
+      warn('MOSS-TTS-Nano auto-install failed', tail);
+      await speakText(`MOSS-TTS-Nano 자동 설치가 실패했어. Edge fallback은 유지할게. 로그 꼬리: ${tail}`, signal, { mirrorText: true });
+      return { ok: false, installed: false, error };
+    }
+  }
+  return { ok: true, installed: false };
+}
+
 async function handleTtsVoiceCommand(prompt, signal) {
   const request = voiceCommandFromTranscript(prompt);
   if (!request) return false;
@@ -696,15 +759,16 @@ async function handleTtsVoiceCommand(prompt, signal) {
   config = updateTtsVoiceConfig(config, request);
   writeTtsVoiceConfig(TTS_VOICE_CONFIG_PATH, config);
   const { selection } = applyVoiceConfigToProcessEnv(config);
-  settings.tts.backend = selection.backend;
-  if (selection.backend === 'edge') settings.tts.edge.voice = selection.voice.voice;
+  await ensureSelectedTtsBackendInstalled(selection, signal);
+  rebuildTtsRuntimeSettings(selection);
   if (selection.voice?.language) settings.voiceLanguage = selection.voice.language;
-  ttsBackend = createTtsBackend(settings.tts, { execFileAsync, log, warn, voiceProvider: () => settings.tts.edge.voice });
   persistEnvValues({
     TTS_BACKEND: selection.backend,
     TTS_VOICE_TYPE: selection.voiceType,
     TTS_VOICE: selection.backend === 'edge' ? selection.voice.voice : process.env.TTS_VOICE,
     VOICE_LANGUAGE: settings.voiceLanguage,
+    FIREREDTTS2_COMMAND: selection.backend === 'fireredtts2' ? (process.env.FIREREDTTS2_COMMAND || './.local/bin/fireredtts2') : process.env.FIREREDTTS2_COMMAND,
+    FIREREDTTS2_PRETRAINED_DIR: selection.backend === 'fireredtts2' ? (process.env.FIREREDTTS2_PRETRAINED_DIR || 'pretrained_models/FireRedTTS2') : process.env.FIREREDTTS2_PRETRAINED_DIR,
   });
   await speakText(voiceChangedText(selection), signal);
   return true;

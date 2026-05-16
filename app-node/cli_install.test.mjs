@@ -20,6 +20,7 @@ test('package exposes a short vc shell command', () => {
   assert.ok(pkg.files.includes('scripts/*.mjs'));
   assert.ok(pkg.files.includes('scripts/*.sh'));
   assert.ok(pkg.files.includes('integrations/openvoice/*.py'));
+  assert.ok(pkg.files.includes('integrations/fireredtts2/*.py'));
   assert.ok(!pkg.files.includes('integrations/openvoice/'));
   assert.ok(!pkg.files.includes('scripts/*.py'));
   assert.ok(pkg.files.includes('run.sh'));
@@ -93,12 +94,33 @@ test('doctor auto-bootstraps fixable prerequisites by default', () => {
   assert.match(doctor, /WHISPER_CPP_BIN/);
   assert.match(doctor, /EDGE_TTS_COMMAND/);
   assert.match(doctor, /installHermesCliIfNeeded/);
+  assert.match(doctor, /installFireRedTts2IfNeeded/);
+  assert.match(doctor, /install_fireredtts2\.sh'\), '--yes'/);
+  assert.match(doctor, /VERBALCODING_DOCTOR_INSTALL_FIREREDTTS2/);
   assert.match(doctor, /NousResearch\/hermes-agent\/main\/scripts\/install\.sh/);
   assert.match(doctor, /VERBALCODING_DOCTOR_INSTALL_HERMES/);
   assert.match(doctor, /Discord bot setup:/);
   assert.match(doctor, /vc setup token/);
   assert.match(doctor, /discord\.com\/developers\/applications/);
   assert.match(cli, /doctor\.mjs'\), \.\.\.argv\.slice\(1\)/);
+});
+
+test('FireRedTTS-2 backend has package-managed installer and wrapper', () => {
+  const installer = fs.readFileSync(path.join(ROOT, 'scripts', 'install_fireredtts2.sh'), 'utf8');
+  const config = fs.readFileSync(path.join(ROOT, 'app-node', 'install_config.mjs'), 'utf8');
+  const settings = fs.readFileSync(path.join(ROOT, 'app-node', 'tts_settings.mjs'), 'utf8');
+  const main = fs.readFileSync(path.join(ROOT, 'app-node', 'main.mjs'), 'utf8');
+  const wrapper = fs.readFileSync(path.join(ROOT, 'integrations', 'fireredtts2', 'synth.py'), 'utf8');
+
+  assert.match(installer, /FireRedTeam\/FireRedTTS2\.git/);
+  assert.match(installer, /huggingface\.co\/FireRedTeam\/FireRedTTS2/);
+  assert.match(installer, /\.local\/bin\/fireredtts2/);
+  assert.match(config, /fireredtts2/);
+  assert.match(config, /FIREREDTTS2_COMMAND/);
+  assert.match(settings, /\.\/\.local\/bin\/fireredtts2/);
+  assert.match(main, /ensureSelectedTtsBackendInstalled/);
+  assert.match(main, /install_fireredtts2\.sh/);
+  assert.match(wrapper, /generate_monologue/);
 });
 
 test('setup summary guides Discord app creation and records client id', () => {

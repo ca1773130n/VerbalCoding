@@ -1,4 +1,5 @@
 import { languagePreset, normalizeLanguageKey } from './language_config.mjs';
+import { normalizeTtsBackendName, SUPPORTED_TTS_BACKENDS } from './tts_settings.mjs';
 
 export const SUPPORTED_HARNESSES = [
   'hermes',
@@ -21,6 +22,8 @@ function clean(value, fallback = '') {
   return v || fallback;
 }
 
+export { SUPPORTED_TTS_BACKENDS };
+
 export function normalizeInstallAnswers(input = {}) {
   const harness = clean(input.harness || input.AGENT_BACKEND, 'hermes').toLowerCase();
   const normalizedHarness = SUPPORTED_HARNESSES.includes(harness) ? harness : 'custom';
@@ -33,9 +36,7 @@ export function normalizeInstallAnswers(input = {}) {
     DISCORD_ALLOWED_USERS: clean(input.allowedUsers || input.DISCORD_ALLOWED_USERS),
     AUTO_JOIN_VOICE_CHANNELS: clean(input.autoJoinVoiceChannels || input.AUTO_JOIN_VOICE_CHANNELS, '일반,General,general'),
     TRANSCRIPT_CHANNEL_ID: clean(input.transcriptChannelId || input.TRANSCRIPT_CHANNEL_ID),
-    TTS_BACKEND: ['edge', 'openvoice', 'speechswift', 'supertonic', 'omnivoice'].includes(clean(input.ttsBackend || input.TTS_BACKEND, 'edge').toLowerCase())
-      ? clean(input.ttsBackend || input.TTS_BACKEND, 'edge').toLowerCase()
-      : 'edge',
+    TTS_BACKEND: normalizeTtsBackendName(input.ttsBackend || input.TTS_BACKEND, 'edge'),
     EDGE_TTS_COMMAND: clean(input.edgeTtsCommand || input.EDGE_TTS_COMMAND || input.TTS_EDGE_COMMAND, 'edge-tts'),
     VOICE_LANGUAGE: clean(input.voiceLanguage || input.VOICE_LANGUAGE, preset.voiceLanguage),
     WHISPER_CPP_LANGUAGE: clean(input.whisperLanguage || input.WHISPER_CPP_LANGUAGE || input.STT_LANGUAGE, preset.sttLanguage),
@@ -69,6 +70,31 @@ export function normalizeInstallAnswers(input = {}) {
     OMNIVOICE_SPEAKER: clean(input.omnivoiceSpeaker || input.OMNIVOICE_SPEAKER),
     OMNIVOICE_TIMEOUT_MS: clean(input.omnivoiceTimeoutMs || input.OMNIVOICE_TIMEOUT_MS, '180000'),
     OMNIVOICE_PROGRESS: input.omnivoiceProgress === true || input.OMNIVOICE_PROGRESS === '1' ? '1' : '0',
+    QWEN3TTS_COMMAND: clean(input.qwen3TtsCommand || input.QWEN3TTS_COMMAND, 'audio'),
+    QWEN3TTS_MODE: clean(input.qwen3TtsMode || input.QWEN3TTS_MODE, 'custom'),
+    QWEN3TTS_MODEL: clean(input.qwen3TtsModel || input.QWEN3TTS_MODEL, 'customVoice'),
+    QWEN3TTS_LANGUAGE: clean(input.qwen3TtsLanguage || input.QWEN3TTS_LANGUAGE, 'korean'),
+    QWEN3TTS_SPEAKER: clean(input.qwen3TtsSpeaker || input.QWEN3TTS_SPEAKER, 'sohee'),
+    QWEN3TTS_PROGRESS: input.qwen3TtsProgress === true || input.QWEN3TTS_PROGRESS === '1' ? '1' : '0',
+    FIREREDTTS2_COMMAND: clean(input.fireRedTts2Command || input.FIREREDTTS2_COMMAND, './.local/bin/fireredtts2'),
+    FIREREDTTS2_PRETRAINED_DIR: clean(input.fireRedTts2PretrainedDir || input.FIREREDTTS2_PRETRAINED_DIR, 'pretrained_models/FireRedTTS2'),
+    FIREREDTTS2_DEVICE: clean(input.fireRedTts2Device || input.FIREREDTTS2_DEVICE, 'auto'),
+    FIREREDTTS2_GEN_TYPE: clean(input.fireRedTts2GenType || input.FIREREDTTS2_GEN_TYPE, 'monologue'),
+    FIREREDTTS2_SPEAKER: clean(input.fireRedTts2Speaker || input.FIREREDTTS2_SPEAKER, 'S1'),
+    FIREREDTTS2_PROMPT_AUDIO: clean(input.fireRedTts2PromptAudio || input.FIREREDTTS2_PROMPT_AUDIO, './voice-samples/user-reference.wav'),
+    FIREREDTTS2_PROMPT_TEXT: clean(input.fireRedTts2PromptText || input.FIREREDTTS2_PROMPT_TEXT),
+    FIREREDTTS2_BF16: input.fireRedTts2Bf16 === true || input.FIREREDTTS2_BF16 === '1' ? '1' : '0',
+    FIREREDTTS2_TIMEOUT_MS: clean(input.fireRedTts2TimeoutMs || input.FIREREDTTS2_TIMEOUT_MS, '180000'),
+    FIREREDTTS2_PROGRESS: input.fireRedTts2Progress === true || input.FIREREDTTS2_PROGRESS === '1' ? '1' : '0',
+    MOSSTTSNANO_COMMAND: clean(input.mossTtsNanoCommand || input.MOSSTTSNANO_COMMAND, './.venv-mossttsnano/bin/python'),
+    MOSSTTSNANO_SCRIPT: clean(input.mossTtsNanoScript || input.MOSSTTSNANO_SCRIPT, 'vendor/MOSS-TTS-Nano/infer.py'),
+    MOSSTTSNANO_CHECKPOINT: clean(input.mossTtsNanoCheckpoint || input.MOSSTTSNANO_CHECKPOINT, 'OpenMOSS-Team/MOSS-TTS-Nano'),
+    MOSSTTSNANO_MODE: clean(input.mossTtsNanoMode || input.MOSSTTSNANO_MODE, 'continuation'),
+    MOSSTTSNANO_DEVICE: clean(input.mossTtsNanoDevice || input.MOSSTTSNANO_DEVICE, 'auto'),
+    MOSSTTSNANO_DTYPE: clean(input.mossTtsNanoDtype || input.MOSSTTSNANO_DTYPE, 'auto'),
+    MOSSTTSNANO_PROMPT_AUDIO: clean(input.mossTtsNanoPromptAudio || input.MOSSTTSNANO_PROMPT_AUDIO, './voice-samples/user-reference.wav'),
+    MOSSTTSNANO_TIMEOUT_MS: clean(input.mossTtsNanoTimeoutMs || input.MOSSTTSNANO_TIMEOUT_MS, '120000'),
+    MOSSTTSNANO_PROGRESS: input.mossTtsNanoProgress === true || input.MOSSTTSNANO_PROGRESS === '1' ? '1' : '0',
     REQUIRE_WAKE_WORD: input.requireWakeWord === true || input.REQUIRE_WAKE_WORD === '1' ? '1' : '0',
     MIN_UTTERANCE_SECONDS: clean(input.minUtteranceSeconds || input.MIN_UTTERANCE_SECONDS, '1.0'),
     UTTERANCE_IDLE_MS: clean(input.utteranceIdleMs || input.UTTERANCE_IDLE_MS, '4500'),
@@ -156,6 +182,31 @@ export function buildEnvFile(values = {}) {
     'OMNIVOICE_SPEAKER',
     'OMNIVOICE_TIMEOUT_MS',
     'OMNIVOICE_PROGRESS',
+    'QWEN3TTS_COMMAND',
+    'QWEN3TTS_MODE',
+    'QWEN3TTS_MODEL',
+    'QWEN3TTS_LANGUAGE',
+    'QWEN3TTS_SPEAKER',
+    'QWEN3TTS_PROGRESS',
+    'FIREREDTTS2_COMMAND',
+    'FIREREDTTS2_PRETRAINED_DIR',
+    'FIREREDTTS2_DEVICE',
+    'FIREREDTTS2_GEN_TYPE',
+    'FIREREDTTS2_SPEAKER',
+    'FIREREDTTS2_PROMPT_AUDIO',
+    'FIREREDTTS2_PROMPT_TEXT',
+    'FIREREDTTS2_BF16',
+    'FIREREDTTS2_TIMEOUT_MS',
+    'FIREREDTTS2_PROGRESS',
+    'MOSSTTSNANO_COMMAND',
+    'MOSSTTSNANO_SCRIPT',
+    'MOSSTTSNANO_CHECKPOINT',
+    'MOSSTTSNANO_MODE',
+    'MOSSTTSNANO_DEVICE',
+    'MOSSTTSNANO_DTYPE',
+    'MOSSTTSNANO_PROMPT_AUDIO',
+    'MOSSTTSNANO_TIMEOUT_MS',
+    'MOSSTTSNANO_PROGRESS',
     'REQUIRE_WAKE_WORD',
     'MIN_UTTERANCE_SECONDS',
     'UTTERANCE_IDLE_MS',

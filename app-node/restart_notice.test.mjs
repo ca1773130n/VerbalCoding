@@ -35,3 +35,14 @@ test('restart detail strips restart boilerplate before formatting', () => {
     '재시작 완료. 다시 온라인이야. 에이전트 안내 고쳤어.',
   );
 });
+
+test('Korean restart detail strips stale English restart boilerplate', () => {
+  assert.equal(
+    cleanRestartDetail('I applied this change: OmniVoice 한국어 설정 반영. Restarting now. Voice may cut out briefly.', 'ko-KR-InJoonNeural'),
+    'OmniVoice 한국어 설정 반영.',
+  );
+  assert.equal(
+    formatRestartCompleteNotice('I applied this change: OmniVoice 한국어 설정 반영. Restarting now. Voice may cut out briefly.', 'ko-KR-InJoonNeural').speech,
+    '재시작 완료. 다시 온라인이야. OmniVoice 한국어 설정 반영.',
+  );
+});

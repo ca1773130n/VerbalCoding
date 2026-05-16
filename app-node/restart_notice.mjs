@@ -15,6 +15,9 @@ export function cleanRestartDetail(detail = '', ttsVoice = '') {
       .trim();
   }
   return raw
+    .replace(/\bI applied this change:\s*/igu, '')
+    .replace(/\bRestarting now\b[.!?\s]*/igu, '')
+    .replace(/\bVoice may cut out briefly\b[.!?\s]*/igu, '')
     .replace(/이제\s*재시작할게[.!?。！？\s]*/gu, '')
     .replace(/잠깐\s*음성이\s*끊길\s*수\s*있어[.!?。！？\s]*/gu, '')
     .replace(/\s+/g, ' ')

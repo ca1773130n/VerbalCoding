@@ -10,7 +10,17 @@ import {
   normalizeInstanceAnswers,
   parseKeyValueEnv,
   renderInstanceSetupSummary,
+  SUPPORTED_TTS_BACKENDS,
 } from '../app-node/install_config.mjs';
+import {
+  applyTtsVoiceSelectionToEnv,
+  defaultTtsVoiceConfig,
+  effectiveTtsVoiceSelection,
+  readTtsVoiceConfig,
+  updateTtsVoiceConfig,
+  writeTtsVoiceConfig,
+} from '../app-node/tts_voice_config.mjs';
+import { normalizeTtsBackendName } from '../app-node/tts_settings.mjs';
 import { ensureHermesProfile, validateProfileName } from '../app-node/hermes_profiles.mjs';
 import { checkInstanceConfigs } from '../app-node/instance_doctor.mjs';
 import { healInstanceProfileFromEnv } from '../app-node/instance_profile_lifecycle.mjs';
@@ -38,6 +48,8 @@ Usage:
   vc language <ko|en|auto>
   vc language status
   vc restart auto <on|off|status>
+  vc tts backend <${SUPPORTED_TTS_BACKENDS.join('|')}>
+  vc tts status
   vc bot invite <client-id> [--guild <guild-id>]
   vc instance list
   vc instance setup [name] [--start]
@@ -57,6 +69,7 @@ Examples:
   vc language en
   vc language ko
   vc language auto
+  vc tts backend qwen3
   vc restart auto off
   vc bot invite 123456789012345678
 `;
@@ -95,6 +108,55 @@ function printLanguageStatus(values) {
   console.log(`STT language: ${s.sttLanguage}`);
   console.log(`Progress/voice language: ${s.voiceLanguage}`);
   console.log(`TTS voice: ${s.ttsVoice}`);
+}
+
+function ttsVoiceConfigPath(values = readEnvFile()) {
+  const configured = values.TTS_VOICE_CONFIG || process.env.TTS_VOICE_CONFIG || path.join('config', 'tts-voices.json');
+  return path.isAbsolute(configured) ? configured : path.join(ROOT, configured);
+}
+
+function compactUpdates(updates) {
+  return Object.fromEntries(Object.entries(updates).filter(([, value]) => value != null && value !== ''));
+}
+
+function printTtsStatus() {
+  const env = readEnvFile();
+  const config = readTtsVoiceConfig(ttsVoiceConfigPath(env), defaultTtsVoiceConfig());
+  const selected = effectiveTtsVoiceSelection(config, env);
+  console.log(`TTS backend: ${selected.backend}`);
+  console.log(`TTS voice type: ${selected.voiceType}`);
+  console.log(`TTS voice: ${selected.voice?.label || selected.voice?.voice || '-'}`);
+}
+
+function setTtsBackendFromCli(rawBackend, rawVoiceType = '') {
+  const backend = normalizeTtsBackendName(rawBackend, '');
+  if (!backend) {
+    throw new Error(`Unknown TTS backend: ${rawBackend}. Supported: ${SUPPORTED_TTS_BACKENDS.join(', ')}`);
+  }
+  const env = readEnvFile();
+  const configPath = ttsVoiceConfigPath(env);
+  const baseConfig = readTtsVoiceConfig(configPath, defaultTtsVoiceConfig());
+  const nextConfig = updateTtsVoiceConfig(baseConfig, { backend, voiceType: rawVoiceType });
+  writeTtsVoiceConfig(configPath, nextConfig);
+  const selected = effectiveTtsVoiceSelection(nextConfig, { ...env, TTS_BACKEND: backend, TTS_VOICE_TYPE: rawVoiceType || env.TTS_VOICE_TYPE });
+  const nextEnv = applyTtsVoiceSelectionToEnv(env, selected);
+  upsertEnvFile(ENV_PATH, compactUpdates({
+    TTS_BACKEND: nextEnv.TTS_BACKEND,
+    TTS_VOICE_TYPE: nextEnv.TTS_VOICE_TYPE,
+    TTS_VOICE: nextEnv.TTS_VOICE || env.TTS_VOICE,
+    VOICE_LANGUAGE: nextEnv.VOICE_LANGUAGE || env.VOICE_LANGUAGE,
+    QWEN3TTS_MODE: nextEnv.QWEN3TTS_MODE,
+    QWEN3TTS_SPEAKER: nextEnv.QWEN3TTS_SPEAKER,
+    QWEN3TTS_REF_AUDIO: nextEnv.QWEN3TTS_REF_AUDIO,
+    QWEN3TTS_INSTRUCT: nextEnv.QWEN3TTS_INSTRUCT,
+    FIREREDTTS2_PROMPT_AUDIO: nextEnv.FIREREDTTS2_PROMPT_AUDIO,
+    MOSSTTSNANO_MODE: nextEnv.MOSSTTSNANO_MODE,
+    MOSSTTSNANO_PROMPT_AUDIO: nextEnv.MOSSTTSNANO_PROMPT_AUDIO,
+  }));
+  console.log(`Updated ${ENV_PATH}`);
+  console.log(`TTS backend: ${selected.backend}`);
+  console.log(`TTS voice type: ${selected.voiceType}`);
+  console.log('Restart the bridge for CLI changes to take effect; voice requests switch the running bridge immediately.');
 }
 
 function printInstanceStatus(statuses) {
@@ -308,7 +370,28 @@ async function main(argv = process.argv.slice(2)) {
   }
   if (command === 'status') {
     printLanguageStatus(readEnvFile());
+    printTtsStatus();
     console.log(autoRestartStatusText(readEnvFile()));
+    return;
+  }
+  if (command === 'tts' || command === 'voice') {
+    if (!subcommand || subcommand === 'status') {
+      printTtsStatus();
+      return;
+    }
+    if (subcommand === 'backend' || subcommand === 'switch' || subcommand === 'set') {
+      const backend = argv[2];
+      const voiceType = argv.includes('--voice-type') ? argv[argv.indexOf('--voice-type') + 1] : '';
+      if (!backend || backend.startsWith('--')) {
+        console.error(`Use: vc tts backend <${SUPPORTED_TTS_BACKENDS.join('|')}> [--voice-type <name>]`);
+        process.exitCode = 2;
+        return;
+      }
+      setTtsBackendFromCli(backend, voiceType);
+      return;
+    }
+    console.error('Use: vc tts status OR vc tts backend <name>');
+    process.exitCode = 2;
     return;
   }
   if (command === 'instance') {

@@ -105,8 +105,41 @@ function fixablePrerequisites(env) {
     const edgeCommand = env.EDGE_TTS_COMMAND || env.TTS_EDGE_COMMAND || 'edge-tts';
     if (!resolveCommand(edgeCommand, [path.join(ROOT, '.venv-tts', 'bin', 'edge-tts')])) missing.push('edge-tts');
   }
+  if (ttsBackend === 'fireredtts2') {
+    const fireCommand = env.FIREREDTTS2_COMMAND || './.local/bin/fireredtts2';
+    const firePath = path.isAbsolute(fireCommand) ? fireCommand : path.resolve(ROOT, fireCommand);
+    const fireModel = path.resolve(ROOT, env.FIREREDTTS2_PRETRAINED_DIR || 'pretrained_models/FireRedTTS2');
+    if (!isExecutable(firePath) || !fs.existsSync(fireModel)) missing.push('FireRedTTS-2');
+  }
   if (backend === 'hermes' && !commandExists('hermes')) missing.push('hermes CLI');
   return missing;
+}
+
+function installFireRedTts2IfNeeded(env) {
+  const ttsBackend = (env.TTS_BACKEND || 'edge').toLowerCase();
+  if (ttsBackend !== 'fireredtts2') return false;
+  const fireCommand = env.FIREREDTTS2_COMMAND || './.local/bin/fireredtts2';
+  const firePath = path.isAbsolute(fireCommand) ? fireCommand : path.resolve(ROOT, fireCommand);
+  const fireModel = path.resolve(ROOT, env.FIREREDTTS2_PRETRAINED_DIR || 'pretrained_models/FireRedTTS2');
+  if (isExecutable(firePath) && fs.existsSync(fireModel)) return false;
+  if (['0', 'false', 'no', 'off'].includes(String(process.env.VERBALCODING_DOCTOR_INSTALL_FIREREDTTS2 || '1').toLowerCase())) {
+    console.log('Skipping FireRedTTS-2 auto-install because VERBALCODING_DOCTOR_INSTALL_FIREREDTTS2 is off.');
+    return false;
+  }
+  console.log('VerbalCoding doctor: TTS_BACKEND=fireredtts2 but FireRedTTS-2 is missing; installing...');
+  const result = spawnSync('bash', [path.join(ROOT, 'scripts', 'install_fireredtts2.sh'), '--yes'], {
+    cwd: ROOT,
+    stdio: 'inherit',
+    env: process.env,
+  });
+  if (result.status !== 0) {
+    console.log(`FireRedTTS-2 installer exited with status ${result.status}. Continuing with checks.`);
+  }
+  upsertEnvFile(path.join(ROOT, '.env'), {
+    FIREREDTTS2_COMMAND: './.local/bin/fireredtts2',
+    FIREREDTTS2_PRETRAINED_DIR: 'pretrained_models/FireRedTTS2',
+  });
+  return true;
 }
 
 function installHermesCliIfNeeded(env) {
@@ -192,6 +225,11 @@ if (autoFixEnabled && missingBeforeFix.length > 0) {
   env = mergeEnv();
 }
 if (autoFixEnabled) {
+  const fireAttempted = installFireRedTts2IfNeeded(env);
+  if (fireAttempted) {
+    console.log('');
+    env = mergeEnv();
+  }
   const hermesAttempted = installHermesCliIfNeeded(env);
   if (hermesAttempted) {
     console.log('');
@@ -246,8 +284,8 @@ note('Progress/voice language', env.VOICE_LANGUAGE || env.WHISPER_CPP_LANGUAGE |
 note('Latency log path', env.LATENCY_LOG_PATH || './.logs/latency.jsonl');
 note('TTS voice fallback', env.TTS_VOICE || 'ko-KR-SunHiNeural');
 
-if (!['edge', 'openvoice', 'speechswift', 'supertonic', 'omnivoice'].includes(ttsBackend)) {
-  ok = check('TTS_BACKEND value', false, 'must be edge, openvoice, speechswift, supertonic, or omnivoice') && ok;
+if (!['edge', 'openvoice', 'speechswift', 'supertonic', 'omnivoice', 'qwen3tts', 'fireredtts2', 'mossttsnano'].includes(ttsBackend)) {
+  ok = check('TTS_BACKEND value', false, 'must be edge, openvoice, speechswift, supertonic, omnivoice, qwen3tts, fireredtts2, or mossttsnano') && ok;
 }
 if (ttsBackend === 'edge') {
   const edgeCommand = env.EDGE_TTS_COMMAND || env.TTS_EDGE_COMMAND || 'edge-tts';
@@ -281,6 +319,27 @@ if (ttsBackend === 'edge') {
   ok = check('OmniVoice synth wrapper help', spawnSync(fs.existsSync(resolvedOmniPython) ? resolvedOmniPython : 'python3', ['integrations/omnivoice/synth.py', '--help'], { cwd: ROOT, encoding: 'utf8' }).status === 0, 'integrations/omnivoice/synth.py') && ok;
   note('OmniVoice model/device', `${env.OMNIVOICE_MODEL || 'k2-fsa/OmniVoice'} / ${env.OMNIVOICE_DEVICE || 'mps'}`);
   note('OmniVoice progress prompts', ['1', 'true', 'yes', 'on'].includes(String(env.OMNIVOICE_PROGRESS || '0').toLowerCase()) ? 'omnivoice' : 'edge fallback');
+} else if (ttsBackend === 'qwen3tts') {
+  const qwenCommand = env.QWEN3TTS_COMMAND || 'audio';
+  ok = check('Qwen3 TTS audio CLI', commandExists(qwenCommand), commandExists(qwenCommand) || 'install speech-swift/audio first') && ok;
+  note('Qwen3 speaker', env.QWEN3TTS_SPEAKER || 'sohee');
+  note('Qwen3 progress prompts', ['1', 'true', 'yes', 'on'].includes(String(env.QWEN3TTS_PROGRESS || '0').toLowerCase()) ? 'qwen3tts' : 'edge fallback');
+} else if (ttsBackend === 'fireredtts2') {
+  const fireCommand = env.FIREREDTTS2_COMMAND || './.local/bin/fireredtts2';
+  const firePath = path.isAbsolute(fireCommand) ? fireCommand : path.resolve(ROOT, fireCommand);
+  const fireModel = path.resolve(ROOT, env.FIREREDTTS2_PRETRAINED_DIR || 'pretrained_models/FireRedTTS2');
+  ok = check('FireRedTTS-2 wrapper', isExecutable(firePath), path.relative(ROOT, firePath) || firePath) && ok;
+  ok = check('FireRedTTS-2 model', fs.existsSync(fireModel), path.relative(ROOT, fireModel)) && ok;
+  ok = check('FireRedTTS-2 synth wrapper help', spawnSync(isExecutable(firePath) ? firePath : process.execPath, isExecutable(firePath) ? ['--help'] : ['integrations/fireredtts2/synth.py', '--help'], { cwd: ROOT, encoding: 'utf8' }).status === 0, 'integrations/fireredtts2/synth.py') && ok;
+  note('FireRedTTS-2 progress prompts', ['1', 'true', 'yes', 'on'].includes(String(env.FIREREDTTS2_PROGRESS || '0').toLowerCase()) ? 'fireredtts2' : 'edge fallback');
+} else if (ttsBackend === 'mossttsnano') {
+  const mossCommand = env.MOSSTTSNANO_COMMAND || './.venv-mossttsnano/bin/python';
+  const mossPath = path.isAbsolute(mossCommand) ? mossCommand : path.resolve(ROOT, mossCommand);
+  const mossScript = path.resolve(ROOT, env.MOSSTTSNANO_SCRIPT || 'vendor/MOSS-TTS-Nano/infer.py');
+  ok = check('MOSS-TTS-Nano Python', isExecutable(mossPath) || commandExists(mossCommand), isExecutable(mossPath) ? path.relative(ROOT, mossPath) : (commandExists(mossCommand) || 'missing')) && ok;
+  ok = check('MOSS-TTS-Nano infer.py', fs.existsSync(mossScript), path.relative(ROOT, mossScript)) && ok;
+  note('MOSS checkpoint', env.MOSSTTSNANO_CHECKPOINT || 'OpenMOSS-Team/MOSS-TTS-Nano');
+  note('MOSS progress prompts', ['1', 'true', 'yes', 'on'].includes(String(env.MOSSTTSNANO_PROGRESS || '0').toLowerCase()) ? 'mossttsnano' : 'edge fallback');
 }
 
 const backendCommand = {
