@@ -90,6 +90,32 @@ function qwen3TtsArgs(text, out, qwen3tts) {
   return args;
 }
 
+function fireRedTts2Args(text, out, fireredtts2) {
+  const args = ['--text', text, '--output', out];
+  if (fireredtts2.pretrainedDir) args.push('--pretrained-dir', fireredtts2.pretrainedDir);
+  if (fireredtts2.device) args.push('--device', fireredtts2.device);
+  if (fireredtts2.genType) args.push('--gen-type', fireredtts2.genType);
+  if (fireredtts2.speaker) args.push('--speaker', fireredtts2.speaker);
+  if (fireredtts2.promptAudio) args.push('--prompt-audio', fireredtts2.promptAudio);
+  if (fireredtts2.promptText) args.push('--prompt-text', fireredtts2.promptText);
+  if (fireredtts2.useBf16) args.push('--bf16');
+  return args;
+}
+
+function mossTtsNanoArgs(text, out, mossttsnano) {
+  const args = [mossttsnano.script || 'infer.py', '--text', text, '--output-audio-path', out];
+  if (mossttsnano.checkpoint) args.push('--checkpoint', mossttsnano.checkpoint);
+  if (mossttsnano.audioTokenizer) args.push('--audio-tokenizer-pretrained-name-or-path', mossttsnano.audioTokenizer);
+  if (mossttsnano.mode) args.push('--mode', mossttsnano.mode);
+  if (mossttsnano.device) args.push('--device', mossttsnano.device);
+  if (mossttsnano.dtype) args.push('--dtype', mossttsnano.dtype);
+  if (mossttsnano.promptAudio) args.push('--prompt-audio-path', mossttsnano.promptAudio);
+  if (mossttsnano.promptText) args.push('--prompt-text', mossttsnano.promptText);
+  if (mossttsnano.maxNewFrames) args.push('--max-new-frames', String(mossttsnano.maxNewFrames));
+  if (mossttsnano.seed) args.push('--seed', String(mossttsnano.seed));
+  return args;
+}
+
 async function speechSwiftServerRequest({ fetchImpl, speechswift, text, signal }) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), speechswift.timeoutMs);
@@ -351,11 +377,87 @@ export function createQwen3TtsBackend(settings, deps = {}) {
   };
 }
 
+export function createFireRedTts2Backend(settings, deps = {}) {
+  const execFileAsync = deps.execFileAsync;
+  if (!execFileAsync) throw new Error('execFileAsync dependency is required');
+  const tmpdir = deps.tmpdir || os.tmpdir();
+  const warn = deps.warn || (() => {});
+  const fsApi = {
+    existsSync: deps.existsSync || fs.existsSync,
+    statSync: deps.statSync || fs.statSync,
+  };
+  const edge = createEdgeTtsBackend(settings, deps);
+  const fireredtts2 = settings.fireredtts2;
+  return {
+    name: 'fireredtts2',
+    outputExtension: fireredtts2.useForProgress ? 'wav' : 'wav',
+    cacheKeyParts() {
+      return ['fireredtts2', fireredtts2.command, fireredtts2.pretrainedDir, fireredtts2.device, fireredtts2.genType, fireredtts2.speaker, fireredtts2.promptAudio, fireredtts2.promptText, fireredtts2.useBf16];
+    },
+    async synthesize(text, { signal, kind = 'final' } = {}) {
+      if (kind === 'progress' && !fireredtts2.useForProgress) {
+        return edge.synthesize(text, { signal, kind });
+      }
+      const out = uniquePath(tmpdir, 'verbalcoding-fireredtts2', 'wav');
+      try {
+        await execFileAsync(fireredtts2.command, fireRedTts2Args(text, out, fireredtts2), execOptions({
+          timeout: fireredtts2.timeoutMs,
+          maxBuffer: 4 * 1024 * 1024,
+        }, signal));
+        return validateOutput(out, fsApi);
+      } catch (error) {
+        fs.rm(out, { force: true }, () => {});
+        warn('fireredtts2 failed; falling back to edge', error?.message || error);
+        return edge.synthesize(text, { signal, kind });
+      }
+    },
+  };
+}
+
+export function createMossTtsNanoBackend(settings, deps = {}) {
+  const execFileAsync = deps.execFileAsync;
+  if (!execFileAsync) throw new Error('execFileAsync dependency is required');
+  const tmpdir = deps.tmpdir || os.tmpdir();
+  const warn = deps.warn || (() => {});
+  const fsApi = {
+    existsSync: deps.existsSync || fs.existsSync,
+    statSync: deps.statSync || fs.statSync,
+  };
+  const edge = createEdgeTtsBackend(settings, deps);
+  const mossttsnano = settings.mossttsnano;
+  return {
+    name: 'mossttsnano',
+    outputExtension: mossttsnano.useForProgress ? 'wav' : 'wav',
+    cacheKeyParts() {
+      return ['mossttsnano', mossttsnano.command, mossttsnano.script, mossttsnano.checkpoint, mossttsnano.audioTokenizer, mossttsnano.mode, mossttsnano.language, mossttsnano.device, mossttsnano.dtype, mossttsnano.promptAudio, mossttsnano.promptText, mossttsnano.maxNewFrames, mossttsnano.seed];
+    },
+    async synthesize(text, { signal, kind = 'final' } = {}) {
+      if (kind === 'progress' && !mossttsnano.useForProgress) {
+        return edge.synthesize(text, { signal, kind });
+      }
+      const out = uniquePath(tmpdir, 'verbalcoding-mossttsnano', 'wav');
+      try {
+        await execFileAsync(mossttsnano.command, mossTtsNanoArgs(text, out, mossttsnano), execOptions({
+          timeout: mossttsnano.timeoutMs,
+          maxBuffer: 4 * 1024 * 1024,
+        }, signal));
+        return validateOutput(out, fsApi);
+      } catch (error) {
+        fs.rm(out, { force: true }, () => {});
+        warn('mossttsnano failed; falling back to edge', error?.message || error);
+        return edge.synthesize(text, { signal, kind });
+      }
+    },
+  };
+}
+
 export function createTtsBackend(settings, deps = {}) {
   if (settings.backend === 'openvoice') return createOpenVoiceBackend(settings, deps);
   if (settings.backend === 'speechswift') return createSpeechSwiftBackend(settings, deps);
   if (settings.backend === 'supertonic') return createSupertonicBackend(settings, deps);
   if (settings.backend === 'omnivoice') return createOmniVoiceBackend(settings, deps);
   if (settings.backend === 'qwen3tts') return createQwen3TtsBackend(settings, deps);
+  if (settings.backend === 'fireredtts2') return createFireRedTts2Backend(settings, deps);
+  if (settings.backend === 'mossttsnano') return createMossTtsNanoBackend(settings, deps);
   return createEdgeTtsBackend(settings, deps);
 }

@@ -72,6 +72,34 @@ function baseSettings() {
       timeoutMs: 120000,
       useForProgress: false,
     },
+    fireredtts2: {
+      command: 'fireredtts2',
+      pretrainedDir: '/project/models/FireRedTTS2',
+      device: 'mps',
+      genType: 'monologue',
+      speaker: 'S1',
+      promptAudio: '/project/voice-samples/me.wav',
+      promptText: '테스트 기준 음성입니다.',
+      useBf16: true,
+      timeoutMs: 180000,
+      useForProgress: false,
+    },
+    mossttsnano: {
+      command: 'python3',
+      script: '/project/vendor/MOSS-TTS-Nano/infer.py',
+      checkpoint: 'OpenMOSS-Team/MOSS-TTS-Nano',
+      audioTokenizer: 'OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano',
+      mode: 'voice_clone',
+      language: 'ko',
+      device: 'cpu',
+      dtype: 'float32',
+      promptAudio: '/project/voice-samples/me.wav',
+      promptText: '테스트 기준 음성입니다.',
+      maxNewFrames: 256,
+      seed: '7',
+      timeoutMs: 120000,
+      useForProgress: false,
+    },
   };
 }
 
@@ -555,6 +583,92 @@ test('Qwen3 TTS falls back to Edge when local CLI fails', async () => {
   assert.ok(calls.some(call => call.cmd === 'audio'));
   assert.ok(calls.some(call => call.cmd === 'edge-tts'));
   assert.ok(calls.some(call => /qwen3tts failed; falling back to edge/i.test(call.warn || '')));
+});
+
+test('FireRedTTS-2 backend calls configured CLI with model, prompt, and output path', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'fireredtts2' };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 999 }),
+    execFileAsync: async (cmd, args, options) => calls.push({ cmd, args, options }),
+  });
+
+  const out = await backend.synthesize('파이어레드 테스트', { kind: 'final' });
+
+  assert.equal(calls[0].cmd, 'fireredtts2');
+  assert.deepEqual(calls[0].args.slice(0, 4), ['--text', '파이어레드 테스트', '--output', calls[0].args[3]]);
+  assert.ok(calls[0].args.includes('--pretrained-dir'));
+  assert.ok(calls[0].args.includes('/project/models/FireRedTTS2'));
+  assert.ok(calls[0].args.includes('--prompt-audio'));
+  assert.ok(calls[0].args.includes('/project/voice-samples/me.wav'));
+  assert.ok(calls[0].args.includes('--bf16'));
+  assert.equal(calls[0].options.timeout, 180000);
+  assert.match(out, /^\/tmp\/verbalcoding-fireredtts2-/);
+  assert.deepEqual(backend.cacheKeyParts(), ['fireredtts2', 'fireredtts2', '/project/models/FireRedTTS2', 'mps', 'monologue', 'S1', '/project/voice-samples/me.wav', '테스트 기준 음성입니다.', true]);
+});
+
+test('FireRedTTS-2 progress uses Edge fallback unless explicitly enabled', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'fireredtts2' };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 123 }),
+    execFileAsync: async (cmd, args) => calls.push({ cmd, args }),
+  });
+
+  await backend.synthesize('진행 안내', { kind: 'progress' });
+
+  assert.equal(calls[0].cmd, 'edge-tts');
+});
+
+test('MOSS-TTS-Nano backend calls infer.py with checkpoint, prompt, and output path', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'mossttsnano' };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 999 }),
+    execFileAsync: async (cmd, args, options) => calls.push({ cmd, args, options }),
+  });
+
+  const out = await backend.synthesize('모스 나노 테스트', { kind: 'final' });
+
+  assert.equal(calls[0].cmd, 'python3');
+  assert.deepEqual(calls[0].args.slice(0, 5), ['/project/vendor/MOSS-TTS-Nano/infer.py', '--text', '모스 나노 테스트', '--output-audio-path', calls[0].args[4]]);
+  assert.ok(calls[0].args.includes('--checkpoint'));
+  assert.ok(calls[0].args.includes('OpenMOSS-Team/MOSS-TTS-Nano'));
+  assert.ok(calls[0].args.includes('--audio-tokenizer-pretrained-name-or-path'));
+  assert.ok(calls[0].args.includes('--prompt-audio-path'));
+  assert.ok(calls[0].args.includes('/project/voice-samples/me.wav'));
+  assert.ok(calls[0].args.includes('--max-new-frames'));
+  assert.ok(calls[0].args.includes('256'));
+  assert.equal(calls[0].options.timeout, 120000);
+  assert.match(out, /^\/tmp\/verbalcoding-mossttsnano-/);
+  assert.deepEqual(backend.cacheKeyParts(), ['mossttsnano', 'python3', '/project/vendor/MOSS-TTS-Nano/infer.py', 'OpenMOSS-Team/MOSS-TTS-Nano', 'OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano', 'voice_clone', 'ko', 'cpu', 'float32', '/project/voice-samples/me.wav', '테스트 기준 음성입니다.', 256, '7']);
+});
+
+test('MOSS-TTS-Nano falls back to Edge when local CLI fails', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'mossttsnano' };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 123 }),
+    warn: (...args) => calls.push({ warn: args.join(' ') }),
+    execFileAsync: async (cmd, args) => {
+      calls.push({ cmd, args });
+      if (cmd === 'python3') throw new Error('moss missing');
+    },
+  });
+
+  await backend.synthesize('fallback', { kind: 'final' });
+
+  assert.ok(calls.some(call => call.cmd === 'python3'));
+  assert.ok(calls.some(call => call.cmd === 'edge-tts'));
+  assert.ok(calls.some(call => /mossttsnano failed; falling back to edge/i.test(call.warn || '')));
 });
 
 test('TTS backends omit signal option when no AbortSignal is provided', async () => {

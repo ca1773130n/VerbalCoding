@@ -22,9 +22,16 @@ export function buildTtsSettings(env = process.env, root = process.cwd()) {
     ['qwen3', 'qwen3tts'],
     ['qwen3-tts', 'qwen3tts'],
     ['qtts', 'qwen3tts'],
+    ['firered', 'fireredtts2'],
+    ['fireredtts', 'fireredtts2'],
+    ['fireredtts-2', 'fireredtts2'],
+    ['moss', 'mossttsnano'],
+    ['moss-tts', 'mossttsnano'],
+    ['moss-tts-nano', 'mossttsnano'],
+    ['openmoss', 'mossttsnano'],
   ]);
   const normalizedBackend = aliases.get(requestedBackend) || requestedBackend;
-  const supportedBackends = new Set(['edge', 'openvoice', 'speechswift', 'supertonic', 'omnivoice', 'qwen3tts']);
+  const supportedBackends = new Set(['edge', 'openvoice', 'speechswift', 'supertonic', 'omnivoice', 'qwen3tts', 'fireredtts2', 'mossttsnano']);
   const backend = supportedBackends.has(normalizedBackend) ? normalizedBackend : 'edge';
   return {
     backend,
@@ -99,6 +106,34 @@ export function buildTtsSettings(env = process.env, root = process.cwd()) {
       stream: boolEnv(env.QWEN3TTS_STREAM, true),
       timeoutMs: positiveNumber(env.QWEN3TTS_TIMEOUT_MS, 120000),
       useForProgress: boolEnv(env.QWEN3TTS_PROGRESS, false),
+    },
+    fireredtts2: {
+      command: env.FIREREDTTS2_COMMAND || 'fireredtts2',
+      pretrainedDir: env.FIREREDTTS2_PRETRAINED_DIR ? resolveUnderRoot(root, env.FIREREDTTS2_PRETRAINED_DIR, '') : '',
+      device: env.FIREREDTTS2_DEVICE || 'auto',
+      genType: env.FIREREDTTS2_GEN_TYPE || 'monologue',
+      speaker: env.FIREREDTTS2_SPEAKER || 'S1',
+      promptAudio: env.FIREREDTTS2_PROMPT_AUDIO ? resolveUnderRoot(root, env.FIREREDTTS2_PROMPT_AUDIO, '') : '',
+      promptText: env.FIREREDTTS2_PROMPT_TEXT || '',
+      useBf16: boolEnv(env.FIREREDTTS2_BF16, false),
+      timeoutMs: positiveNumber(env.FIREREDTTS2_TIMEOUT_MS, 180000),
+      useForProgress: boolEnv(env.FIREREDTTS2_PROGRESS, false),
+    },
+    mossttsnano: {
+      command: env.MOSSTTSNANO_COMMAND || 'python3',
+      script: env.MOSSTTSNANO_SCRIPT ? resolveUnderRoot(root, env.MOSSTTSNANO_SCRIPT, '') : 'infer.py',
+      checkpoint: env.MOSSTTSNANO_CHECKPOINT || env.MOSS_TTS_NANO_CHECKPOINT || 'OpenMOSS-Team/MOSS-TTS-Nano',
+      audioTokenizer: env.MOSSTTSNANO_AUDIO_TOKENIZER || env.MOSS_TTS_NANO_AUDIO_TOKENIZER || '',
+      mode: env.MOSSTTSNANO_MODE || 'continuation',
+      language: env.MOSSTTSNANO_LANGUAGE || env.VOICE_LANGUAGE || 'ko',
+      device: env.MOSSTTSNANO_DEVICE || 'auto',
+      dtype: env.MOSSTTSNANO_DTYPE || 'auto',
+      promptAudio: env.MOSSTTSNANO_PROMPT_AUDIO ? resolveUnderRoot(root, env.MOSSTTSNANO_PROMPT_AUDIO, '') : '',
+      promptText: env.MOSSTTSNANO_PROMPT_TEXT || '',
+      maxNewFrames: positiveNumber(env.MOSSTTSNANO_MAX_NEW_FRAMES, 375),
+      seed: env.MOSSTTSNANO_SEED || '',
+      timeoutMs: positiveNumber(env.MOSSTTSNANO_TIMEOUT_MS, 120000),
+      useForProgress: boolEnv(env.MOSSTTSNANO_PROGRESS, false),
     },
   };
 }

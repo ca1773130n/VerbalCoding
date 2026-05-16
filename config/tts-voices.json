@@ -106,6 +106,36 @@
           "voice": "calm conversational Korean voice"
         }
       }
+    },
+    "fireredtts2": {
+      "currentVoiceType": "prompt_reference",
+      "voices": {
+        "prompt_reference": {
+          "label": "FireRedTTS-2 prompt reference",
+          "language": "ko",
+          "voice": "voice-samples/user-reference.wav"
+        },
+        "random_speaker": {
+          "label": "FireRedTTS-2 random speaker",
+          "language": "ko",
+          "voice": ""
+        }
+      }
+    },
+    "mossttsnano": {
+      "currentVoiceType": "prompt_reference",
+      "voices": {
+        "prompt_reference": {
+          "label": "MOSS-TTS-Nano prompt reference",
+          "language": "ko",
+          "voice": "voice-samples/user-reference.wav"
+        },
+        "continuation": {
+          "label": "MOSS-TTS-Nano continuation/default",
+          "language": "ko",
+          "voice": ""
+        }
+      }
     }
   }
 }

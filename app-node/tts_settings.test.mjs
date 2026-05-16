@@ -181,6 +181,72 @@ test('buildTtsSettings normalizes Qwen3 TTS CLI settings and aliases qwen3', () 
   assert.equal(settings.qwen3tts.useForProgress, true);
 });
 
+test('buildTtsSettings normalizes FireRedTTS-2 settings', () => {
+  const root = '/project';
+  const settings = buildTtsSettings({
+    TTS_BACKEND: 'firered',
+    FIREREDTTS2_COMMAND: './bin/fireredtts2',
+    FIREREDTTS2_PRETRAINED_DIR: './models/FireRedTTS2',
+    FIREREDTTS2_DEVICE: 'mps',
+    FIREREDTTS2_GEN_TYPE: 'monologue',
+    FIREREDTTS2_SPEAKER: 'S1',
+    FIREREDTTS2_PROMPT_AUDIO: './voice-samples/me.wav',
+    FIREREDTTS2_PROMPT_TEXT: '테스트 기준 음성입니다.',
+    FIREREDTTS2_BF16: '1',
+    FIREREDTTS2_TIMEOUT_MS: '240000',
+    FIREREDTTS2_PROGRESS: '1',
+  }, root);
+
+  assert.equal(settings.backend, 'fireredtts2');
+  assert.equal(settings.fireredtts2.command, './bin/fireredtts2');
+  assert.equal(settings.fireredtts2.pretrainedDir, path.join(root, 'models', 'FireRedTTS2'));
+  assert.equal(settings.fireredtts2.device, 'mps');
+  assert.equal(settings.fireredtts2.genType, 'monologue');
+  assert.equal(settings.fireredtts2.speaker, 'S1');
+  assert.equal(settings.fireredtts2.promptAudio, path.join(root, 'voice-samples', 'me.wav'));
+  assert.equal(settings.fireredtts2.promptText, '테스트 기준 음성입니다.');
+  assert.equal(settings.fireredtts2.useBf16, true);
+  assert.equal(settings.fireredtts2.timeoutMs, 240000);
+  assert.equal(settings.fireredtts2.useForProgress, true);
+});
+
+test('buildTtsSettings normalizes MOSS-TTS-Nano settings', () => {
+  const root = '/project';
+  const settings = buildTtsSettings({
+    TTS_BACKEND: 'moss-tts-nano',
+    MOSSTTSNANO_COMMAND: 'python3',
+    MOSSTTSNANO_SCRIPT: './vendor/MOSS-TTS-Nano/infer.py',
+    MOSSTTSNANO_CHECKPOINT: './models/MOSS-TTS-Nano',
+    MOSSTTSNANO_AUDIO_TOKENIZER: './models/MOSS-Audio-Tokenizer-Nano',
+    MOSSTTSNANO_MODE: 'voice_clone',
+    MOSSTTSNANO_LANGUAGE: 'ko',
+    MOSSTTSNANO_DEVICE: 'cpu',
+    MOSSTTSNANO_DTYPE: 'float32',
+    MOSSTTSNANO_PROMPT_AUDIO: './voice-samples/me.wav',
+    MOSSTTSNANO_PROMPT_TEXT: '테스트 기준 음성입니다.',
+    MOSSTTSNANO_MAX_NEW_FRAMES: '256',
+    MOSSTTSNANO_SEED: '7',
+    MOSSTTSNANO_TIMEOUT_MS: '90000',
+    MOSSTTSNANO_PROGRESS: '1',
+  }, root);
+
+  assert.equal(settings.backend, 'mossttsnano');
+  assert.equal(settings.mossttsnano.command, 'python3');
+  assert.equal(settings.mossttsnano.script, path.join(root, 'vendor', 'MOSS-TTS-Nano', 'infer.py'));
+  assert.equal(settings.mossttsnano.checkpoint, './models/MOSS-TTS-Nano');
+  assert.equal(settings.mossttsnano.audioTokenizer, './models/MOSS-Audio-Tokenizer-Nano');
+  assert.equal(settings.mossttsnano.mode, 'voice_clone');
+  assert.equal(settings.mossttsnano.language, 'ko');
+  assert.equal(settings.mossttsnano.device, 'cpu');
+  assert.equal(settings.mossttsnano.dtype, 'float32');
+  assert.equal(settings.mossttsnano.promptAudio, path.join(root, 'voice-samples', 'me.wav'));
+  assert.equal(settings.mossttsnano.promptText, '테스트 기준 음성입니다.');
+  assert.equal(settings.mossttsnano.maxNewFrames, 256);
+  assert.equal(settings.mossttsnano.seed, '7');
+  assert.equal(settings.mossttsnano.timeoutMs, 90000);
+  assert.equal(settings.mossttsnano.useForProgress, true);
+});
+
 test('buildTtsSettings falls back to edge for unsupported backend', () => {
   const settings = buildTtsSettings({ TTS_BACKEND: 'unknown' }, '/project');
   assert.equal(settings.backend, 'edge');

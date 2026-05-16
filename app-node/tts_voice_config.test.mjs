@@ -78,6 +78,8 @@ test('voiceCommandFromTranscript detects TTS backend changes', () => {
   assert.deepEqual(voiceCommandFromTranscript('TTS를 Edge로 바꿔'), { backend: 'edge' });
   assert.deepEqual(voiceCommandFromTranscript('TTS를 qwen3로 바꿔'), { backend: 'qwen3tts' });
   assert.deepEqual(voiceCommandFromTranscript('음성 백엔드 큐웬으로 바꿔'), { backend: 'qwen3tts' });
+  assert.deepEqual(voiceCommandFromTranscript('TTS backend to FireRedTTS-2'), { backend: 'fireredtts2' });
+  assert.deepEqual(voiceCommandFromTranscript('음성 백엔드 모스로 바꿔'), { backend: 'mossttsnano' });
 });
 
 test('applyTtsVoiceSelectionToEnv maps Qwen3 voice types to CLI mode env', () => {
@@ -96,6 +98,25 @@ test('applyTtsVoiceSelectionToEnv maps Qwen3 voice types to CLI mode env', () =>
     TTS_VOICE_TYPE: 'cloned_reference',
     QWEN3TTS_MODE: 'clone',
     QWEN3TTS_REF_AUDIO: 'voice-samples/user-reference.wav',
+    VOICE_LANGUAGE: 'ko',
+  });
+});
+
+test('applyTtsVoiceSelectionToEnv maps FireRedTTS-2 and MOSS prompt references', () => {
+  const fire = effectiveTtsVoiceSelection(updateTtsVoiceConfig(defaultTtsVoiceConfig(), { backend: 'fireredtts2', voiceType: 'prompt_reference' }), {});
+  assert.deepEqual(applyTtsVoiceSelectionToEnv({}, fire), {
+    TTS_BACKEND: 'fireredtts2',
+    TTS_VOICE_TYPE: 'prompt_reference',
+    FIREREDTTS2_PROMPT_AUDIO: 'voice-samples/user-reference.wav',
+    VOICE_LANGUAGE: 'ko',
+  });
+
+  const moss = effectiveTtsVoiceSelection(updateTtsVoiceConfig(defaultTtsVoiceConfig(), { backend: 'mossttsnano', voiceType: 'prompt_reference' }), {});
+  assert.deepEqual(applyTtsVoiceSelectionToEnv({}, moss), {
+    TTS_BACKEND: 'mossttsnano',
+    TTS_VOICE_TYPE: 'prompt_reference',
+    MOSSTTSNANO_MODE: 'voice_clone',
+    MOSSTTSNANO_PROMPT_AUDIO: 'voice-samples/user-reference.wav',
     VOICE_LANGUAGE: 'ko',
   });
 });
