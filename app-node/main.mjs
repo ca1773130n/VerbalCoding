@@ -503,6 +503,7 @@ function smartProgressStatusText() {
 let activeProgressLastEventAt = 0;
 let lastVerboseProgressText = '';
 let lastVerboseProgressTextAt = 0;
+const VOICE_CONNECT_TIMEOUT_MS = Number(process.env.VOICE_CONNECT_TIMEOUT_MS || '60000');
 const PROGRESS_IDLE_NOTICE_INITIAL_MS = Number(process.env.PROGRESS_IDLE_NOTICE_INITIAL_MS || process.env.PROGRESS_IDLE_NOTICE_MS || '10000');
 const PROGRESS_IDLE_NOTICE_MAX_MS = Number(process.env.PROGRESS_IDLE_NOTICE_MAX_MS || '30000');
 const PROGRESS_IDLE_NOTICE_MULTIPLIER = Number(process.env.PROGRESS_IDLE_NOTICE_MULTIPLIER || '1.8');
@@ -1741,7 +1742,7 @@ async function connectTo(channel) {
       }
     }
   });
-  await entersState(voiceConnection, VoiceConnectionStatus.Ready, 30000);
+  await entersState(voiceConnection, VoiceConnectionStatus.Ready, VOICE_CONNECT_TIMEOUT_MS);
   voiceConnection.receiver.speaking.on('start', userId => subscribeUser(voiceConnection.receiver, userId));
   log(`Listening in voice channel ${channel.guild.name} / ${channel.name}`);
 }
