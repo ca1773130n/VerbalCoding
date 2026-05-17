@@ -192,6 +192,8 @@ Remove `ports:` from that Compose service. On Docker Desktop for macOS/Windows, 
 
 ## Optional TTS Backends
 
+For the full backend matrix, latency notes, aliases, and Mac mini caveats, see [TTS Backends](TTS_BACKENDS.md).
+
 Edge TTS remains the default and fallback. Optional local backends are configured with their own env vars:
 
 | Backend | Settings | Voice choices |
@@ -201,7 +203,13 @@ Edge TTS remains the default and fallback. Optional local backends are configure
 | OpenVoice | `OPENVOICE_REF_AUDIO`, `OPENVOICE_STYLE`, `OPENVOICE_LANGUAGE` | User-provided permitted reference WAV; style defaults to `default` |
 | SpeechSwift / CosyVoice | `SPEECHSWIFT_REF_AUDIO`, `SPEECHSWIFT_ENGINE`, `SPEECHSWIFT_SPEAKER`, `SPEECHSWIFT_MODEL_ID` | Reference-sample voices for CosyVoice, or backend-supported speaker/model IDs |
 | OmniVoice | `OMNIVOICE_PYTHON`, `OMNIVOICE_MODEL`, `OMNIVOICE_REF_AUDIO`, `OMNIVOICE_REF_TEXT`, `OMNIVOICE_LANGUAGE`, `OMNIVOICE_SPEAKER` | k2-fsa/OmniVoice reference-sample cloning or optional voice-design attributes |
+| Qwen3 TTS | `QWEN3TTS_COMMAND`, `QWEN3TTS_MODE`, `QWEN3TTS_MODEL`, `QWEN3TTS_SPEAKER` | Preset speaker such as `sohee`, reference mode, or designed speaker text |
+| MLX Audio | `MLXAUDIO_PYTHON`, `MLXAUDIO_MODEL`, `MLXAUDIO_VOICE`, `MLXAUDIO_LANG_CODE` | MLX Qwen3 voice/speaker IDs such as `Chelsie` |
 | NeuTTS Air | `NEUTTSAIR_PYTHON`, `NEUTTSAIR_BACKBONE_REPO`, `NEUTTSAIR_CODEC_REPO`, `NEUTTSAIR_REF_AUDIO`, `NEUTTSAIR_REF_TEXT` | English NeuTTS Air reference-sample cloning; use Q4 GGUF for lower latency |
+| FireRedTTS-2 | `FIREREDTTS2_COMMAND`, `FIREREDTTS2_PRETRAINED_DIR`, `FIREREDTTS2_PROMPT_AUDIO`, `FIREREDTTS2_PROMPT_TEXT` | Prompt-reference voice or random speaker |
+| FireRedTTS-2 MLX helper | `integrations/fireredtts2/synth_mlx.py` | Experimental Apple Silicon LLM-port helper; not a canonical `TTS_BACKEND` yet |
+| MOSS-TTS-Nano | `MOSSTTSNANO_COMMAND`, `MOSSTTSNANO_SCRIPT`, `MOSSTTSNANO_CHECKPOINT`, `MOSSTTSNANO_PROMPT_AUDIO` | OpenMOSS prompt reference or continuation mode |
+| MOSS-TTS-Nano MLX | `MOSSTTSNANO_MLX_PYTHON`, `MOSSTTSNANO_MLX_SCRIPT`, `MOSSTTSNANO_MLX_WORKER`, `MOSSTTSNANO_PROMPT_AUDIO` | Experimental MLX hybrid prompt reference or continuation mode |
 
 Only clone voices you own or have permission to use. For OmniVoice, install it in a separate Python environment such as `.venv-omnivoice` (`pip install torch torchaudio soundfile omnivoice`) and set `TTS_BACKEND=omnivoice`. For NeuTTS Air, install the local `neutts` package in `.venv-neuttsair`, set `TTS_BACKEND=neuttsair`, and keep progress prompts on Edge unless explicitly testing local progress TTS. If a local backend fails or times out, VerbalCoding falls back to Edge TTS.
 
