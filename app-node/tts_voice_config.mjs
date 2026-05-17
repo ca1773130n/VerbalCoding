@@ -49,6 +49,19 @@ export const DEFAULT_TTS_VOICE_CONFIG = {
         designed_speaker: { label: 'Qwen3 TTS designed speaker', language: 'ko', voice: 'calm conversational Korean voice' },
       },
     },
+    mlxaudio: {
+      currentVoiceType: 'qwen3_mlx',
+      voices: {
+        qwen3_mlx: { label: 'MLX Audio Qwen3 speaker', language: 'ko', voice: 'Chelsie' },
+      },
+    },
+    neuttsair: {
+      currentVoiceType: 'cloned_reference',
+      voices: {
+        cloned_reference: { label: 'NeuTTS Air reference sample', language: 'en', voice: 'voice-samples/user-reference.wav' },
+        default_sample: { label: 'NeuTTS Air bundled sample', language: 'en', voice: 'vendor/neutts-air/samples/jo.wav' },
+      },
+    },
     fireredtts2: {
       currentVoiceType: 'prompt_reference',
       voices: {
@@ -61,6 +74,12 @@ export const DEFAULT_TTS_VOICE_CONFIG = {
       voices: {
         prompt_reference: { label: 'MOSS-TTS-Nano prompt reference', language: 'ko', voice: 'voice-samples/user-reference.wav' },
         continuation: { label: 'MOSS-TTS-Nano continuation/default', language: 'ko', voice: '' },
+      },
+    },
+    neuttsair: {
+      currentVoiceType: 'cloned_reference',
+      voices: {
+        cloned_reference: { label: 'NeuTTS Air reference sample', language: 'en', voice: 'voice-samples/user-reference.wav' },
       },
     },
   },
@@ -81,6 +100,13 @@ function normalizeBackend(value, config) {
     ['qwen3', 'qwen3tts'],
     ['qwen3-tts', 'qwen3tts'],
     ['qtts', 'qwen3tts'],
+    ['qwen3-mlx', 'mlxaudio'],
+    ['mlx', 'mlxaudio'],
+    ['mlx-audio', 'mlxaudio'],
+    ['neutts', 'neuttsair'],
+    ['neutts-air', 'neuttsair'],
+    ['neuttsair', 'neuttsair'],
+    ['neu-tts-air', 'neuttsair'],
     ['firered', 'fireredtts2'],
     ['fireredtts', 'fireredtts2'],
     ['firered-tts-2', 'fireredtts2'],
@@ -90,6 +116,12 @@ function normalizeBackend(value, config) {
     ['mossnano', 'mossttsnano'],
     ['moss-tts-nano', 'mossttsnano'],
     ['openmoss', 'mossttsnano'],
+    ['neutts', 'neuttsair'],
+    ['neutts-air', 'neuttsair'],
+    ['neutts air', 'neuttsair'],
+    ['neuttsair', 'neuttsair'],
+    ['neu-tts-air', 'neuttsair'],
+    ['neu tts air', 'neuttsair'],
   ]);
   const normalized = aliases.get(key) || key;
   return config.backends?.[normalized] ? normalized : 'edge';
@@ -143,6 +175,12 @@ export function applyTtsVoiceSelectionToEnv(env = {}, selection) {
       next.QWEN3TTS_SPEAKER = selection.voice.voice;
     }
   }
+  if (selection.backend === 'mlxaudio') {
+    if (selection.voice?.voice) next.MLXAUDIO_VOICE = selection.voice.voice;
+  }
+  if (selection.backend === 'neuttsair') {
+    if (selection.voice?.voice) next.NEUTTSAIR_REF_AUDIO = selection.voice.voice;
+  }
   if (selection.backend === 'fireredtts2') {
     if (selection.voice?.voice) next.FIREREDTTS2_PROMPT_AUDIO = selection.voice.voice;
   }
@@ -152,6 +190,9 @@ export function applyTtsVoiceSelectionToEnv(env = {}, selection) {
       next.MOSSTTSNANO_MODE = 'voice_clone';
       if (selection.voice?.voice) next.MOSSTTSNANO_PROMPT_AUDIO = selection.voice.voice;
     }
+  }
+  if (selection.backend === 'neuttsair') {
+    if (selection.voice?.voice) next.NEUTTSAIR_REF_AUDIO = selection.voice.voice;
   }
   if (selection.voice?.language) next.VOICE_LANGUAGE = selection.voice.language;
   return next;
@@ -185,12 +226,15 @@ export function voiceCommandFromTranscript(text) {
   const compact = raw.toLowerCase().replace(/\s+/g, '');
   const looksLikeBackend = /\b(tts|voice|speech|audio)\b.*\bbackend\b|\bbackend\b.*\b(tts|voice|speech|audio)\b/i.test(raw)
     || /(tts|음성|목소리).*(백엔드|백앤드|backend).*(바꿔|변경|설정|해줘|로)/iu.test(raw)
-    || /(백엔드|백앤드|backend).*(옴니보이스|오픈보이스|엣지|수퍼토닉|슈퍼토닉|스피치스위프트|큐원|큐웬|qwen|q3|qtts|firered|moss|openmoss|speechswift|omnivoice|openvoice|edge|supertonic)/iu.test(raw)
-    || /tts를.*(옴니보이스|오픈보이스|엣지|수퍼토닉|슈퍼토닉|스피치스위프트|큐원|큐웬|qwen|q3|qtts|firered|moss|openmoss|omnivoice|openvoice|edge|supertonic|speechswift).*바꿔/iu.test(raw);
+    || /(백엔드|백앤드|backend).*(옴니보이스|오픈보이스|엣지|수퍼토닉|슈퍼토닉|스피치스위프트|큐원|큐웬|qwen|q3|qtts|firered|moss|openmoss|neutts|neu\s*tts|뉴티티에스|뉴티TS|speechswift|omnivoice|openvoice|edge|supertonic)/iu.test(raw)
+    || /tts를.*(옴니보이스|오픈보이스|엣지|수퍼토닉|슈퍼토닉|스피치스위프트|큐원|큐웬|qwen|q3|qtts|firered|moss|openmoss|neutts|neu\s*tts|뉴티티에스|뉴티TS|omnivoice|openvoice|edge|supertonic|speechswift).*바꿔/iu.test(raw);
   if (looksLikeBackend) {
+    if (/(neutts\s*-?\s*air|neu\s*tts\s*-?\s*air|neuttsair|뉴\s*티\s*티\s*에스\s*에어|뉴티티에스\s*에어|뉴티TS\s*에어)/iu.test(raw)) return { backend: 'neuttsair' };
     if (/(omnivoice|omni voice|옴니보이스|업니보이스|옴니|업니)/iu.test(raw)) return { backend: 'omnivoice' };
     if (/(openvoice|open voice|오픈보이스|오픈 보이스)/iu.test(raw)) return { backend: 'openvoice' };
     if (/(speechswift|speech swift|스피치스위프트|스피치 스위프트|cosyvoice|코지보이스)/iu.test(raw)) return { backend: 'speechswift' };
+    if (/(qwen3mlx|qwen mlx|qwen3 mlx|mlx-audio|mlx audio|엠엘엑스|mlx)/iu.test(raw)) return { backend: 'mlxaudio' };
+    if (/(neutts-air|neuttsair|neutts|neu tts air|뉴티티에스|뉴티츠|뉴티에스)/iu.test(raw)) return { backend: 'neuttsair' };
     if (/(qwen3|qwen|q3|qtts|큐원|큐웬|큐엔|큐3|큐삼)/iu.test(raw)) return { backend: 'qwen3tts' };
     if (/(fireredtts2|fireredtts|firered|fire red|파이어레드)/iu.test(raw)) return { backend: 'fireredtts2' };
     if (/(moss-tts-nano|moss tts nano|mossnano|moss|openmoss|모스|오픈모스)/iu.test(raw)) return { backend: 'mossttsnano' };

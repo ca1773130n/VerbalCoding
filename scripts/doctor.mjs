@@ -284,8 +284,8 @@ note('Progress/voice language', env.VOICE_LANGUAGE || env.WHISPER_CPP_LANGUAGE |
 note('Latency log path', env.LATENCY_LOG_PATH || './.logs/latency.jsonl');
 note('TTS voice fallback', env.TTS_VOICE || 'ko-KR-SunHiNeural');
 
-if (!['edge', 'openvoice', 'speechswift', 'supertonic', 'omnivoice', 'qwen3tts', 'fireredtts2', 'mossttsnano'].includes(ttsBackend)) {
-  ok = check('TTS_BACKEND value', false, 'must be edge, openvoice, speechswift, supertonic, omnivoice, qwen3tts, fireredtts2, or mossttsnano') && ok;
+if (!['edge', 'openvoice', 'speechswift', 'supertonic', 'omnivoice', 'qwen3tts', 'mlxaudio', 'fireredtts2', 'mossttsnano', 'neuttsair'].includes(ttsBackend)) {
+  ok = check('TTS_BACKEND value', false, 'must be edge, openvoice, speechswift, supertonic, omnivoice, qwen3tts, mlxaudio, fireredtts2, mossttsnano, or neuttsair') && ok;
 }
 if (ttsBackend === 'edge') {
   const edgeCommand = env.EDGE_TTS_COMMAND || env.TTS_EDGE_COMMAND || 'edge-tts';
@@ -324,6 +324,13 @@ if (ttsBackend === 'edge') {
   ok = check('Qwen3 TTS audio CLI', commandExists(qwenCommand), commandExists(qwenCommand) || 'install speech-swift/audio first') && ok;
   note('Qwen3 speaker', env.QWEN3TTS_SPEAKER || 'sohee');
   note('Qwen3 progress prompts', ['1', 'true', 'yes', 'on'].includes(String(env.QWEN3TTS_PROGRESS || '0').toLowerCase()) ? 'qwen3tts' : 'edge fallback');
+} else if (ttsBackend === 'mlxaudio') {
+  const mlxPython = env.MLXAUDIO_PYTHON || './.venv-mlxaudio/bin/python';
+  const mlxPath = path.isAbsolute(mlxPython) ? mlxPython : path.resolve(ROOT, mlxPython);
+  ok = check('MLX Audio Python', isExecutable(mlxPath) || commandExists(mlxPython), isExecutable(mlxPath) ? path.relative(ROOT, mlxPath) : (commandExists(mlxPython) || 'install with: scripts/install_mlxaudio.sh --yes')) && ok;
+  ok = check('MLX Audio wrapper help', spawnSync(isExecutable(mlxPath) ? mlxPath : 'python3', ['integrations/mlxaudio/synth.py', '--help'], { cwd: ROOT, encoding: 'utf8' }).status === 0, 'integrations/mlxaudio/synth.py') && ok;
+  note('MLX Audio model/voice', `${env.MLXAUDIO_MODEL || 'mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit'} / ${env.MLXAUDIO_VOICE || 'Chelsie'}`);
+  note('MLX Audio progress prompts', ['1', 'true', 'yes', 'on'].includes(String(env.MLXAUDIO_PROGRESS || '0').toLowerCase()) ? 'mlxaudio' : 'edge fallback');
 } else if (ttsBackend === 'fireredtts2') {
   const fireCommand = env.FIREREDTTS2_COMMAND || './.local/bin/fireredtts2';
   const firePath = path.isAbsolute(fireCommand) ? fireCommand : path.resolve(ROOT, fireCommand);
@@ -340,6 +347,18 @@ if (ttsBackend === 'edge') {
   ok = check('MOSS-TTS-Nano infer.py', fs.existsSync(mossScript), path.relative(ROOT, mossScript)) && ok;
   note('MOSS checkpoint', env.MOSSTTSNANO_CHECKPOINT || 'OpenMOSS-Team/MOSS-TTS-Nano');
   note('MOSS progress prompts', ['1', 'true', 'yes', 'on'].includes(String(env.MOSSTTSNANO_PROGRESS || '0').toLowerCase()) ? 'mossttsnano' : 'edge fallback');
+} else if (ttsBackend === 'neuttsair') {
+  const neuPython = env.NEUTTSAIR_PYTHON || './.venv-neuttsair/bin/python';
+  const neuPath = path.isAbsolute(neuPython) ? neuPython : path.resolve(ROOT, neuPython);
+  const neuScript = path.resolve(ROOT, env.NEUTTSAIR_SCRIPT || 'integrations/neuttsair/synth.py');
+  const refAudio = path.resolve(ROOT, env.NEUTTSAIR_REF_AUDIO || env.OPENVOICE_REF_AUDIO || './voice-samples/user-reference.wav');
+  ok = check('NeuTTS Air Python', isExecutable(neuPath) || commandExists(neuPython), isExecutable(neuPath) ? path.relative(ROOT, neuPath) : (commandExists(neuPython) || 'install with: python3 -m venv .venv-neuttsair && .venv-neuttsair/bin/pip install -e vendor/neutts-air')) && ok;
+  ok = check('NeuTTS Air wrapper', fs.existsSync(neuScript), path.relative(ROOT, neuScript)) && ok;
+  ok = check('NeuTTS Air reference audio', fs.existsSync(refAudio), path.relative(ROOT, refAudio)) && ok;
+  ok = check('NeuTTS Air synth wrapper help', spawnSync(isExecutable(neuPath) ? neuPath : 'python3', ['integrations/neuttsair/synth.py', '--help'], { cwd: ROOT, encoding: 'utf8' }).status === 0, 'integrations/neuttsair/synth.py') && ok;
+  note('NeuTTS Air backbone/device', `${env.NEUTTSAIR_BACKBONE_REPO || env.NEUTTSAIR_BACKBONE || 'neuphonic/neutts-air-q4-gguf'} / ${env.NEUTTSAIR_BACKBONE_DEVICE || env.NEUTTSAIR_DEVICE || 'mps'}`);
+  note('NeuTTS Air codec/device', `${env.NEUTTSAIR_CODEC_REPO || env.NEUTTSAIR_CODEC || 'neuphonic/neucodec'} / ${env.NEUTTSAIR_CODEC_DEVICE || env.NEUTTSAIR_DEVICE || 'mps'}`);
+  note('NeuTTS Air progress prompts', ['1', 'true', 'yes', 'on'].includes(String(env.NEUTTSAIR_PROGRESS || '0').toLowerCase()) ? 'neuttsair' : 'edge fallback');
 }
 
 const backendCommand = {

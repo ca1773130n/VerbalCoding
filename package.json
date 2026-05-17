@@ -37,6 +37,8 @@
     "integrations/openvoice/*.py",
     "integrations/omnivoice/*.py",
     "integrations/fireredtts2/*.py",
+    "integrations/mlxaudio/*.py",
+    "integrations/neuttsair/*.py",
     "run.sh",
     ".env.example",
     "README.md",

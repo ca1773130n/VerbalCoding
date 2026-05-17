@@ -1,6 +1,6 @@
 {
-  "currentBackend": "qwen3tts",
-  "currentVoiceType": "korean_preset",
+  "currentBackend": "mossttsnano",
+  "currentVoiceType": "prompt_reference",
   "backends": {
     "edge": {
       "currentVoiceType": "korean_male",
@@ -107,6 +107,16 @@
         }
       }
     },
+    "mlxaudio": {
+      "currentVoiceType": "qwen3_mlx",
+      "voices": {
+        "qwen3_mlx": {
+          "label": "MLX Audio Qwen3 speaker",
+          "language": "ko",
+          "voice": "Chelsie"
+        }
+      }
+    },
     "fireredtts2": {
       "currentVoiceType": "prompt_reference",
       "voices": {
@@ -134,6 +144,16 @@
           "label": "MOSS-TTS-Nano continuation/default",
           "language": "ko",
           "voice": ""
+        }
+      }
+    },
+    "neuttsair": {
+      "currentVoiceType": "cloned_reference",
+      "voices": {
+        "cloned_reference": {
+          "label": "NeuTTS Air reference sample",
+          "language": "en",
+          "voice": "voice-samples/user-reference.wav"
         }
       }
     }

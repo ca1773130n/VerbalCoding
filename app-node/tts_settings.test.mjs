@@ -247,6 +247,39 @@ test('buildTtsSettings normalizes MOSS-TTS-Nano settings', () => {
   assert.equal(settings.mossttsnano.useForProgress, true);
 });
 
+test('buildTtsSettings normalizes NeuTTS Air settings and aliases neutts air', () => {
+  const root = '/project';
+  const settings = buildTtsSettings({
+    TTS_BACKEND: 'neutts-air',
+    NEUTTSAIR_PYTHON: './.venv-neuttsair/bin/python',
+    NEUTTSAIR_SCRIPT: './integrations/neuttsair/synth.py',
+    NEUTTSAIR_BACKBONE_REPO: 'neuphonic/neutts-air-q4-gguf',
+    NEUTTSAIR_BACKBONE_DEVICE: 'mps',
+    NEUTTSAIR_CODEC_REPO: 'neuphonic/neucodec',
+    NEUTTSAIR_CODEC_DEVICE: 'mps',
+    NEUTTSAIR_REF_AUDIO: './voice-samples/me.wav',
+    NEUTTSAIR_REF_TEXT: 'Reference voice text.',
+    NEUTTSAIR_LANGUAGE: 'en',
+    NEUTTSAIR_SAMPLE_RATE: '24000',
+    NEUTTSAIR_TIMEOUT_MS: '120000',
+    NEUTTSAIR_PROGRESS: '1',
+  }, root);
+
+  assert.equal(settings.backend, 'neuttsair');
+  assert.equal(settings.neuttsair.python, path.join(root, '.venv-neuttsair', 'bin', 'python'));
+  assert.equal(settings.neuttsair.script, path.join(root, 'integrations', 'neuttsair', 'synth.py'));
+  assert.equal(settings.neuttsair.backboneRepo, 'neuphonic/neutts-air-q4-gguf');
+  assert.equal(settings.neuttsair.backboneDevice, 'mps');
+  assert.equal(settings.neuttsair.codecRepo, 'neuphonic/neucodec');
+  assert.equal(settings.neuttsair.codecDevice, 'mps');
+  assert.equal(settings.neuttsair.refAudio, path.join(root, 'voice-samples', 'me.wav'));
+  assert.equal(settings.neuttsair.refText, 'Reference voice text.');
+  assert.equal(settings.neuttsair.language, 'en');
+  assert.equal(settings.neuttsair.sampleRate, 24000);
+  assert.equal(settings.neuttsair.timeoutMs, 120000);
+  assert.equal(settings.neuttsair.useForProgress, true);
+});
+
 test('buildTtsSettings falls back to edge for unsupported backend', () => {
   const settings = buildTtsSettings({ TTS_BACKEND: 'unknown' }, '/project');
   assert.equal(settings.backend, 'edge');

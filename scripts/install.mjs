@@ -166,7 +166,7 @@ async function main() {
     const autoJoinVoiceChannels = await ask('Auto-join voice channel names', process.env.AUTO_JOIN_VOICE_CHANNELS || '일반,General,general');
     const transcriptChannelId = await ask('Transcript text channel/thread ID', process.env.TRANSCRIPT_CHANNEL_ID || '');
     const language = await ask('Default voice language: ko/en/auto', process.env.VOICE_LANGUAGE || process.env.WHISPER_CPP_LANGUAGE || process.env.STT_LANGUAGE || 'ko');
-    const ttsBackend = await ask('TTS backend: edge/openvoice/speechswift/supertonic/omnivoice/qwen3tts/fireredtts2/mossttsnano', process.env.TTS_BACKEND || 'edge');
+    const ttsBackend = await ask('TTS backend: edge/openvoice/speechswift/supertonic/omnivoice/qwen3tts/mlxaudio/fireredtts2/mossttsnano/neuttsair', process.env.TTS_BACKEND || 'edge');
     const edgeTtsCommand = await ask('Edge TTS command', process.env.EDGE_TTS_COMMAND || process.env.TTS_EDGE_COMMAND || 'edge-tts');
     const ttsVoice = await ask('TTS voice', process.env.TTS_VOICE || 'ko-KR-SunHiNeural');
     const ttsRate = await ask('TTS rate', process.env.TTS_RATE || '+10%');

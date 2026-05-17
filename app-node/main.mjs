@@ -696,6 +696,27 @@ function voiceChangedText(selection) {
 }
 
 async function ensureSelectedTtsBackendInstalled(selection, signal) {
+  if (selection.backend === 'mlxaudio') {
+    const mlxPython = process.env.MLXAUDIO_PYTHON || './.venv-mlxaudio/bin/python';
+    const mlxPath = path.isAbsolute(mlxPython) ? mlxPython : path.resolve(ROOT, mlxPython);
+    if (fs.existsSync(mlxPath)) return { ok: true, installed: false };
+    await speakText('MLX Audio가 아직 설치 안 돼 있어서 지금 설치할게. 처음엔 모델 다운로드가 걸릴 수 있어.', signal, { mirrorText: true });
+    try {
+      await execFileAsync('bash', [path.join(ROOT, 'scripts', 'install_mlxaudio.sh'), '--yes'], {
+        cwd: ROOT,
+        timeout: Number(process.env.MLXAUDIO_INSTALL_TIMEOUT_MS || '1800000'),
+        maxBuffer: 1024 * 1024,
+      });
+      process.env.MLXAUDIO_PYTHON = './.venv-mlxaudio/bin/python';
+      persistEnvValues({ MLXAUDIO_PYTHON: './.venv-mlxaudio/bin/python' });
+      return { ok: true, installed: true };
+    } catch (error) {
+      const tail = String(error?.stderr || error?.stdout || error?.message || error).slice(-900);
+      warn('MLX Audio auto-install failed', tail);
+      await speakText(`MLX Audio 자동 설치가 실패했어. Edge fallback은 유지할게. 로그 꼬리: ${tail}`, signal, { mirrorText: true });
+      return { ok: false, installed: false, error };
+    }
+  }
   if (selection.backend === 'fireredtts2') {
     const fireCommand = process.env.FIREREDTTS2_COMMAND || './.local/bin/fireredtts2';
     const firePath = path.isAbsolute(fireCommand) ? fireCommand : path.resolve(ROOT, fireCommand);
@@ -767,6 +788,8 @@ async function handleTtsVoiceCommand(prompt, signal) {
     TTS_VOICE_TYPE: selection.voiceType,
     TTS_VOICE: selection.backend === 'edge' ? selection.voice.voice : process.env.TTS_VOICE,
     VOICE_LANGUAGE: settings.voiceLanguage,
+    MLXAUDIO_PYTHON: selection.backend === 'mlxaudio' ? (process.env.MLXAUDIO_PYTHON || './.venv-mlxaudio/bin/python') : process.env.MLXAUDIO_PYTHON,
+    MLXAUDIO_VOICE: selection.backend === 'mlxaudio' ? (process.env.MLXAUDIO_VOICE || selection.voice?.voice) : process.env.MLXAUDIO_VOICE,
     FIREREDTTS2_COMMAND: selection.backend === 'fireredtts2' ? (process.env.FIREREDTTS2_COMMAND || './.local/bin/fireredtts2') : process.env.FIREREDTTS2_COMMAND,
     FIREREDTTS2_PRETRAINED_DIR: selection.backend === 'fireredtts2' ? (process.env.FIREREDTTS2_PRETRAINED_DIR || 'pretrained_models/FireRedTTS2') : process.env.FIREREDTTS2_PRETRAINED_DIR,
   });
@@ -1994,9 +2017,9 @@ client.once('ready', async () => {
 });
 
 client.on('messageCreate', async msg => {
-  if (msg.author.bot) return;
-  if (!isAllowed(msg.author.id)) return;
   const content = msg.content.trim();
+  if (msg.author.bot && !content.startsWith('!say ')) return;
+  if (!msg.author.bot && !isAllowed(msg.author.id)) return;
   appendRecentDiscordText(recentDiscordTextByChannel, {
     channelId: msg.channelId,
     authorLabel: msg.member?.displayName || msg.author?.username || 'user',

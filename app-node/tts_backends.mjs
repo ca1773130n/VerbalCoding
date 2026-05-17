@@ -90,6 +90,38 @@ function qwen3TtsArgs(text, out, qwen3tts) {
   return args;
 }
 
+function mlxAudioArgs(text, out, mlxaudio) {
+  const args = [
+    path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', 'integrations', 'mlxaudio', 'synth.py'),
+    '--text', text,
+    '--output', out,
+    '--model', mlxaudio.model,
+    '--voice', mlxaudio.voice,
+  ];
+  if (mlxaudio.langCode) args.push('--lang-code', mlxaudio.langCode);
+  if (mlxaudio.stream) args.push('--stream');
+  return args;
+}
+
+function neuTtsAirArgs(text, out, neuttsair) {
+  const args = [
+    neuttsair.script,
+    '--text', text,
+    '--output', out,
+    '--backbone-repo', neuttsair.backboneRepo,
+    '--codec-repo', neuttsair.codecRepo,
+    '--backbone-device', neuttsair.backboneDevice,
+    '--codec-device', neuttsair.codecDevice,
+    '--ref-audio', neuttsair.refAudio,
+    '--language', neuttsair.language,
+    '--sample-rate', String(neuttsair.sampleRate),
+  ];
+  if (neuttsair.refText) args.push('--ref-text', neuttsair.refText);
+  if (neuttsair.refTextFile) args.push('--ref-text-file', neuttsair.refTextFile);
+  if (neuttsair.cacheRef) args.push('--cache-ref');
+  return args;
+}
+
 function fireRedTts2Args(text, out, fireredtts2) {
   const args = ['--text', text, '--output', out];
   if (fireredtts2.pretrainedDir) args.push('--pretrained-dir', fireredtts2.pretrainedDir);
@@ -113,6 +145,7 @@ function mossTtsNanoArgs(text, out, mossttsnano) {
   if (mossttsnano.promptText) args.push('--prompt-text', mossttsnano.promptText);
   if (mossttsnano.maxNewFrames) args.push('--max-new-frames', String(mossttsnano.maxNewFrames));
   if (mossttsnano.seed) args.push('--seed', String(mossttsnano.seed));
+  if (mossttsnano.disableWetext !== false) args.push('--disable-wetext-processing');
   return args;
 }
 
@@ -377,6 +410,80 @@ export function createQwen3TtsBackend(settings, deps = {}) {
   };
 }
 
+export function createMlxAudioBackend(settings, deps = {}) {
+  const execFileAsync = deps.execFileAsync;
+  if (!execFileAsync) throw new Error('execFileAsync dependency is required');
+  const tmpdir = deps.tmpdir || os.tmpdir();
+  const warn = deps.warn || (() => {});
+  const fsApi = {
+    existsSync: deps.existsSync || fs.existsSync,
+    statSync: deps.statSync || fs.statSync,
+  };
+  const edge = createEdgeTtsBackend(settings, deps);
+  const mlxaudio = settings.mlxaudio;
+  return {
+    name: 'mlxaudio',
+    outputExtension: mlxaudio.useForProgress ? 'wav' : 'wav',
+    cacheKeyParts() {
+      return ['mlxaudio', mlxaudio.python, mlxaudio.model, mlxaudio.voice, mlxaudio.langCode, mlxaudio.stream];
+    },
+    async synthesize(text, { signal, kind = 'final' } = {}) {
+      if (kind === 'progress' && !mlxaudio.useForProgress) {
+        return edge.synthesize(text, { signal, kind });
+      }
+      const out = uniquePath(tmpdir, 'verbalcoding-mlxaudio', 'wav');
+      try {
+        await execFileAsync(mlxaudio.python || 'python3', mlxAudioArgs(text, out, mlxaudio), execOptions({
+          timeout: mlxaudio.timeoutMs,
+          maxBuffer: 4 * 1024 * 1024,
+        }, signal));
+        return validateOutput(out, fsApi);
+      } catch (error) {
+        fs.rm(out, { force: true }, () => {});
+        warn('mlx-audio failed; falling back to edge', error?.message || error);
+        return edge.synthesize(text, { signal, kind });
+      }
+    },
+  };
+}
+
+export function createNeuTtsAirBackend(settings, deps = {}) {
+  const execFileAsync = deps.execFileAsync;
+  if (!execFileAsync) throw new Error('execFileAsync dependency is required');
+  const tmpdir = deps.tmpdir || os.tmpdir();
+  const warn = deps.warn || (() => {});
+  const fsApi = {
+    existsSync: deps.existsSync || fs.existsSync,
+    statSync: deps.statSync || fs.statSync,
+  };
+  const edge = createEdgeTtsBackend(settings, deps);
+  const neuttsair = settings.neuttsair;
+  return {
+    name: 'neuttsair',
+    outputExtension: neuttsair.useForProgress ? 'wav' : 'wav',
+    cacheKeyParts() {
+      return ['neuttsair', neuttsair.python, neuttsair.script, neuttsair.backboneRepo, neuttsair.backboneDevice, neuttsair.codecRepo, neuttsair.codecDevice, neuttsair.refAudio, neuttsair.refText, neuttsair.language, neuttsair.sampleRate];
+    },
+    async synthesize(text, { signal, kind = 'final' } = {}) {
+      if (kind === 'progress' && !neuttsair.useForProgress) {
+        return edge.synthesize(text, { signal, kind });
+      }
+      const out = uniquePath(tmpdir, 'verbalcoding-neuttsair', 'wav');
+      try {
+        await execFileAsync(neuttsair.python || 'python3', neuTtsAirArgs(text, out, neuttsair), execOptions({
+          timeout: neuttsair.timeoutMs,
+          maxBuffer: 4 * 1024 * 1024,
+        }, signal));
+        return validateOutput(out, fsApi);
+      } catch (error) {
+        fs.rm(out, { force: true }, () => {});
+        warn('neuttsair failed; falling back to edge', error?.message || error);
+        return edge.synthesize(text, { signal, kind });
+      }
+    },
+  };
+}
+
 export function createFireRedTts2Backend(settings, deps = {}) {
   const execFileAsync = deps.execFileAsync;
   if (!execFileAsync) throw new Error('execFileAsync dependency is required');
@@ -457,6 +564,8 @@ export function createTtsBackend(settings, deps = {}) {
   if (settings.backend === 'supertonic') return createSupertonicBackend(settings, deps);
   if (settings.backend === 'omnivoice') return createOmniVoiceBackend(settings, deps);
   if (settings.backend === 'qwen3tts') return createQwen3TtsBackend(settings, deps);
+  if (settings.backend === 'mlxaudio') return createMlxAudioBackend(settings, deps);
+  if (settings.backend === 'neuttsair') return createNeuTtsAirBackend(settings, deps);
   if (settings.backend === 'fireredtts2') return createFireRedTts2Backend(settings, deps);
   if (settings.backend === 'mossttsnano') return createMossTtsNanoBackend(settings, deps);
   return createEdgeTtsBackend(settings, deps);

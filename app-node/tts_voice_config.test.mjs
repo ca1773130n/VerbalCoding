@@ -80,6 +80,8 @@ test('voiceCommandFromTranscript detects TTS backend changes', () => {
   assert.deepEqual(voiceCommandFromTranscript('음성 백엔드 큐웬으로 바꿔'), { backend: 'qwen3tts' });
   assert.deepEqual(voiceCommandFromTranscript('TTS backend to FireRedTTS-2'), { backend: 'fireredtts2' });
   assert.deepEqual(voiceCommandFromTranscript('음성 백엔드 모스로 바꿔'), { backend: 'mossttsnano' });
+  assert.deepEqual(voiceCommandFromTranscript('TTS backend to NeuTTS Air'), { backend: 'neuttsair' });
+  assert.deepEqual(voiceCommandFromTranscript('음성 백엔드 뉴티티에스 에어로 바꿔'), { backend: 'neuttsair' });
 });
 
 test('applyTtsVoiceSelectionToEnv maps Qwen3 voice types to CLI mode env', () => {
@@ -118,6 +120,14 @@ test('applyTtsVoiceSelectionToEnv maps FireRedTTS-2 and MOSS prompt references',
     MOSSTTSNANO_MODE: 'voice_clone',
     MOSSTTSNANO_PROMPT_AUDIO: 'voice-samples/user-reference.wav',
     VOICE_LANGUAGE: 'ko',
+  });
+
+  const neutts = effectiveTtsVoiceSelection(updateTtsVoiceConfig(defaultTtsVoiceConfig(), { backend: 'neuttsair', voiceType: 'cloned_reference' }), {});
+  assert.deepEqual(applyTtsVoiceSelectionToEnv({}, neutts), {
+    TTS_BACKEND: 'neuttsair',
+    TTS_VOICE_TYPE: 'cloned_reference',
+    NEUTTSAIR_REF_AUDIO: 'voice-samples/user-reference.wav',
+    VOICE_LANGUAGE: 'en',
   });
 });
 

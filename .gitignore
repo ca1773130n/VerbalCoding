@@ -17,6 +17,8 @@ node_modules/
 .venv-fireredtts2/
 .venv-mossttsnano
 .venv-mossttsnano/
+.venv-mlxaudio/
+.venv-neuttsair/
 .local/bin/fireredtts2
 .local/bin/mossttsnano
 vendor/OpenVoice/
@@ -24,6 +26,7 @@ vendor/FireRedTTS2
 vendor/FireRedTTS2/
 vendor/MOSS-TTS-Nano
 vendor/MOSS-TTS-Nano/
+vendor/neutts-air/
 vendor/whisper.cpp/
 pretrained_models
 pretrained_models/

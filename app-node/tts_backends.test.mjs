@@ -100,6 +100,20 @@ function baseSettings() {
       timeoutMs: 120000,
       useForProgress: false,
     },
+    neuttsair: {
+      python: '/project/.venv-neuttsair/bin/python',
+      script: '/project/integrations/neuttsair/synth.py',
+      backboneRepo: 'neuphonic/neutts-air-q4-gguf',
+      backboneDevice: 'mps',
+      codecRepo: 'neuphonic/neucodec',
+      codecDevice: 'mps',
+      refAudio: '/project/voice-samples/me.wav',
+      refText: 'Reference voice text.',
+      language: 'en',
+      sampleRate: 24000,
+      timeoutMs: 120000,
+      useForProgress: false,
+    },
   };
 }
 
@@ -669,6 +683,74 @@ test('MOSS-TTS-Nano falls back to Edge when local CLI fails', async () => {
   assert.ok(calls.some(call => call.cmd === 'python3'));
   assert.ok(calls.some(call => call.cmd === 'edge-tts'));
   assert.ok(calls.some(call => /mossttsnano failed; falling back to edge/i.test(call.warn || '')));
+});
+
+test('NeuTTS Air backend calls Python wrapper with GGUF backbone, reference sample, and output path', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'neuttsair' };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 999 }),
+    execFileAsync: async (cmd, args, options) => calls.push({ cmd, args, options }),
+  });
+
+  const out = await backend.synthesize('NeuTTS Air test', { kind: 'final' });
+
+  assert.equal(calls[0].cmd, '/project/.venv-neuttsair/bin/python');
+  assert.deepEqual(calls[0].args.slice(0, 5), ['/project/integrations/neuttsair/synth.py', '--text', 'NeuTTS Air test', '--output', calls[0].args[4]]);
+  assert.ok(calls[0].args.includes('--backbone-repo'));
+  assert.ok(calls[0].args.includes('neuphonic/neutts-air-q4-gguf'));
+  assert.ok(calls[0].args.includes('--backbone-device'));
+  assert.ok(calls[0].args.includes('mps'));
+  assert.ok(calls[0].args.includes('--codec-repo'));
+  assert.ok(calls[0].args.includes('neuphonic/neucodec'));
+  assert.ok(calls[0].args.includes('--codec-device'));
+  assert.ok(calls[0].args.includes('--ref-audio'));
+  assert.ok(calls[0].args.includes('/project/voice-samples/me.wav'));
+  assert.ok(calls[0].args.includes('--ref-text'));
+  assert.ok(calls[0].args.includes('Reference voice text.'));
+  assert.ok(calls[0].args.includes('--language'));
+  assert.ok(calls[0].args.includes('en'));
+  assert.equal(calls[0].options.timeout, 120000);
+  assert.match(out, /^\/tmp\/verbalcoding-neuttsair-/);
+  assert.deepEqual(backend.cacheKeyParts(), ['neuttsair', '/project/.venv-neuttsair/bin/python', '/project/integrations/neuttsair/synth.py', 'neuphonic/neutts-air-q4-gguf', 'mps', 'neuphonic/neucodec', 'mps', '/project/voice-samples/me.wav', 'Reference voice text.', 'en', 24000]);
+});
+
+test('NeuTTS Air progress uses Edge fallback unless explicitly enabled', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'neuttsair' };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 123 }),
+    execFileAsync: async (cmd, args) => calls.push({ cmd, args }),
+  });
+
+  await backend.synthesize('진행 안내', { kind: 'progress' });
+
+  assert.equal(calls[0].cmd, 'edge-tts');
+});
+
+test('NeuTTS Air falls back to Edge when Python wrapper fails', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'neuttsair' };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 123 }),
+    warn: (...args) => calls.push({ warn: args.join(' ') }),
+    execFileAsync: async (cmd, args) => {
+      calls.push({ cmd, args });
+      if (cmd.includes('.venv-neuttsair')) throw new Error('neutts missing');
+    },
+  });
+
+  await backend.synthesize('fallback', { kind: 'final' });
+
+  assert.ok(calls.some(call => call.cmd?.includes('.venv-neuttsair')));
+  assert.ok(calls.some(call => call.cmd === 'edge-tts'));
+  assert.ok(calls.some(call => /neuttsair failed; falling back to edge/i.test(call.warn || '')));
 });
 
 test('TTS backends omit signal option when no AbortSignal is provided', async () => {
