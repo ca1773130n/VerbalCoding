@@ -1836,6 +1836,23 @@ async function connectTo(channel) {
 
 async function autoJoin() {
   const attempted = [];
+  for (const guild of client.guilds.cache.values()) {
+    await guild.channels.fetch().catch(e => warn('auto-join channel fetch failed', guild.name, e?.message || e));
+  }
+  const occupied = pickOccupiedUserVoiceChannel(client.guilds.cache.values(), settings.allowedUsers);
+  if (occupied) {
+    attempted.push(`${occupied.guild.name}/${occupied.name}`);
+    try {
+      log('auto-join following occupied user voice channel', occupied.guild.name, occupied.name);
+      await connectTo(occupied);
+      return;
+    } catch (e) {
+      warn('auto-join occupied user voice channel failed; trying configured channels', occupied.guild.name, occupied.name, e?.stack || e);
+      try { connection?.destroy(); } catch {}
+      connection = null;
+      activeVoiceChannelId = '';
+    }
+  }
   for (const preferredName of settings.autoJoinVoiceChannels) {
     for (const guild of client.guilds.cache.values()) {
       const channels = await guild.channels.fetch();

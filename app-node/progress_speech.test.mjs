@@ -16,9 +16,18 @@ test('progressDetail preserves the meaningful task name after the generic prefix
 });
 
 test('formatProgressMessage renders intermediate text in the selected English language', () => {
-  assert.equal(formatProgressMessage('파일 읽기 app-node/main.mjs', { language: 'en' }), '📖 reading files');
-  assert.equal(formatProgressMessage('터미널 명령 실행 npm test', { language: 'en' }), '🧪 running tests npm test');
-  assert.equal(formatProgressMessage('파일 수정 재시작 안내 문구 개선', { language: 'en' }), '✏️ editing files');
+  assert.equal(formatProgressMessage('reading files app-node/main.mjs', { language: 'en' }), '📖 reading files: app-node/main.mjs');
+  assert.equal(formatProgressMessage('running terminal commands npm test', { language: 'en' }), '🧪 running tests: npm test');
+  assert.equal(formatProgressMessage('editing files app-node/main.mjs restart notice', { language: 'en' }), '✏️ editing files: app-node/main.mjs restart notice');
+});
+
+test('English spoken progress does not repeat category phrases', () => {
+  assert.equal(progressDetail('calling the agent Hermes Agent', { language: 'en' }), 'calling the agent');
+  assert.equal(summarizeProgressEvents(['calling the agent Hermes Agent'], { language: 'en' }), 'calling the agent.');
+  assert.equal(summarizeProgressEvents([
+    'calling the agent Hermes Agent',
+    'received agent response Hermes Agent',
+  ], { language: 'en' }), 'calling the agent.');
 });
 
 test('agent progress events format as visible and speakable status', () => {

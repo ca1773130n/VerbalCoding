@@ -11,18 +11,56 @@ const CATEGORY_LABELS = {
 
 const CATEGORY_RULES = [
   { key: 'test', pattern: /(테스트|test|pytest|npm test|node --test)/i },
-  { key: 'edit', pattern: /(파일\s*수정|수정|patch|write_file|쓰기|변경|edit)/i },
-  { key: 'read', pattern: /(파일\s*읽기|read_file|읽기|열람)/i },
-  { key: 'search', pattern: /(웹\s*검색|검색|web_search|search_files|찾기)/i },
-  { key: 'terminal', pattern: /(터미널|명령|terminal|shell|실행)/i },
-  { key: 'skill', pattern: /(스킬|skill)/i },
-  { key: 'browser', pattern: /(브라우저|browser)/i },
-  { key: 'tool', pattern: /(툴|도구|tool)/i },
-  { key: 'agent', pattern: /(에이전트|agent|hermes)/i },
+  { key: 'edit', pattern: /(파일\s*수정|수정|patch|write_file|쓰기|변경|edit|editing\s+files?)/i },
+  { key: 'read', pattern: /(파일\s*읽기|read_file|읽기|열람|reading\s+files?)/i },
+  { key: 'search', pattern: /(웹\s*검색|검색|web_search|search_files|찾기|searching)/i },
+  { key: 'terminal', pattern: /(터미널|명령|terminal|shell|실행|running\s+terminal\s+commands?)/i },
+  { key: 'skill', pattern: /(스킬|skill|loading\s+skills?)/i },
+  { key: 'browser', pattern: /(브라우저|browser|checking\s+the\s+browser)/i },
+  { key: 'tool', pattern: /(툴|도구|tool|using\s+tools?)/i },
+  { key: 'agent', pattern: /(에이전트|agent|hermes|calling\s+the\s+agent|received\s+agent\s+response)/i },
 ];
 
 function labelsFor(language = 'ko') {
   return /^en/i.test(String(language || '')) ? CATEGORY_LABELS.en : CATEGORY_LABELS.ko;
+}
+
+function categoryEmoji(key = 'work') {
+  return {
+    test: '🧪',
+    edit: '✏️',
+    read: '📖',
+    search: '🔎',
+    terminal: '💻',
+    skill: '📚',
+    browser: '🌐',
+    agent: '🤖',
+    tool: '🛠️',
+    work: '⚙️',
+  }[key] || '⚙️';
+}
+
+function stripProgressPrefix(text, category, { keepPaths = false, language = 'ko' } = {}) {
+  let detail = String(text || '')
+    .replace(/^VERBALCODING_PROGRESS:\s*/i, '')
+    .replace(/^(파일\s*읽기|파일\s*수정|웹\s*검색|터미널\s*(명령\s*)?실행|테스트\s*실행|스킬\s*사용|툴\s*사용|브라우저\s*확인|에이전트\s*(호출|처리|응답\s*수신)?|Hermes Agent\s*(호출\s*시작|응답\s*수신)?)\s*/i, '')
+    .replace(/^(reading\s+files?|editing\s+files?|searching(?:\s+web)?|running\s+(terminal\s+commands?|tests?)|loading\s+skills?|checking\s+the\s+browser|using\s+tools?|calling\s+the\s+agent|received\s+agent\s+response|working)\s*/i, '')
+    .replace(/^(read_file|write_file|patch|web_search|search_files|terminal|skill_view|tool)\s*/i, '')
+    .replace(/[`*_#>\[\](){}]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const label = category?.label || labelsFor(language).work;
+  if (detail.toLowerCase().startsWith(label.toLowerCase())) {
+    detail = detail.slice(label.length).replace(/^\s*[-:–—,;.]?\s*/u, '').trim();
+  }
+  if (!keepPaths) {
+    detail = detail
+      .replace(/\bHermes\s+Agent\b/gi, '')
+      .replace(/\b[a-zA-Z0-9_.\/-]+\.(mjs|js|py|md|json|txt|sh|yaml|yml)\b/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+  return detail;
 }
 
 export function progressCategory(event, { language = 'ko' } = {}) {
@@ -37,14 +75,7 @@ export function progressDetail(event, { language = 'ko' } = {}) {
   const text = String(event || '').replace(/\s+/g, ' ').trim();
   if (!text) return '';
   const category = progressCategory(text, { language });
-  let detail = text
-    .replace(/^VERBALCODING_PROGRESS:\s*/i, '')
-    .replace(/^(파일\s*읽기|파일\s*수정|웹\s*검색|터미널\s*(명령\s*)?실행|테스트\s*실행|스킬\s*사용|툴\s*사용|브라우저\s*확인|에이전트\s*(호출|처리|응답\s*수신)?|Hermes Agent\s*(호출\s*시작|응답\s*수신)?)\s*/i, '')
-    .replace(/^(read_file|write_file|patch|web_search|search_files|terminal|skill_view|tool)\s*/i, '')
-    .replace(/[`*_#>\[\](){}]/g, '')
-    .replace(/\b[a-zA-Z0-9_.\/-]+\.(mjs|js|py|md|json|txt|sh|yaml|yml)\b/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  let detail = stripProgressPrefix(text, category, { language });
   if (!detail || detail.length < 2) return category?.label || '';
   if (detail.length > 28) detail = detail.slice(0, 27).replace(/[\s,.;:，。]+$/u, '');
   return `${category?.label || labelsFor(language).work} ${detail}`.trim();
@@ -54,22 +85,11 @@ export function formatProgressMessage(event, { language = 'ko' } = {}) {
   const text = String(event || '').replace(/\s+/g, ' ').trim();
   if (!text) return '';
   const category = progressCategory(text, { language });
-  const detail = progressDetail(text, { language });
+  let detail = stripProgressPrefix(text, category, { language, keepPaths: true });
   const english = /^en/i.test(String(language || ''));
-  const safeDetail = english && /\p{Script=Hangul}/u.test(detail) ? '' : detail;
-  const body = english ? (safeDetail || category?.label || 'working') : (safeDetail || category?.label || '작업 처리');
-  const emoji = {
-    test: '🧪',
-    edit: '✏️',
-    read: '📖',
-    search: '🔎',
-    terminal: '💻',
-    skill: '📚',
-    browser: '🌐',
-    agent: '🤖',
-    tool: '🛠️',
-    work: '⚙️',
-  }[category?.key || 'work'] || '⚙️';
+  if (english && /\p{Script=Hangul}/u.test(detail)) detail = '';
+  const body = [category?.label || (english ? 'working' : '작업 처리'), detail].filter(Boolean).join(': ');
+  const emoji = categoryEmoji(category?.key || 'work');
   return `${emoji} ${body}`.trim();
 }
 
