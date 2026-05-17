@@ -28,6 +28,18 @@ def test_synth_installs_native_mlx_generation_hook():
     assert "model._generate_audio_token_ids_with_fallback" in source
     assert "generator.generate_audio_token_ids" in source
     assert "do_sample=bool(do_sample)" in source
+    assert "use_kv_cache=bool(use_kv_cache)" in source
+
+
+def test_mlx_generator_uses_kv_cache_by_default():
+    signature = inspect.signature(MossTTSNanoMLXGenerator.generate_audio_token_ids)
+    assert signature.parameters["use_kv_cache"].default is True
+    source = inspect.getsource(MossTTSNanoMLXGenerator.generate_audio_token_ids)
+    assert "self._global_prefill(current, mask)" in source
+    assert "self._global_decode_next(row, mask, global_cache)" in source
+    transformer_source = inspect.getsource(MossTTSNanoMLXGenerator._global_decode_next)
+    assert "past_key_values=cache" in transformer_source
+    assert "use_cache=True" in transformer_source
 
 
 def test_mlx_sampling_uses_candidate_only_text_tokens_and_top_k():

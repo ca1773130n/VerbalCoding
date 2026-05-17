@@ -143,7 +143,14 @@ class _Transformer:
                 }
             )
 
-    def __call__(self, inputs_embeds, attention_mask=None):
+    def __call__(
+        self,
+        inputs_embeds,
+        attention_mask=None,
+        *,
+        past_key_values=None,
+        use_cache: bool = False,
+    ):
         x = inputs_embeds
         if attention_mask is None:
             attention_mask = mx.ones(x.shape[:2], dtype=mx.bool_)
@@ -153,7 +160,12 @@ class _Transformer:
         position_ids = mx.cumsum(attention_mask.astype(mx.int32), axis=-1) - 1
         position_ids = mx.where(attention_mask, position_ids, 0)[:, -x.shape[1] :]
         x = x * mx.expand_dims(query_mask.astype(x.dtype), -1)
-        for layer in self.layers:
+        if past_key_values is not None and len(past_key_values) != len(self.layers):
+            raise ValueError(
+                f"past_key_values layer count {len(past_key_values)} does not match transformer layers {len(self.layers)}"
+            )
+        presents = [] if use_cache else None
+        for layer_index, layer in enumerate(self.layers):
             residual = x
             h = _layer_norm(x, layer["ln1_w"], layer["ln1_b"], self.cfg.layer_norm_eps)
             q = _linear(h, layer["q_w"], layer["q_b"])
@@ -166,6 +178,12 @@ class _Transformer:
             if self.cfg.position_embedding_type == "rope":
                 q = _apply_rope(q, position_ids, self.cfg)
                 k = _apply_rope(k, position_ids, self.cfg)
+            if past_key_values is not None:
+                past_k, past_v = past_key_values[layer_index]
+                k = mx.concatenate([past_k, k], axis=1)
+                v = mx.concatenate([past_v, v], axis=1)
+            if presents is not None:
+                presents.append((k, v))
             q_t = mx.transpose(q, (0, 2, 1, 3))
             k_t = mx.transpose(k, (0, 2, 1, 3))
             v_t = mx.transpose(v, (0, 2, 1, 3))
@@ -182,7 +200,10 @@ class _Transformer:
             x = x + _linear(mlp_hidden, layer["fc_out_w"], layer["fc_out_b"])
             x = x * mx.expand_dims(query_mask.astype(x.dtype), -1)
         x = _layer_norm(x, self.ln_f_w, self.ln_f_b, self.cfg.layer_norm_eps)
-        return x * mx.expand_dims(query_mask.astype(x.dtype), -1)
+        x = x * mx.expand_dims(query_mask.astype(x.dtype), -1)
+        if use_cache:
+            return x, tuple(presents)
+        return x
 
 
 class MossTTSNanoMLXGenerator:
@@ -240,6 +261,28 @@ class MossTTSNanoMLXGenerator:
     def _local_last_hidden(self, local_inputs):
         mask = mx.ones(local_inputs.shape[:2], dtype=mx.bool_)
         return self.local_transformer(local_inputs, mask)[:, -1, :]
+
+    def _global_prefill(self, current, mask):
+        hidden, cache = self.global_transformer(self._build_inputs_embeds(current), mask, use_cache=True)
+        return hidden[:, -1:, :], cache
+
+    def _global_decode_next(self, row, full_mask, cache):
+        hidden, cache = self.global_transformer(
+            self._build_inputs_embeds(row),
+            full_mask,
+            past_key_values=cache,
+            use_cache=True,
+        )
+        return hidden[:, -1:, :], cache
+
+    def _local_step_hidden(self, current_input, *, past_key_values, attention_mask):
+        hidden, next_cache = self.local_transformer(
+            mx.expand_dims(current_input, axis=1),
+            attention_mask,
+            past_key_values=past_key_values,
+            use_cache=True,
+        )
+        return hidden[:, -1, :], next_cache
 
     @staticmethod
     def _sample_np(
@@ -315,6 +358,7 @@ class MossTTSNanoMLXGenerator:
         audio_top_p: float | None = 0.8,
         audio_repetition_penalty: float = 1.0,
         seed: int | None = None,
+        use_kv_cache: bool = True,
     ) -> np.ndarray:
         current = mx.array(np.asarray(prompt_input_ids.detach().cpu().numpy() if hasattr(prompt_input_ids, "detach") else prompt_input_ids), dtype=mx.int32)
         mask = mx.array(np.asarray(attention_mask.detach().cpu().numpy() if hasattr(attention_mask, "detach") else attention_mask), dtype=mx.bool_)
@@ -323,9 +367,14 @@ class MossTTSNanoMLXGenerator:
         finished = mx.zeros((batch,), dtype=mx.bool_)
         rng = np.random.default_rng(seed)
         candidate_ids = np.array([self.config.audio_assistant_slot_token_id, self.config.audio_end_token_id], dtype=np.int32)
+        global_cache = None
+        global_hidden = None
+        if use_kv_cache:
+            global_hidden, global_cache = self._global_prefill(current, mask)
         for _step in range(int(max_new_frames)):
-            global_hidden_all = self.global_transformer(self._build_inputs_embeds(current), mask)
-            global_hidden = global_hidden_all[:, -1:, :]
+            if not use_kv_cache:
+                global_hidden_all = self.global_transformer(self._build_inputs_embeds(current), mask)
+                global_hidden = global_hidden_all[:, -1:, :]
             text_hidden = self._local_last_hidden(global_hidden)
             text_logits = _linear(text_hidden, self.global_transformer.wte, None)
             mx.eval(text_logits)
@@ -346,10 +395,19 @@ class MossTTSNanoMLXGenerator:
             next_tokens = []
             current_local = _embedding(self.global_transformer.wte, next_text)
             local_inputs = global_hidden
+            local_cache = None
+            local_attention_mask = None
+            if use_kv_cache:
+                local_attention_mask = mx.ones((batch, 1), dtype=mx.bool_)
+                _local_prefill, local_cache = self.local_transformer(local_inputs, local_attention_mask, use_cache=True)
             history_np = None if not frames else np.asarray(mx.stack(frames, axis=1))
             for channel_index in range(int(effective_nq)):
-                local_inputs = mx.concatenate([local_inputs, mx.expand_dims(current_local, axis=1)], axis=1)
-                channel_hidden = self._local_last_hidden(local_inputs)
+                if use_kv_cache:
+                    local_attention_mask = mx.concatenate([local_attention_mask, mx.ones((batch, 1), dtype=mx.bool_)], axis=1)
+                    channel_hidden, local_cache = self._local_step_hidden(current_local, past_key_values=local_cache, attention_mask=local_attention_mask)
+                else:
+                    local_inputs = mx.concatenate([local_inputs, mx.expand_dims(current_local, axis=1)], axis=1)
+                    channel_hidden = self._local_last_hidden(local_inputs)
                 logits = _linear(channel_hidden, self.audio_embeddings[channel_index], None)
                 mx.eval(logits)
                 previous = None if history_np is None else history_np[:, :, channel_index]
@@ -382,6 +440,8 @@ class MossTTSNanoMLXGenerator:
             row = mx.where(mx.reshape(should_continue, (batch, 1, 1)), row, inactive_row)
             current = mx.concatenate([current, row], axis=1)
             mask = mx.concatenate([mask, mx.expand_dims(should_continue, axis=1)], axis=1)
+            if use_kv_cache:
+                global_hidden, global_cache = self._global_decode_next(row, mask, global_cache)
         if frames:
             out = mx.stack(frames, axis=1)
         else:

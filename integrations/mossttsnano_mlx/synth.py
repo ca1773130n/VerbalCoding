@@ -129,14 +129,15 @@ def _install_mlx_generator(model: Any) -> None:
         use_kv_cache: bool,
         resolved_device,
     ):
-        del use_kv_cache, resolved_device
+        del resolved_device
         logging.info(
-            "mossttsnano_mlx native generator start batch=%s prompt_frames=%s max_new_frames=%s nq=%s do_sample=%s",
+            "mossttsnano_mlx native generator start batch=%s prompt_frames=%s max_new_frames=%s nq=%s do_sample=%s kv_cache=%s",
             tuple(prompt_input_ids.shape),
             int(prompt_input_ids.shape[1]),
             int(max_new_frames),
             int(effective_nq),
             bool(do_sample),
+            bool(use_kv_cache),
         )
         audio_np = generator.generate_audio_token_ids(
             prompt_input_ids,
@@ -151,6 +152,7 @@ def _install_mlx_generator(model: Any) -> None:
             audio_top_k=int(audio_top_k) if audio_top_k is not None else None,
             audio_top_p=float(audio_top_p) if audio_top_p is not None else None,
             audio_repetition_penalty=float(audio_repetition_penalty),
+            use_kv_cache=bool(use_kv_cache),
         )
         logging.info("mossttsnano_mlx native generator done frames=%s", int(audio_np.shape[1]))
         return torch.as_tensor(audio_np, dtype=torch.long, device=prompt_input_ids.device)
@@ -202,7 +204,7 @@ def run_mlx(args: argparse.Namespace) -> int:
         audio_top_p=0.8 if args.audio_top_p is None else args.audio_top_p,
         audio_top_k=25 if args.audio_top_k is None else args.audio_top_k,
         audio_repetition_penalty=1.0 if args.audio_repetition_penalty is None else args.audio_repetition_penalty,
-        use_kv_cache=False,
+        use_kv_cache=True,
     )
     elapsed = time.time() - started
     logging.info(
