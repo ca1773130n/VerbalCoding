@@ -241,18 +241,104 @@ class MossTTSNanoMLXGenerator:
         mask = mx.ones(local_inputs.shape[:2], dtype=mx.bool_)
         return self.local_transformer(local_inputs, mask)[:, -1, :]
 
-    def generate_audio_token_ids(self, prompt_input_ids: Any, attention_mask: Any, *, max_new_frames: int, effective_nq: int) -> np.ndarray:
+    @staticmethod
+    def _sample_np(
+        logits: Any,
+        *,
+        do_sample: bool,
+        temperature: float,
+        top_k: int | None,
+        top_p: float | None,
+        previous_token_ids: np.ndarray | None = None,
+        repetition_penalty: float = 1.0,
+        rng: np.random.Generator | None = None,
+    ) -> np.ndarray:
+        scores = np.asarray(logits, dtype=np.float64).copy()
+        if repetition_penalty <= 0:
+            raise ValueError("repetition_penalty must be positive")
+        if previous_token_ids is not None and repetition_penalty != 1.0:
+            prev = np.asarray(previous_token_ids)
+            if prev.ndim == 1:
+                prev = prev[None, :]
+            elif prev.ndim > 2:
+                prev = prev.reshape(prev.shape[0], -1)
+            for batch_index in range(scores.shape[0]):
+                valid = prev[batch_index]
+                valid = valid[(valid >= 0) & (valid < scores.shape[-1])]
+                for token_id in np.unique(valid):
+                    token_score = scores[batch_index, int(token_id)]
+                    scores[batch_index, int(token_id)] = (
+                        token_score * repetition_penalty if token_score < 0 else token_score / repetition_penalty
+                    )
+        if not do_sample:
+            return np.argmax(scores, axis=-1).astype(np.int32)
+        if temperature <= 0:
+            raise ValueError("temperature must be positive when do_sample=True")
+        scores = scores / float(temperature)
+        if top_k is not None and top_k > 0:
+            k = min(int(top_k), scores.shape[-1])
+            threshold = np.partition(scores, scores.shape[-1] - k, axis=-1)[:, scores.shape[-1] - k][:, None]
+            scores = np.where(scores < threshold, -np.inf, scores)
+        if top_p is not None and 0.0 < float(top_p) < 1.0:
+            order = np.argsort(-scores, axis=-1)
+            sorted_scores = np.take_along_axis(scores, order, axis=-1)
+            stable = sorted_scores - np.nanmax(sorted_scores, axis=-1, keepdims=True)
+            probs = np.exp(stable)
+            probs = probs / np.sum(probs, axis=-1, keepdims=True)
+            cumsum = np.cumsum(probs, axis=-1)
+            remove = cumsum > float(top_p)
+            remove[:, 1:] = remove[:, :-1]
+            remove[:, 0] = False
+            sorted_scores = np.where(remove, -np.inf, sorted_scores)
+            restored = np.full_like(scores, -np.inf)
+            np.put_along_axis(restored, order, sorted_scores, axis=-1)
+            scores = restored
+        stable = scores - np.nanmax(scores, axis=-1, keepdims=True)
+        probs = np.exp(stable)
+        probs = probs / np.sum(probs, axis=-1, keepdims=True)
+        rng = rng or np.random.default_rng()
+        return np.array([rng.choice(scores.shape[-1], p=probs[i]) for i in range(scores.shape[0])], dtype=np.int32)
+
+    def generate_audio_token_ids(
+        self,
+        prompt_input_ids: Any,
+        attention_mask: Any,
+        *,
+        max_new_frames: int,
+        effective_nq: int,
+        do_sample: bool = True,
+        text_temperature: float = 1.5,
+        text_top_k: int | None = 50,
+        text_top_p: float | None = 1.0,
+        audio_temperature: float = 1.7,
+        audio_top_k: int | None = 25,
+        audio_top_p: float | None = 0.8,
+        audio_repetition_penalty: float = 1.0,
+        seed: int | None = None,
+    ) -> np.ndarray:
         current = mx.array(np.asarray(prompt_input_ids.detach().cpu().numpy() if hasattr(prompt_input_ids, "detach") else prompt_input_ids), dtype=mx.int32)
         mask = mx.array(np.asarray(attention_mask.detach().cpu().numpy() if hasattr(attention_mask, "detach") else attention_mask), dtype=mx.bool_)
         batch = int(current.shape[0])
         frames: list[Any] = []
         finished = mx.zeros((batch,), dtype=mx.bool_)
+        rng = np.random.default_rng(seed)
+        candidate_ids = np.array([self.config.audio_assistant_slot_token_id, self.config.audio_end_token_id], dtype=np.int32)
         for _step in range(int(max_new_frames)):
             global_hidden_all = self.global_transformer(self._build_inputs_embeds(current), mask)
             global_hidden = global_hidden_all[:, -1:, :]
             text_hidden = self._local_last_hidden(global_hidden)
             text_logits = _linear(text_hidden, self.global_transformer.wte, None)
-            next_text = mx.argmax(text_logits, axis=-1).astype(mx.int32)
+            mx.eval(text_logits)
+            candidate_logits = np.asarray(text_logits)[:, candidate_ids]
+            next_text_np = candidate_ids[self._sample_np(
+                candidate_logits,
+                do_sample=do_sample,
+                temperature=text_temperature,
+                top_k=text_top_k,
+                top_p=text_top_p,
+                rng=rng,
+            )]
+            next_text = mx.array(next_text_np, dtype=mx.int32)
             should_continue = mx.logical_and(next_text == self.config.audio_assistant_slot_token_id, mx.logical_not(finished))
             finished = mx.logical_or(finished, next_text == self.config.audio_end_token_id)
             if not bool(mx.any(should_continue).item()):
@@ -260,11 +346,24 @@ class MossTTSNanoMLXGenerator:
             next_tokens = []
             current_local = _embedding(self.global_transformer.wte, next_text)
             local_inputs = global_hidden
+            history_np = None if not frames else np.asarray(mx.stack(frames, axis=1))
             for channel_index in range(int(effective_nq)):
                 local_inputs = mx.concatenate([local_inputs, mx.expand_dims(current_local, axis=1)], axis=1)
                 channel_hidden = self._local_last_hidden(local_inputs)
                 logits = _linear(channel_hidden, self.audio_embeddings[channel_index], None)
-                tok = mx.argmax(logits, axis=-1).astype(mx.int32)
+                mx.eval(logits)
+                previous = None if history_np is None else history_np[:, :, channel_index]
+                tok_np = self._sample_np(
+                    np.asarray(logits),
+                    do_sample=do_sample,
+                    temperature=audio_temperature,
+                    top_k=audio_top_k,
+                    top_p=audio_top_p,
+                    previous_token_ids=previous,
+                    repetition_penalty=audio_repetition_penalty,
+                    rng=rng,
+                )
+                tok = mx.array(tok_np, dtype=mx.int32)
                 next_tokens.append(tok)
                 current_local = _embedding(self.audio_embeddings[channel_index], tok)
             if int(effective_nq) < self.config.n_vq:

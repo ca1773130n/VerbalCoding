@@ -129,21 +129,28 @@ def _install_mlx_generator(model: Any) -> None:
         use_kv_cache: bool,
         resolved_device,
     ):
-        del text_temperature, text_top_p, text_top_k, audio_temperature, audio_top_p, audio_top_k, audio_repetition_penalty, use_kv_cache, resolved_device
-        if do_sample:
-            logging.warning("mossttsnano_mlx currently uses greedy MLX generation; ignoring do_sample=True")
+        del use_kv_cache, resolved_device
         logging.info(
-            "mossttsnano_mlx native generator start batch=%s prompt_frames=%s max_new_frames=%s nq=%s",
+            "mossttsnano_mlx native generator start batch=%s prompt_frames=%s max_new_frames=%s nq=%s do_sample=%s",
             tuple(prompt_input_ids.shape),
             int(prompt_input_ids.shape[1]),
             int(max_new_frames),
             int(effective_nq),
+            bool(do_sample),
         )
         audio_np = generator.generate_audio_token_ids(
             prompt_input_ids,
             attention_mask,
             max_new_frames=max_new_frames,
             effective_nq=effective_nq,
+            do_sample=bool(do_sample),
+            text_temperature=float(text_temperature),
+            text_top_k=int(text_top_k) if text_top_k is not None else None,
+            text_top_p=float(text_top_p) if text_top_p is not None else None,
+            audio_temperature=float(audio_temperature),
+            audio_top_k=int(audio_top_k) if audio_top_k is not None else None,
+            audio_top_p=float(audio_top_p) if audio_top_p is not None else None,
+            audio_repetition_penalty=float(audio_repetition_penalty),
         )
         logging.info("mossttsnano_mlx native generator done frames=%s", int(audio_np.shape[1]))
         return torch.as_tensor(audio_np, dtype=torch.long, device=prompt_input_ids.device)
@@ -188,6 +195,13 @@ def run_mlx(args: argparse.Namespace) -> int:
         voice_clone_max_text_tokens=args.voice_clone_max_text_tokens,
         voice_clone_max_memory_per_sample_gb=args.voice_clone_max_memory_per_sample_gb,
         do_sample=bool(args.do_sample),
+        text_temperature=1.5 if args.text_temperature is None else args.text_temperature,
+        text_top_p=1.0 if args.text_top_p is None else args.text_top_p,
+        text_top_k=50 if args.text_top_k is None else args.text_top_k,
+        audio_temperature=1.7 if args.audio_temperature is None else args.audio_temperature,
+        audio_top_p=0.8 if args.audio_top_p is None else args.audio_top_p,
+        audio_top_k=25 if args.audio_top_k is None else args.audio_top_k,
+        audio_repetition_penalty=1.0 if args.audio_repetition_penalty is None else args.audio_repetition_penalty,
         use_kv_cache=False,
     )
     elapsed = time.time() - started
@@ -216,7 +230,14 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--torch-device", default="cpu")
     parser.add_argument("--torch-dtype", default="float32")
-    parser.add_argument("--do-sample", action="store_true", default=False)
+    parser.add_argument("--do-sample", type=int, nargs="?", const=1, default=1, choices=[0, 1])
+    parser.add_argument("--text-temperature", type=float, default=None)
+    parser.add_argument("--text-top-p", type=float, default=None)
+    parser.add_argument("--text-top-k", type=int, default=None)
+    parser.add_argument("--audio-temperature", type=float, default=None)
+    parser.add_argument("--audio-top-p", type=float, default=None)
+    parser.add_argument("--audio-top-k", type=int, default=None)
+    parser.add_argument("--audio-repetition-penalty", type=float, default=None)
     parser.add_argument("--voice-clone-max-text-tokens", type=int, default=160)
     parser.add_argument("--voice-clone-max-memory-per-sample-gb", type=float, default=4.0)
     parser.add_argument("--print-voice-clone-text-chunks", action="store_true", default=False)
