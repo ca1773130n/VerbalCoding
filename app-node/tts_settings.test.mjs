@@ -253,6 +253,9 @@ test('buildTtsSettings normalizes MOSS-TTS-Nano MLX hybrid settings', () => {
     TTS_BACKEND: 'moss-mlx',
     MOSSTTSNANO_COMMAND: 'python3',
     MOSSTTSNANO_MLX_SCRIPT: './integrations/mossttsnano_mlx/synth.py',
+    MOSSTTSNANO_MLX_WORKER_SCRIPT: './integrations/mossttsnano_mlx/worker.py',
+    MOSSTTSNANO_MLX_WORKER: '1',
+    MOSSTTSNANO_MLX_WORKER_STARTUP_TIMEOUT_MS: '240000',
     MOSSTTSNANO_SCRIPT: './vendor/MOSS-TTS-Nano/infer.py',
     MOSSTTSNANO_CHECKPOINT: './models/MOSS-TTS-Nano',
     MOSSTTSNANO_AUDIO_TOKENIZER: './models/MOSS-Audio-Tokenizer-Nano',
@@ -271,6 +274,9 @@ test('buildTtsSettings normalizes MOSS-TTS-Nano MLX hybrid settings', () => {
   assert.equal(settings.backend, 'mossttsnano_mlx');
   assert.equal(settings.mossttsnano_mlx.python, 'python3');
   assert.equal(settings.mossttsnano_mlx.script, path.join(root, 'integrations', 'mossttsnano_mlx', 'synth.py'));
+  assert.equal(settings.mossttsnano_mlx.workerScript, path.join(root, 'integrations', 'mossttsnano_mlx', 'worker.py'));
+  assert.equal(settings.mossttsnano_mlx.workerEnabled, true);
+  assert.equal(settings.mossttsnano_mlx.workerStartupTimeoutMs, 240000);
   assert.equal(settings.mossttsnano_mlx.torchInferScript, path.join(root, 'vendor', 'MOSS-TTS-Nano', 'infer.py'));
   assert.equal(settings.mossttsnano_mlx.checkpoint, './models/MOSS-TTS-Nano');
   assert.equal(settings.mossttsnano_mlx.audioTokenizer, './models/MOSS-Audio-Tokenizer-Nano');

@@ -103,6 +103,9 @@ function baseSettings() {
     mossttsnano_mlx: {
       python: 'python3',
       script: '/project/integrations/mossttsnano_mlx/synth.py',
+      workerScript: '/project/integrations/mossttsnano_mlx/worker.py',
+      workerEnabled: false,
+      workerStartupTimeoutMs: 120000,
       torchInferScript: '/project/vendor/MOSS-TTS-Nano/infer.py',
       checkpoint: 'OpenMOSS-Team/MOSS-TTS-Nano',
       audioTokenizer: 'OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano',
@@ -726,7 +729,7 @@ test('MOSS-TTS-Nano MLX hybrid backend calls experimental synth wrapper', async 
   assert.ok(calls[0].args.includes('/project/voice-samples/me.wav'));
   assert.equal(calls[0].options.timeout, 180000);
   assert.match(out, /^\/tmp\/verbalcoding-mossttsnano-mlx-/);
-  assert.deepEqual(backend.cacheKeyParts(), ['mossttsnano_mlx', 'python3', '/project/integrations/mossttsnano_mlx/synth.py', '/project/vendor/MOSS-TTS-Nano/infer.py', 'OpenMOSS-Team/MOSS-TTS-Nano', 'OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano', 'voice_clone', 'ko', 'cpu', 'float32', '/project/voice-samples/me.wav', '테스트 기준 음성입니다.', 120, '7']);
+  assert.deepEqual(backend.cacheKeyParts(), ['mossttsnano_mlx', 'subprocess', 'python3', '/project/integrations/mossttsnano_mlx/synth.py', '/project/integrations/mossttsnano_mlx/worker.py', '/project/vendor/MOSS-TTS-Nano/infer.py', 'OpenMOSS-Team/MOSS-TTS-Nano', 'OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano', 'voice_clone', 'ko', 'cpu', 'float32', '/project/voice-samples/me.wav', '테스트 기준 음성입니다.', 120, '7']);
 });
 
 test('MOSS-TTS-Nano MLX progress uses Edge fallback unless explicitly enabled', async () => {

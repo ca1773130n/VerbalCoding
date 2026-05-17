@@ -173,7 +173,7 @@ function applyVoiceConfigToProcessEnv(config = ensureTtsVoiceConfig()) {
 function rebuildTtsRuntimeSettings(selection = null) {
   settings.tts = buildTtsSettings(process.env, ROOT);
   if (selection?.backend === 'edge' && selection.voice?.voice) settings.tts.edge.voice = selection.voice.voice;
-  ttsBackend = createTtsBackend(settings.tts, { execFileAsync, log, warn, voiceProvider: () => settings.tts.edge.voice });
+  ttsBackend = createTtsBackend(settings.tts, { execFileAsync, spawn, log, warn, voiceProvider: () => settings.tts.edge.voice });
   return settings.tts;
 }
 function reloadRuntimeLanguageFromEnv() {
@@ -216,7 +216,7 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
   partials: [Partials.Channel],
 });
-let ttsBackend = createTtsBackend(settings.tts, { execFileAsync, log, warn, voiceProvider: () => settings.tts.edge.voice });
+let ttsBackend = createTtsBackend(settings.tts, { execFileAsync, spawn, log, warn, voiceProvider: () => settings.tts.edge.voice });
 const voiceCloneCapture = createVoiceCloneCaptureState({ defaultTargetPath: settings.tts.openvoice.refAudio });
 
 let connection = null;
@@ -1005,7 +1005,7 @@ async function refreshTtsRuntimeConfig() {
   if (previousBackend !== settings.tts.backend) {
     const rebuilt = buildTtsSettings(process.env, ROOT);
     Object.assign(settings.tts, rebuilt);
-    ttsBackend = createTtsBackend(settings.tts, { execFileAsync, log, warn, voiceProvider: () => settings.tts.edge.voice });
+    ttsBackend = createTtsBackend(settings.tts, { execFileAsync, spawn, log, warn, voiceProvider: () => settings.tts.edge.voice });
     log('tts backend reloaded from voice config', settings.tts.backend, 'voiceType', selection.voiceType);
   }
   return selection;

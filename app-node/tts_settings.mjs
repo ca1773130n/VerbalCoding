@@ -198,6 +198,9 @@ export function buildTtsSettings(env = process.env, root = process.cwd()) {
     mossttsnano_mlx: {
       python: env.MOSSTTSNANO_MLX_PYTHON || env.MOSSTTSNANO_COMMAND || './.venv-mossttsnano/bin/python',
       script: resolveUnderRoot(root, env.MOSSTTSNANO_MLX_SCRIPT, path.join('integrations', 'mossttsnano_mlx', 'synth.py')),
+      workerScript: resolveUnderRoot(root, env.MOSSTTSNANO_MLX_WORKER_SCRIPT, path.join('integrations', 'mossttsnano_mlx', 'worker.py')),
+      workerEnabled: boolEnv(env.MOSSTTSNANO_MLX_WORKER, false),
+      workerStartupTimeoutMs: positiveNumber(env.MOSSTTSNANO_MLX_WORKER_STARTUP_TIMEOUT_MS, 120000),
       torchInferScript: resolveUnderRoot(root, env.MOSSTTSNANO_SCRIPT, path.join('vendor', 'MOSS-TTS-Nano', 'infer.py')),
       checkpoint: env.MOSSTTSNANO_CHECKPOINT || env.MOSS_TTS_NANO_CHECKPOINT || 'OpenMOSS-Team/MOSS-TTS-Nano',
       audioTokenizer: env.MOSSTTSNANO_AUDIO_TOKENIZER || env.MOSS_TTS_NANO_AUDIO_TOKENIZER || 'OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano',

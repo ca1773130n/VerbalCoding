@@ -1,3 +1,4 @@
+import { spawn as spawnProcess } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -578,6 +579,139 @@ export function createMossTtsNanoBackend(settings, deps = {}) {
   };
 }
 
+function mossTtsNanoMlxWorkerArgs(mossttsnanoMlx) {
+  const args = [
+    mossttsnanoMlx.workerScript,
+    '--checkpoint', mossttsnanoMlx.checkpoint,
+    '--audio-tokenizer-pretrained-name-or-path', mossttsnanoMlx.audioTokenizer,
+    '--mode', mossttsnanoMlx.mode,
+    '--torch-device', mossttsnanoMlx.torchDevice,
+    '--torch-dtype', mossttsnanoMlx.torchDtype,
+    '--max-new-frames', String(mossttsnanoMlx.maxNewFrames),
+  ];
+  if (mossttsnanoMlx.promptAudio) args.push('--prompt-audio-path', mossttsnanoMlx.promptAudio);
+  if (mossttsnanoMlx.promptText) args.push('--prompt-text', mossttsnanoMlx.promptText);
+  if (mossttsnanoMlx.seed) args.push('--seed', String(mossttsnanoMlx.seed));
+  return args;
+}
+
+function createJsonLineWorker({ command, args, spawn = spawnProcess, startupTimeoutMs = 120000, warn = () => {} }) {
+  let child = null;
+  let readyPromise = null;
+  let nextId = 1;
+  let stdoutBuffer = '';
+  const pending = new Map();
+
+  function rejectPending(error) {
+    for (const { reject, timer } of pending.values()) {
+      clearTimeout(timer);
+      reject(error);
+    }
+    pending.clear();
+  }
+
+  function handleMessage(message) {
+    if (message?.type === 'ready') {
+      if (message.ok === false) throw new Error(message.error || 'worker failed startup');
+      return;
+    }
+    const entry = pending.get(message.id);
+    if (!entry) return;
+    pending.delete(message.id);
+    clearTimeout(entry.timer);
+    if (message.ok) entry.resolve(message);
+    else entry.reject(new Error(message.error || 'worker request failed'));
+  }
+
+  function start() {
+    if (child && !child.killed) return readyPromise;
+    child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    stdoutBuffer = '';
+    readyPromise = new Promise((resolve, reject) => {
+      const startupTimer = setTimeout(() => reject(new Error('worker startup timed out')), startupTimeoutMs);
+      const onData = chunk => {
+        stdoutBuffer += chunk.toString('utf8');
+        let index;
+        while ((index = stdoutBuffer.indexOf('\n')) >= 0) {
+          const line = stdoutBuffer.slice(0, index).trim();
+          stdoutBuffer = stdoutBuffer.slice(index + 1);
+          if (!line) continue;
+          let message;
+          try {
+            message = JSON.parse(line);
+          } catch (error) {
+            warn('mossttsnano_mlx worker emitted non-json stdout', line.slice(0, 300));
+            continue;
+          }
+          try {
+            handleMessage(message);
+            if (message?.type === 'ready') {
+              clearTimeout(startupTimer);
+              resolve();
+            }
+          } catch (error) {
+            clearTimeout(startupTimer);
+            reject(error);
+          }
+        }
+      };
+      child.stdout.on('data', onData);
+      child.stderr.on('data', chunk => warn('mossttsnano_mlx worker', chunk.toString('utf8').trim()));
+      child.on('error', error => {
+        clearTimeout(startupTimer);
+        reject(error);
+        rejectPending(error);
+      });
+      child.on('exit', (code, signal) => {
+        const error = new Error(`worker exited code=${code} signal=${signal}`);
+        child = null;
+        readyPromise = null;
+        clearTimeout(startupTimer);
+        rejectPending(error);
+      });
+    });
+    return readyPromise;
+  }
+
+  async function request(payload, { timeoutMs, signal } = {}) {
+    await start();
+    if (!child || !child.stdin.writable) throw new Error('worker stdin is not writable');
+    const id = nextId++;
+    const message = { id, ...payload };
+    return await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        pending.delete(id);
+        reject(new Error('worker request timed out'));
+      }, timeoutMs || 180000);
+      const abort = () => {
+        clearTimeout(timer);
+        pending.delete(id);
+        reject(new Error('worker request aborted'));
+      };
+      if (signal) {
+        if (signal.aborted) return abort();
+        signal.addEventListener('abort', abort, { once: true });
+      }
+      pending.set(id, { resolve, reject, timer });
+      child.stdin.write(`${JSON.stringify(message)}\n`, error => {
+        if (error) {
+          clearTimeout(timer);
+          pending.delete(id);
+          reject(error);
+        }
+      });
+    });
+  }
+
+  function stop() {
+    if (child && !child.killed) child.kill('SIGTERM');
+    child = null;
+    readyPromise = null;
+  }
+
+  return { request, stop };
+}
+
 export function createMossTtsNanoMlxBackend(settings, deps = {}) {
   const execFileAsync = deps.execFileAsync;
   if (!execFileAsync) throw new Error('execFileAsync dependency is required');
@@ -589,11 +723,20 @@ export function createMossTtsNanoMlxBackend(settings, deps = {}) {
   };
   const edge = createEdgeTtsBackend(settings, deps);
   const mossttsnanoMlx = settings.mossttsnano_mlx;
+  const worker = mossttsnanoMlx.workerEnabled
+    ? createJsonLineWorker({
+        command: mossttsnanoMlx.python,
+        args: mossTtsNanoMlxWorkerArgs(mossttsnanoMlx),
+        spawn: deps.spawn || spawnProcess,
+        startupTimeoutMs: mossttsnanoMlx.workerStartupTimeoutMs,
+        warn,
+      })
+    : null;
   return {
     name: 'mossttsnano_mlx',
     outputExtension: mossttsnanoMlx.useForProgress ? 'wav' : 'wav',
     cacheKeyParts() {
-      return ['mossttsnano_mlx', mossttsnanoMlx.python, mossttsnanoMlx.script, mossttsnanoMlx.torchInferScript, mossttsnanoMlx.checkpoint, mossttsnanoMlx.audioTokenizer, mossttsnanoMlx.mode, mossttsnanoMlx.language, mossttsnanoMlx.torchDevice, mossttsnanoMlx.torchDtype, mossttsnanoMlx.promptAudio, mossttsnanoMlx.promptText, mossttsnanoMlx.maxNewFrames, mossttsnanoMlx.seed];
+      return ['mossttsnano_mlx', mossttsnanoMlx.workerEnabled ? 'worker' : 'subprocess', mossttsnanoMlx.python, mossttsnanoMlx.script, mossttsnanoMlx.workerScript, mossttsnanoMlx.torchInferScript, mossttsnanoMlx.checkpoint, mossttsnanoMlx.audioTokenizer, mossttsnanoMlx.mode, mossttsnanoMlx.language, mossttsnanoMlx.torchDevice, mossttsnanoMlx.torchDtype, mossttsnanoMlx.promptAudio, mossttsnanoMlx.promptText, mossttsnanoMlx.maxNewFrames, mossttsnanoMlx.seed];
     },
     async synthesize(text, { signal, kind = 'final' } = {}) {
       if (kind === 'progress' && !mossttsnanoMlx.useForProgress) {
@@ -601,16 +744,23 @@ export function createMossTtsNanoMlxBackend(settings, deps = {}) {
       }
       const out = uniquePath(tmpdir, 'verbalcoding-mossttsnano-mlx', 'wav');
       try {
-        await execFileAsync(mossttsnanoMlx.python, mossTtsNanoMlxArgs(text, out, mossttsnanoMlx), execOptions({
-          timeout: mossttsnanoMlx.timeoutMs,
-          maxBuffer: 4 * 1024 * 1024,
-        }, signal));
+        if (worker) {
+          await worker.request({ text, output_audio_path: out }, { timeoutMs: mossttsnanoMlx.timeoutMs, signal });
+        } else {
+          await execFileAsync(mossttsnanoMlx.python, mossTtsNanoMlxArgs(text, out, mossttsnanoMlx), execOptions({
+            timeout: mossttsnanoMlx.timeoutMs,
+            maxBuffer: 4 * 1024 * 1024,
+          }, signal));
+        }
         return validateOutput(out, fsApi);
       } catch (error) {
         fs.rm(out, { force: true }, () => {});
         warn('mossttsnano_mlx failed; falling back to edge', error?.message || error);
         return edge.synthesize(text, { signal, kind });
       }
+    },
+    close() {
+      if (worker) worker.stop();
     },
   };
 }
