@@ -100,6 +100,23 @@ function baseSettings() {
       timeoutMs: 120000,
       useForProgress: false,
     },
+    mossttsnano_mlx: {
+      python: 'python3',
+      script: '/project/integrations/mossttsnano_mlx/synth.py',
+      torchInferScript: '/project/vendor/MOSS-TTS-Nano/infer.py',
+      checkpoint: 'OpenMOSS-Team/MOSS-TTS-Nano',
+      audioTokenizer: 'OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano',
+      mode: 'voice_clone',
+      language: 'ko',
+      torchDevice: 'cpu',
+      torchDtype: 'float32',
+      promptAudio: '/project/voice-samples/me.wav',
+      promptText: '테스트 기준 음성입니다.',
+      maxNewFrames: 120,
+      seed: '7',
+      timeoutMs: 180000,
+      useForProgress: false,
+    },
     neuttsair: {
       python: '/project/.venv-neuttsair/bin/python',
       script: '/project/integrations/neuttsair/synth.py',
@@ -683,6 +700,48 @@ test('MOSS-TTS-Nano falls back to Edge when local CLI fails', async () => {
   assert.ok(calls.some(call => call.cmd === 'python3'));
   assert.ok(calls.some(call => call.cmd === 'edge-tts'));
   assert.ok(calls.some(call => /mossttsnano failed; falling back to edge/i.test(call.warn || '')));
+});
+
+test('MOSS-TTS-Nano MLX hybrid backend calls experimental synth wrapper', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'mossttsnano_mlx' };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 999 }),
+    execFileAsync: async (cmd, args, options) => calls.push({ cmd, args, options }),
+  });
+
+  const out = await backend.synthesize('모스 엠엘엑스 테스트', { kind: 'final' });
+
+  assert.equal(calls[0].cmd, 'python3');
+  assert.deepEqual(calls[0].args.slice(0, 5), ['/project/integrations/mossttsnano_mlx/synth.py', '--text', '모스 엠엘엑스 테스트', '--output-audio-path', calls[0].args[4]]);
+  assert.ok(calls[0].args.includes('--torch-infer-script'));
+  assert.ok(calls[0].args.includes('/project/vendor/MOSS-TTS-Nano/infer.py'));
+  assert.ok(calls[0].args.includes('--torch-device'));
+  assert.ok(calls[0].args.includes('cpu'));
+  assert.ok(calls[0].args.includes('--torch-dtype'));
+  assert.ok(calls[0].args.includes('float32'));
+  assert.ok(calls[0].args.includes('--prompt-audio-path'));
+  assert.ok(calls[0].args.includes('/project/voice-samples/me.wav'));
+  assert.equal(calls[0].options.timeout, 180000);
+  assert.match(out, /^\/tmp\/verbalcoding-mossttsnano-mlx-/);
+  assert.deepEqual(backend.cacheKeyParts(), ['mossttsnano_mlx', 'python3', '/project/integrations/mossttsnano_mlx/synth.py', '/project/vendor/MOSS-TTS-Nano/infer.py', 'OpenMOSS-Team/MOSS-TTS-Nano', 'OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano', 'voice_clone', 'ko', 'cpu', 'float32', '/project/voice-samples/me.wav', '테스트 기준 음성입니다.', 120, '7']);
+});
+
+test('MOSS-TTS-Nano MLX progress uses Edge fallback unless explicitly enabled', async () => {
+  const calls = [];
+  const settings = { ...baseSettings(), backend: 'mossttsnano_mlx' };
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 123 }),
+    execFileAsync: async (cmd, args) => calls.push({ cmd, args }),
+  });
+
+  await backend.synthesize('진행 안내', { kind: 'progress' });
+
+  assert.equal(calls[0].cmd, 'edge-tts');
 });
 
 test('NeuTTS Air backend calls Python wrapper with GGUF backbone, reference sample, and output path', async () => {

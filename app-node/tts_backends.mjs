@@ -149,6 +149,26 @@ function mossTtsNanoArgs(text, out, mossttsnano) {
   return args;
 }
 
+function mossTtsNanoMlxArgs(text, out, mossttsnanoMlx) {
+  const args = [
+    mossttsnanoMlx.script,
+    '--text', text,
+    '--output-audio-path', out,
+    '--checkpoint', mossttsnanoMlx.checkpoint,
+    '--audio-tokenizer-pretrained-name-or-path', mossttsnanoMlx.audioTokenizer,
+    '--mode', mossttsnanoMlx.mode,
+    '--torch-infer-script', mossttsnanoMlx.torchInferScript,
+    '--torch-device', mossttsnanoMlx.torchDevice,
+    '--torch-dtype', mossttsnanoMlx.torchDtype,
+    '--max-new-frames', String(mossttsnanoMlx.maxNewFrames),
+    '--disable-wetext-processing',
+  ];
+  if (mossttsnanoMlx.promptAudio) args.push('--prompt-audio-path', mossttsnanoMlx.promptAudio);
+  if (mossttsnanoMlx.promptText) args.push('--prompt-text', mossttsnanoMlx.promptText);
+  if (mossttsnanoMlx.seed) args.push('--seed', String(mossttsnanoMlx.seed));
+  return args;
+}
+
 async function speechSwiftServerRequest({ fetchImpl, speechswift, text, signal }) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), speechswift.timeoutMs);
@@ -558,6 +578,43 @@ export function createMossTtsNanoBackend(settings, deps = {}) {
   };
 }
 
+export function createMossTtsNanoMlxBackend(settings, deps = {}) {
+  const execFileAsync = deps.execFileAsync;
+  if (!execFileAsync) throw new Error('execFileAsync dependency is required');
+  const tmpdir = deps.tmpdir || os.tmpdir();
+  const warn = deps.warn || (() => {});
+  const fsApi = {
+    existsSync: deps.existsSync || fs.existsSync,
+    statSync: deps.statSync || fs.statSync,
+  };
+  const edge = createEdgeTtsBackend(settings, deps);
+  const mossttsnanoMlx = settings.mossttsnano_mlx;
+  return {
+    name: 'mossttsnano_mlx',
+    outputExtension: mossttsnanoMlx.useForProgress ? 'wav' : 'wav',
+    cacheKeyParts() {
+      return ['mossttsnano_mlx', mossttsnanoMlx.python, mossttsnanoMlx.script, mossttsnanoMlx.torchInferScript, mossttsnanoMlx.checkpoint, mossttsnanoMlx.audioTokenizer, mossttsnanoMlx.mode, mossttsnanoMlx.language, mossttsnanoMlx.torchDevice, mossttsnanoMlx.torchDtype, mossttsnanoMlx.promptAudio, mossttsnanoMlx.promptText, mossttsnanoMlx.maxNewFrames, mossttsnanoMlx.seed];
+    },
+    async synthesize(text, { signal, kind = 'final' } = {}) {
+      if (kind === 'progress' && !mossttsnanoMlx.useForProgress) {
+        return edge.synthesize(text, { signal, kind });
+      }
+      const out = uniquePath(tmpdir, 'verbalcoding-mossttsnano-mlx', 'wav');
+      try {
+        await execFileAsync(mossttsnanoMlx.python, mossTtsNanoMlxArgs(text, out, mossttsnanoMlx), execOptions({
+          timeout: mossttsnanoMlx.timeoutMs,
+          maxBuffer: 4 * 1024 * 1024,
+        }, signal));
+        return validateOutput(out, fsApi);
+      } catch (error) {
+        fs.rm(out, { force: true }, () => {});
+        warn('mossttsnano_mlx failed; falling back to edge', error?.message || error);
+        return edge.synthesize(text, { signal, kind });
+      }
+    },
+  };
+}
+
 export function createTtsBackend(settings, deps = {}) {
   if (settings.backend === 'openvoice') return createOpenVoiceBackend(settings, deps);
   if (settings.backend === 'speechswift') return createSpeechSwiftBackend(settings, deps);
@@ -568,5 +625,6 @@ export function createTtsBackend(settings, deps = {}) {
   if (settings.backend === 'neuttsair') return createNeuTtsAirBackend(settings, deps);
   if (settings.backend === 'fireredtts2') return createFireRedTts2Backend(settings, deps);
   if (settings.backend === 'mossttsnano') return createMossTtsNanoBackend(settings, deps);
+  if (settings.backend === 'mossttsnano_mlx') return createMossTtsNanoMlxBackend(settings, deps);
   return createEdgeTtsBackend(settings, deps);
 }

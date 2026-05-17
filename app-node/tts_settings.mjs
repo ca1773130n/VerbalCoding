@@ -10,6 +10,7 @@ export const SUPPORTED_TTS_BACKENDS = [
   'mlxaudio',
   'fireredtts2',
   'mossttsnano',
+  'mossttsnano_mlx',
   'neuttsair',
 ];
 
@@ -37,6 +38,11 @@ export const TTS_BACKEND_ALIASES = new Map([
   ['mossnano', 'mossttsnano'],
   ['moss-tts-nano', 'mossttsnano'],
   ['openmoss', 'mossttsnano'],
+  ['moss-mlx', 'mossttsnano_mlx'],
+  ['moss mlx', 'mossttsnano_mlx'],
+  ['mossttsnano-mlx', 'mossttsnano_mlx'],
+  ['mossttsnano_mlx', 'mossttsnano_mlx'],
+  ['openmoss-mlx', 'mossttsnano_mlx'],
 ]);
 
 export function normalizeTtsBackendName(value, fallback = 'edge') {
@@ -188,6 +194,23 @@ export function buildTtsSettings(env = process.env, root = process.cwd()) {
       seed: env.MOSSTTSNANO_SEED || '',
       timeoutMs: positiveNumber(env.MOSSTTSNANO_TIMEOUT_MS, 120000),
       useForProgress: boolEnv(env.MOSSTTSNANO_PROGRESS, false),
+    },
+    mossttsnano_mlx: {
+      python: env.MOSSTTSNANO_MLX_PYTHON || env.MOSSTTSNANO_COMMAND || './.venv-mossttsnano/bin/python',
+      script: resolveUnderRoot(root, env.MOSSTTSNANO_MLX_SCRIPT, path.join('integrations', 'mossttsnano_mlx', 'synth.py')),
+      torchInferScript: resolveUnderRoot(root, env.MOSSTTSNANO_SCRIPT, path.join('vendor', 'MOSS-TTS-Nano', 'infer.py')),
+      checkpoint: env.MOSSTTSNANO_CHECKPOINT || env.MOSS_TTS_NANO_CHECKPOINT || 'OpenMOSS-Team/MOSS-TTS-Nano',
+      audioTokenizer: env.MOSSTTSNANO_AUDIO_TOKENIZER || env.MOSS_TTS_NANO_AUDIO_TOKENIZER || 'OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano',
+      mode: env.MOSSTTSNANO_MODE || 'voice_clone',
+      language: env.MOSSTTSNANO_LANGUAGE || env.VOICE_LANGUAGE || 'ko',
+      torchDevice: env.MOSSTTSNANO_TORCH_DEVICE || env.MOSSTTSNANO_DEVICE || 'cpu',
+      torchDtype: env.MOSSTTSNANO_TORCH_DTYPE || env.MOSSTTSNANO_DTYPE || 'float32',
+      promptAudio: env.MOSSTTSNANO_PROMPT_AUDIO ? resolveUnderRoot(root, env.MOSSTTSNANO_PROMPT_AUDIO, '') : '',
+      promptText: env.MOSSTTSNANO_PROMPT_TEXT || '',
+      maxNewFrames: positiveNumber(env.MOSSTTSNANO_MAX_NEW_FRAMES, 120),
+      seed: env.MOSSTTSNANO_SEED || '',
+      timeoutMs: positiveNumber(env.MOSSTTSNANO_MLX_TIMEOUT_MS || env.MOSSTTSNANO_TIMEOUT_MS, 180000),
+      useForProgress: boolEnv(env.MOSSTTSNANO_MLX_PROGRESS || env.MOSSTTSNANO_PROGRESS, false),
     },
   };
 }

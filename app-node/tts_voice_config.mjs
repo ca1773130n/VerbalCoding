@@ -76,6 +76,13 @@ export const DEFAULT_TTS_VOICE_CONFIG = {
         continuation: { label: 'MOSS-TTS-Nano continuation/default', language: 'ko', voice: '' },
       },
     },
+    mossttsnano_mlx: {
+      currentVoiceType: 'prompt_reference',
+      voices: {
+        prompt_reference: { label: 'MOSS-TTS-Nano MLX hybrid prompt reference', language: 'ko', voice: 'voice-samples/user-reference.wav' },
+        continuation: { label: 'MOSS-TTS-Nano MLX hybrid continuation/default', language: 'ko', voice: '' },
+      },
+    },
     neuttsair: {
       currentVoiceType: 'cloned_reference',
       voices: {
@@ -116,6 +123,11 @@ function normalizeBackend(value, config) {
     ['mossnano', 'mossttsnano'],
     ['moss-tts-nano', 'mossttsnano'],
     ['openmoss', 'mossttsnano'],
+    ['moss-mlx', 'mossttsnano_mlx'],
+    ['moss mlx', 'mossttsnano_mlx'],
+    ['mossttsnano-mlx', 'mossttsnano_mlx'],
+    ['mossttsnano_mlx', 'mossttsnano_mlx'],
+    ['openmoss-mlx', 'mossttsnano_mlx'],
     ['neutts', 'neuttsair'],
     ['neutts-air', 'neuttsair'],
     ['neutts air', 'neuttsair'],
@@ -185,6 +197,13 @@ export function applyTtsVoiceSelectionToEnv(env = {}, selection) {
     if (selection.voice?.voice) next.FIREREDTTS2_PROMPT_AUDIO = selection.voice.voice;
   }
   if (selection.backend === 'mossttsnano') {
+    if (selection.voiceType === 'continuation') next.MOSSTTSNANO_MODE = 'continuation';
+    else {
+      next.MOSSTTSNANO_MODE = 'voice_clone';
+      if (selection.voice?.voice) next.MOSSTTSNANO_PROMPT_AUDIO = selection.voice.voice;
+    }
+  }
+  if (selection.backend === 'mossttsnano_mlx') {
     if (selection.voiceType === 'continuation') next.MOSSTTSNANO_MODE = 'continuation';
     else {
       next.MOSSTTSNANO_MODE = 'voice_clone';

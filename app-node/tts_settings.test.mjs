@@ -247,6 +247,45 @@ test('buildTtsSettings normalizes MOSS-TTS-Nano settings', () => {
   assert.equal(settings.mossttsnano.useForProgress, true);
 });
 
+test('buildTtsSettings normalizes MOSS-TTS-Nano MLX hybrid settings', () => {
+  const root = '/project';
+  const settings = buildTtsSettings({
+    TTS_BACKEND: 'moss-mlx',
+    MOSSTTSNANO_COMMAND: 'python3',
+    MOSSTTSNANO_MLX_SCRIPT: './integrations/mossttsnano_mlx/synth.py',
+    MOSSTTSNANO_SCRIPT: './vendor/MOSS-TTS-Nano/infer.py',
+    MOSSTTSNANO_CHECKPOINT: './models/MOSS-TTS-Nano',
+    MOSSTTSNANO_AUDIO_TOKENIZER: './models/MOSS-Audio-Tokenizer-Nano',
+    MOSSTTSNANO_MODE: 'voice_clone',
+    MOSSTTSNANO_LANGUAGE: 'ko',
+    MOSSTTSNANO_TORCH_DEVICE: 'cpu',
+    MOSSTTSNANO_TORCH_DTYPE: 'float32',
+    MOSSTTSNANO_PROMPT_AUDIO: './voice-samples/me.wav',
+    MOSSTTSNANO_PROMPT_TEXT: '테스트 기준 음성입니다.',
+    MOSSTTSNANO_MAX_NEW_FRAMES: '120',
+    MOSSTTSNANO_SEED: '7',
+    MOSSTTSNANO_MLX_TIMEOUT_MS: '180000',
+    MOSSTTSNANO_MLX_PROGRESS: '0',
+  }, root);
+
+  assert.equal(settings.backend, 'mossttsnano_mlx');
+  assert.equal(settings.mossttsnano_mlx.python, 'python3');
+  assert.equal(settings.mossttsnano_mlx.script, path.join(root, 'integrations', 'mossttsnano_mlx', 'synth.py'));
+  assert.equal(settings.mossttsnano_mlx.torchInferScript, path.join(root, 'vendor', 'MOSS-TTS-Nano', 'infer.py'));
+  assert.equal(settings.mossttsnano_mlx.checkpoint, './models/MOSS-TTS-Nano');
+  assert.equal(settings.mossttsnano_mlx.audioTokenizer, './models/MOSS-Audio-Tokenizer-Nano');
+  assert.equal(settings.mossttsnano_mlx.mode, 'voice_clone');
+  assert.equal(settings.mossttsnano_mlx.language, 'ko');
+  assert.equal(settings.mossttsnano_mlx.torchDevice, 'cpu');
+  assert.equal(settings.mossttsnano_mlx.torchDtype, 'float32');
+  assert.equal(settings.mossttsnano_mlx.promptAudio, path.join(root, 'voice-samples', 'me.wav'));
+  assert.equal(settings.mossttsnano_mlx.promptText, '테스트 기준 음성입니다.');
+  assert.equal(settings.mossttsnano_mlx.maxNewFrames, 120);
+  assert.equal(settings.mossttsnano_mlx.seed, '7');
+  assert.equal(settings.mossttsnano_mlx.timeoutMs, 180000);
+  assert.equal(settings.mossttsnano_mlx.useForProgress, false);
+});
+
 test('buildTtsSettings normalizes NeuTTS Air settings and aliases neutts air', () => {
   const root = '/project';
   const settings = buildTtsSettings({

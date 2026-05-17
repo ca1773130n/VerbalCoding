@@ -1,5 +1,5 @@
 {
-  "currentBackend": "mossttsnano",
+  "currentBackend": "mossttsnano_mlx",
   "currentVoiceType": "prompt_reference",
   "backends": {
     "edge": {
@@ -117,6 +117,16 @@
         }
       }
     },
+    "neuttsair": {
+      "currentVoiceType": "cloned_reference",
+      "voices": {
+        "cloned_reference": {
+          "label": "NeuTTS Air reference sample",
+          "language": "en",
+          "voice": "voice-samples/user-reference.wav"
+        }
+      }
+    },
     "fireredtts2": {
       "currentVoiceType": "prompt_reference",
       "voices": {
@@ -147,13 +157,18 @@
         }
       }
     },
-    "neuttsair": {
-      "currentVoiceType": "cloned_reference",
+    "mossttsnano_mlx": {
+      "currentVoiceType": "prompt_reference",
       "voices": {
-        "cloned_reference": {
-          "label": "NeuTTS Air reference sample",
-          "language": "en",
+        "prompt_reference": {
+          "label": "MOSS-TTS-Nano MLX hybrid prompt reference",
+          "language": "ko",
           "voice": "voice-samples/user-reference.wav"
+        },
+        "continuation": {
+          "label": "MOSS-TTS-Nano MLX hybrid continuation/default",
+          "language": "ko",
+          "voice": ""
         }
       }
     }
