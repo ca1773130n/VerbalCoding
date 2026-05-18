@@ -1,5 +1,10 @@
-const PLAN_RE = /PLAN_BEGIN\s*\n([\s\S]*?)\nPLAN_END/;
-const DECISIONS_RE = /DECISIONS_BEGIN\s*\n([\s\S]*?)\nDECISIONS_END/;
+const PLAN_RE = /PLAN_BEGIN\s*\n([\s\S]*?)\nPLAN_END/g;
+const DECISIONS_RE = /DECISIONS_BEGIN\s*\n([\s\S]*?)\nDECISIONS_END/g;
+
+function lastMatch(text, regex) {
+  const matches = Array.from(String(text || '').matchAll(regex));
+  return matches.length ? matches[matches.length - 1] : null;
+}
 
 const SKIP_EN = /\bskip\s+step\s+(\d+)\b/i;
 const SKIP_KO = /step\s*(\d+)\s*건너뛰/i;
@@ -13,7 +18,7 @@ const ENTER_EN = /\b(plan\s+(it\s+)?first|make\s+a\s+plan)\b/i;
 const ENTER_KO = /(먼저\s*계획|계획\s*먼저|계획부터)/i;
 
 export function parsePlanOutput(text) {
-  const planMatch = String(text || '').match(PLAN_RE);
+  const planMatch = lastMatch(text, PLAN_RE);
   if (!planMatch) return { steps: [], decisions: [] };
   const steps = planMatch[1]
     .split(/\r?\n/)
@@ -25,7 +30,7 @@ export function parsePlanOutput(text) {
 }
 
 export function parseDecisions(text) {
-  const match = String(text || '').match(DECISIONS_RE);
+  const match = lastMatch(text, DECISIONS_RE);
   if (!match) return [];
   const out = [];
   let counter = 1;
@@ -48,6 +53,20 @@ const ORDINAL_EN = { first: 1, second: 2, third: 3, fourth: 4, fifth: 5, '1st': 
 const ORDINAL_KO = { '첫': 1, '첫번째': 1, '첫 번째': 1, '두번째': 2, '두 번째': 2, '세번째': 3, '세 번째': 3, '네번째': 4 };
 const DEFER_RE = /\b(either|whatever|you\s+(decide|pick|choose)|agent\s+(decides|picks)|up\s+to\s+you|no\s+preference)\b|아무거나|네가\s*골라|마음대로|상관없|알아서/i;
 
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function optionMatchesText(text, optionLower) {
+  if (!optionLower || optionLower.length < 2) return false;
+  const asciiOnly = /^[\x00-\x7f]+$/.test(optionLower);
+  if (asciiOnly) {
+    const pattern = new RegExp(`(^|\\W)${escapeRegex(optionLower)}(\\W|$)`, 'i');
+    return pattern.test(text);
+  }
+  return text.includes(optionLower);
+}
+
 export function parseDecisionAnswer(utterance, decision, language = 'en') {
   const text = String(utterance || '').trim();
   if (!text || !decision || !Array.isArray(decision.options) || decision.options.length === 0) {
@@ -57,7 +76,7 @@ export function parseDecisionAnswer(utterance, decision, language = 'en') {
   if (DEFER_RE.test(text)) return { type: 'auto', choice: null };
   for (const opt of decision.options) {
     const optLower = String(opt).toLowerCase();
-    if (lower.includes(optLower) && optLower.length >= 2) return { type: 'option', choice: opt };
+    if (optionMatchesText(lower, optLower)) return { type: 'option', choice: opt };
   }
   const numMatch = text.match(/\b(\d+)\b/);
   if (numMatch) {
@@ -120,11 +139,18 @@ export function applyCommand(steps, cmd) {
     return steps.map(s => (s.id === cmd.index ? { ...s, status: 'skipped' } : s));
   }
   if (cmd.type === 'insert') {
+    const usedIds = new Set(steps.map(s => s.id));
+    let fraction = 0.5;
+    let proposed = cmd.after + fraction;
+    while (usedIds.has(proposed)) {
+      fraction /= 2;
+      proposed = cmd.after + fraction;
+    }
     const out = [];
     for (const s of steps) {
       out.push(s);
       if (s.id === cmd.after) {
-        out.push({ id: s.id + 0.5, text: cmd.text, status: 'added' });
+        out.push({ id: proposed, text: cmd.text, status: 'added' });
       }
     }
     return out;

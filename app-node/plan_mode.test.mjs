@@ -77,6 +77,15 @@ test('parseDecisionAnswer returns unknown on no match', () => {
   assert.equal(parseDecisionAnswer('hello world', decision).type, 'unknown');
 });
 
+test('parseDecisionAnswer requires word boundaries for ASCII options', () => {
+  const decision = { slot: 'x', question: 'q', options: ['go', 'wait'] };
+  assert.equal(parseDecisionAnswer('go ahead', decision).choice, 'go');
+  // "go" should not match inside "ago" or "google"
+  const trickier = { slot: 'x', question: 'q', options: ['go', 'wait'] };
+  assert.equal(parseDecisionAnswer('a long time ago', trickier).type, 'unknown');
+  assert.equal(parseDecisionAnswer('let me google that', trickier).type, 'unknown');
+});
+
 test('renderDecisionPrompt formats question with numbered options', () => {
   const decision = { slot: 'x', question: 'Pick auth?', options: ['google', 'github'] };
   assert.match(renderDecisionPrompt(decision, 'en'), /Pick auth\?\s+Options:\s+1\) google\s+2\) github/);
@@ -130,6 +139,37 @@ test('applyCommand insert places new step after target', () => {
   assert.equal(after[1].text, 'extra');
   assert.equal(after[1].status, 'added');
   assert.equal(after[2].text, 'b');
+});
+
+test('applyCommand two inserts after the same step get unique ids', () => {
+  let steps = [{ id: 1, text: 'a', status: 'pending' }, { id: 2, text: 'b', status: 'pending' }];
+  steps = applyCommand(steps, { type: 'insert', after: 1, text: 'first extra' });
+  steps = applyCommand(steps, { type: 'insert', after: 1, text: 'second extra' });
+  const ids = steps.map(s => s.id);
+  assert.equal(new Set(ids).size, ids.length, `expected unique ids, got ${ids.join(',')}`);
+});
+
+test('parsePlanOutput picks the last PLAN/DECISIONS block when duplicates exist', () => {
+  const text = [
+    'PLAN_BEGIN',
+    '1. example step',
+    'PLAN_END',
+    'DECISIONS_BEGIN',
+    '- example_slot | Pick? | a | b',
+    'DECISIONS_END',
+    '',
+    'PLAN_BEGIN',
+    '1. real step one',
+    '2. real step two',
+    'PLAN_END',
+    'DECISIONS_BEGIN',
+    '- real_slot | Real question? | yes | no',
+    'DECISIONS_END',
+  ].join('\n');
+  const out = parsePlanOutput(text);
+  assert.deepEqual(out.steps.map(s => s.text), ['real step one', 'real step two']);
+  assert.equal(out.decisions.length, 1);
+  assert.equal(out.decisions[0].slot, 'real_slot');
 });
 
 test('renderFinalPlan skips skipped steps and renumbers', () => {
