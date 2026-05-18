@@ -7,12 +7,14 @@ export function shouldRouteDiscordTextToAgent({ content = '', channelId = '', tr
   return String(channelId || '') === target;
 }
 
-export function appendRecentDiscordText(state, { channelId = '', authorLabel = 'user', content = '', now = Date.now(), maxEntries = 12 } = {}) {
+export function appendRecentDiscordText(state, { channelId = '', authorLabel = 'user', content = '', now = Date.now(), maxEntries = 12, messageId = '' } = {}) {
   const id = String(channelId || '').trim();
   const text = String(content || '').trim();
   if (!id || !text || text.startsWith('!')) return;
   const entries = state.get(id) || [];
-  entries.push({ at: Number(now) || Date.now(), authorLabel: String(authorLabel || 'user'), content: text.slice(0, 500) });
+  const mid = String(messageId || '').trim();
+  if (mid && entries.some(entry => entry.messageId === mid)) return;
+  entries.push({ at: Number(now) || Date.now(), authorLabel: String(authorLabel || 'user'), content: text.slice(0, 500), messageId: mid || undefined });
   state.set(id, entries.slice(-maxEntries));
 }
 
