@@ -43,6 +43,13 @@ import {
   renderDecisionPrompt,
   renderResolvedDecisions,
 } from './plan_mode.mjs';
+import {
+  parseAgentRoutingCommand,
+  renderAgentPrefix,
+  buildCrossAgentPrompt,
+  isAgentRoutingDecision,
+  buildFallbackDecision,
+} from './agent_routing.mjs';
 import { createNotifier, buildDiscordDeepLink } from './notify.mjs';
 import { progressCategory, summarizeProgressEvents, formatProgressMessage } from './progress_speech.mjs';
 import { buildTtsSettings } from './tts_settings.mjs';
@@ -174,7 +181,7 @@ function rebuildTtsRuntimeSettings(selection = null) {
   settings.tts = buildTtsSettings(process.env, ROOT);
   if (selection?.backend === 'edge' && selection.voice?.voice) settings.tts.edge.voice = selection.voice.voice;
   try { ttsBackend?.close?.(); } catch (e) { warn('tts backend close failed', e?.message || e); }
-  ttsBackend = createTtsBackend(settings.tts, { execFileAsync, spawn, log, warn, voiceProvider: () => settings.tts.edge.voice });
+  ttsBackend = createTtsBackend(settings.tts, { execFileAsync, spawn, log, warn, onFallback: ttsFallbackNotice, voiceProvider: () => settings.tts.edge.voice });
   return settings.tts;
 }
 function reloadRuntimeLanguageFromEnv() {
@@ -217,7 +224,22 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
   partials: [Partials.Channel],
 });
-let ttsBackend = createTtsBackend(settings.tts, { execFileAsync, spawn, log, warn, voiceProvider: () => settings.tts.edge.voice });
+const announcedTtsFallbacks = new Set();
+function ttsFallbackNotice({ backend } = {}) {
+  if (!backend || backend === 'edge') return;
+  if (announcedTtsFallbacks.has(backend)) return;
+  announcedTtsFallbacks.add(backend);
+  const en = /^en/i.test(String(settings.voiceLanguage || ''));
+  const msg = en
+    ? `${backend} synthesis failed; using Edge for the rest of this session.`
+    : `${backend} 음성 생성에 실패해서 이번 세션은 Edge로 진행할게.`;
+  void sendText(`⚠️ ${msg}`).catch(e => warn('tts fallback notice send failed', e?.message || e));
+  queueMicrotask(() => {
+    speakText(msg, null, null, { mirrorText: false })
+      .catch(e => warn('tts fallback notice speak failed', e?.message || e));
+  });
+}
+let ttsBackend = createTtsBackend(settings.tts, { execFileAsync, spawn, log, warn, onFallback: ttsFallbackNotice, voiceProvider: () => settings.tts.edge.voice });
 const voiceCloneCapture = createVoiceCloneCaptureState({ defaultTargetPath: settings.tts.openvoice.refAudio });
 
 let connection = null;
@@ -398,6 +420,18 @@ async function dispatchPlanModeUtterance(prompt, signal) {
       pendingDecisionIndex: existing.pendingDecisionIndex + 1,
     };
     planStates.set(key, next);
+    if (isAgentRoutingDecision(decision) && answer.choice) {
+      const candidate = adapterForBackend(answer.choice, resolveProjectSessionForChannel(key));
+      if (candidate) {
+        activeRouting = { backend: answer.choice, sticky: true };
+      } else {
+        const msg = /^en/i.test(String(language || ''))
+          ? `${answer.choice} is not installed; staying with ${settings.agent.label}.`
+          : `${answer.choice}이(가) 설치되어 있지 않아. ${settings.agent.label}로 진행할게.`;
+        await sendText(`⚠️ ${msg}`);
+        await speakText(msg, signal, null);
+      }
+    }
     if (next.pendingDecisionIndex < next.decisions.length) {
       await askNextDecision(next, signal);
     } else {
@@ -422,6 +456,7 @@ async function dispatchPlanModeUtterance(prompt, signal) {
       return { handled: true };
     }
     if (cmd.type === 'approve') {
+      lastResolvedDecisions = existing.resolvedDecisions || {};
       const finalPlan = renderFinalPlan(existing.steps);
       const resolvedLine = renderResolvedDecisions(existing.resolvedDecisions, language);
       const promptToRun = [
@@ -560,6 +595,48 @@ function adapterForProjectSession(session) {
 }
 function resolveProjectSessionForChannel(channelId) {
   return projectSessionForChannel(projectSessionsState, channelId) || null;
+}
+
+const agentAdaptersByBackend = new Map();
+let activeRouting = { backend: settings.agent.backend, sticky: false };
+let lastUsedBackend = settings.agent.backend;
+let lastResolvedDecisions = {};
+let pendingFallbackPrompt = null;
+const recentUtterances = [];
+function recordUtterance(text) {
+  if (!text) return;
+  recentUtterances.push(text);
+  while (recentUtterances.length > 4) recentUtterances.shift();
+}
+function adapterForBackend(backend, session = null) {
+  const normalized = String(backend || '').toLowerCase();
+  if (!normalized || normalized === settings.agent.backend) {
+    return session ? adapterForProjectSession(session) : agentAdapter;
+  }
+  const key = `${normalized}::${session ? (session.slug || session.name) : '_default'}`;
+  if (agentAdaptersByBackend.has(key)) return agentAdaptersByBackend.get(key);
+  let routedSettings;
+  try {
+    routedSettings = buildAgentSettings({
+      ROOT: settings.agent.cwd || process.cwd(),
+      env: { ...process.env, AGENT_BACKEND: normalized, AGENT_LABEL: '', AGENT_COMMAND: '' },
+    });
+  } catch (e) {
+    warn(`adapterForBackend: cannot build settings for ${normalized}: ${e?.message || e}`);
+    return null;
+  }
+  if (session) {
+    routedSettings = {
+      ...routedSettings,
+      label: `${routedSettings.label} · ${session.name}`,
+      sessionFile: session.sessionFile,
+      cwd: session.workdir || routedSettings.cwd,
+      projectContext: projectSessionContextText(session),
+    };
+  }
+  const adapter = createBridgeAgentAdapter(routedSettings);
+  agentAdaptersByBackend.set(key, adapter);
+  return adapter;
 }
 function saveProjectSessionsState() {
   saveProjectSessions(settings.projectSessionsPath, projectSessionsState);
@@ -1007,7 +1084,7 @@ async function refreshTtsRuntimeConfig() {
     const rebuilt = buildTtsSettings(process.env, ROOT);
     Object.assign(settings.tts, rebuilt);
     try { ttsBackend?.close?.(); } catch (e) { warn('tts backend close failed', e?.message || e); }
-    ttsBackend = createTtsBackend(settings.tts, { execFileAsync, spawn, log, warn, voiceProvider: () => settings.tts.edge.voice });
+    ttsBackend = createTtsBackend(settings.tts, { execFileAsync, spawn, log, warn, onFallback: ttsFallbackNotice, voiceProvider: () => settings.tts.edge.voice });
     log('tts backend reloaded from voice config', settings.tts.backend, 'voiceType', selection.voiceType);
   }
   return selection;
@@ -1574,7 +1651,7 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     await sendText(formatSttResultMessage(settings.voiceLanguage, userId, text));
     if (!acceptsWake(text)) { await sendText(formatWakeRejectedMessage(settings.voiceLanguage)); metricsTurn?.finish({ status: 'wake_rejected' }); return; }
 
-    const prompt = stripWake(text);
+    let prompt = stripWake(text);
     if (await handleLanguageCommand(prompt, signal)) {
       metricsTurn?.finish({ status: 'language_command' });
       return;
@@ -1607,6 +1684,63 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
         return;
       }
     }
+    if (pendingFallbackPrompt) {
+      const decision = buildFallbackDecision(
+        pendingFallbackPrompt.requestedBackend || 'agent',
+        settings.agent.label,
+        settings.voiceLanguage,
+      );
+      const fallbackAnswer = parseDecisionAnswer(prompt, decision, settings.voiceLanguage);
+      if (fallbackAnswer.type === 'unknown') {
+        const msg = /^en/i.test(String(settings.voiceLanguage || ''))
+          ? 'Please answer yes or no.'
+          : '예 또는 아니오로 대답해줘.';
+        await sendText(`⚠️ ${msg}`);
+        await speakText(msg, signal, null);
+        metricsTurn?.finish({ status: 'fallback_pending' });
+        return;
+      }
+      const accepted = fallbackAnswer.type === 'auto' || fallbackAnswer.choice === 'yes';
+      const previous = pendingFallbackPrompt;
+      pendingFallbackPrompt = null;
+      if (!accepted) {
+        const msg = /^en/i.test(String(settings.voiceLanguage || '')) ? 'Cancelled.' : '취소했어.';
+        await sendText(`❎ ${msg}`);
+        await speakText(msg, signal, null);
+        metricsTurn?.finish({ status: 'fallback_declined' });
+        return;
+      }
+      activeRouting = { backend: settings.agent.backend, sticky: false };
+      prompt = previous.originalPrompt;
+    }
+
+    const routing = parseAgentRoutingCommand(prompt, settings.voiceLanguage);
+    if (routing.type === 'restore') {
+      activeRouting = { backend: settings.agent.backend, sticky: false };
+      const msg = /^en/i.test(String(settings.voiceLanguage || ''))
+        ? `Back to the default agent (${settings.agent.label}).`
+        : `기본 에이전트로 돌아갈게 (${settings.agent.label}).`;
+      await sendText(`↩ ${msg}`);
+      await speakText(msg, signal, null);
+      metricsTurn?.finish({ status: 'routing_restore' });
+      return;
+    }
+    if (routing.type === 'route') {
+      const candidate = adapterForBackend(routing.backend, session);
+      if (!candidate) {
+        const msg = /^en/i.test(String(settings.voiceLanguage || ''))
+          ? `${routing.backend} is not installed. Want me to use ${settings.agent.label} instead?`
+          : `${routing.backend}이(가) 설치되어 있지 않아. ${settings.agent.label}로 대신 진행할까?`;
+        await sendText(`⚠️ ${msg}`);
+        await speakText(msg, signal, null);
+        pendingFallbackPrompt = { requestedBackend: routing.backend, originalPrompt: prompt };
+        metricsTurn?.finish({ status: 'routing_fallback_pending' });
+        return;
+      }
+      activeRouting = { backend: routing.backend, sticky: routing.sticky };
+    }
+    recordUtterance(prompt);
+
     let promptForAgent = prompt;
     try {
       const planOutcome = await dispatchPlanModeUtterance(prompt, signal);
@@ -1618,7 +1752,22 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     } catch (e) {
       warn('plan mode dispatch failed', e?.stack || e);
     }
-    const selectedAgentAdapter = adapterForProjectSession(session);
+    const routedBackend = activeRouting.backend;
+    const selectedAgentAdapter = adapterForBackend(routedBackend, session) || adapterForProjectSession(session);
+    const isHandoff = lastUsedBackend !== routedBackend;
+    const ttsPrefix = isHandoff ? renderAgentPrefix(routedBackend, settings.voiceLanguage) : '';
+    if (isHandoff) {
+      promptForAgent = buildCrossAgentPrompt({
+        prompt: promptForAgent,
+        fromBackend: lastUsedBackend,
+        toBackend: routedBackend,
+        resolvedDecisions: lastResolvedDecisions || {},
+        priorUtterances: recentUtterances.slice(0, -1),
+        language: settings.voiceLanguage,
+      });
+    }
+    lastUsedBackend = routedBackend;
+    if (!activeRouting.sticky) activeRouting = { backend: settings.agent.backend, sticky: false };
     const projectContext = projectSessionContextText(session);
     const recentDiscordContext = formatRecentDiscordContext(recentDiscordTextByChannel, {
       channelId: activeTranscriptChannelId,
@@ -1689,7 +1838,8 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     if (interruptedTurns.has(turnId) || signal.aborted) { metricsTurn?.finish({ status: 'aborted_after_agent' }); return; }
 
     log('Agent answer', selectedAgentAdapter.label, answer.slice(0, 200));
-    const spokenAnswer = spokenResultOnly(prompt, answer, settings.voiceLanguage);
+    const spokenAnswerCore = spokenResultOnly(prompt, answer, settings.voiceLanguage);
+    const spokenAnswer = ttsPrefix ? `${ttsPrefix}${spokenAnswerCore}` : spokenAnswerCore;
     const fullAnswerText = `${agentAnswerHeader(settings.voiceLanguage, selectedAgentAdapter.label)}\n${answer || emptyAgentAnswer(settings.voiceLanguage)}`;
     log('send agent answer text', 'chars', fullAnswerText.length);
     const answerTextDelivered = await sendText(fullAnswerText);
