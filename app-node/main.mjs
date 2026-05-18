@@ -173,6 +173,7 @@ function applyVoiceConfigToProcessEnv(config = ensureTtsVoiceConfig()) {
 function rebuildTtsRuntimeSettings(selection = null) {
   settings.tts = buildTtsSettings(process.env, ROOT);
   if (selection?.backend === 'edge' && selection.voice?.voice) settings.tts.edge.voice = selection.voice.voice;
+  try { ttsBackend?.close?.(); } catch (e) { warn('tts backend close failed', e?.message || e); }
   ttsBackend = createTtsBackend(settings.tts, { execFileAsync, spawn, log, warn, voiceProvider: () => settings.tts.edge.voice });
   return settings.tts;
 }
@@ -1005,6 +1006,7 @@ async function refreshTtsRuntimeConfig() {
   if (previousBackend !== settings.tts.backend) {
     const rebuilt = buildTtsSettings(process.env, ROOT);
     Object.assign(settings.tts, rebuilt);
+    try { ttsBackend?.close?.(); } catch (e) { warn('tts backend close failed', e?.message || e); }
     ttsBackend = createTtsBackend(settings.tts, { execFileAsync, spawn, log, warn, voiceProvider: () => settings.tts.edge.voice });
     log('tts backend reloaded from voice config', settings.tts.backend, 'voiceType', selection.voiceType);
   }
@@ -2213,6 +2215,7 @@ async function gracefulShutdown(signalName) {
   } catch (e) {
     warn('shutdown voice notice failed', e?.stack || e);
   }
+  try { ttsBackend?.close?.(); } catch (e) { warn('tts backend close failed', e?.message || e); }
   try { connection?.destroy(); } catch {}
   try { client.destroy(); } catch {}
   process.exit(0);
