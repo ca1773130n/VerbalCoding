@@ -57,13 +57,13 @@ def main() -> int:
     sys.path.insert(0, str(root))
 
     try:
+        import numpy as np
         import mlx.core as mx
         import torch
         import torchaudio
         import soundfile as sf
         from transformers import AutoTokenizer
         from fireredtts2.codec import RedCodecInfer
-        from fireredtts2.llm.utils import Segment
         from integrations.fireredtts2.mlx_llm import load_firered_mlx_from_state_dict
     except Exception as exc:
         print(f"FireRedTTS-2 MLX dependencies missing: {exc}", file=sys.stderr, flush=True)
