@@ -83,12 +83,6 @@ export const DEFAULT_TTS_VOICE_CONFIG = {
         continuation: { label: 'MOSS-TTS-Nano MLX hybrid continuation/default', language: 'ko', voice: '' },
       },
     },
-    neuttsair: {
-      currentVoiceType: 'cloned_reference',
-      voices: {
-        cloned_reference: { label: 'NeuTTS Air reference sample', language: 'en', voice: 'voice-samples/user-reference.wav' },
-      },
-    },
   },
 };
 
@@ -112,8 +106,10 @@ function normalizeBackend(value, config) {
     ['mlx-audio', 'mlxaudio'],
     ['neutts', 'neuttsair'],
     ['neutts-air', 'neuttsair'],
+    ['neutts air', 'neuttsair'],
     ['neuttsair', 'neuttsair'],
     ['neu-tts-air', 'neuttsair'],
+    ['neu tts air', 'neuttsair'],
     ['firered', 'fireredtts2'],
     ['fireredtts', 'fireredtts2'],
     ['firered-tts-2', 'fireredtts2'],
@@ -128,12 +124,6 @@ function normalizeBackend(value, config) {
     ['mossttsnano-mlx', 'mossttsnano_mlx'],
     ['mossttsnano_mlx', 'mossttsnano_mlx'],
     ['openmoss-mlx', 'mossttsnano_mlx'],
-    ['neutts', 'neuttsair'],
-    ['neutts-air', 'neuttsair'],
-    ['neutts air', 'neuttsair'],
-    ['neuttsair', 'neuttsair'],
-    ['neu-tts-air', 'neuttsair'],
-    ['neu tts air', 'neuttsair'],
   ]);
   const normalized = aliases.get(key) || key;
   return config.backends?.[normalized] ? normalized : 'edge';
@@ -209,9 +199,6 @@ export function applyTtsVoiceSelectionToEnv(env = {}, selection) {
       next.MOSSTTSNANO_MODE = 'voice_clone';
       if (selection.voice?.voice) next.MOSSTTSNANO_PROMPT_AUDIO = selection.voice.voice;
     }
-  }
-  if (selection.backend === 'neuttsair') {
-    if (selection.voice?.voice) next.NEUTTSAIR_REF_AUDIO = selection.voice.voice;
   }
   if (selection.voice?.language) next.VOICE_LANGUAGE = selection.voice.language;
   return next;
