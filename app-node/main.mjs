@@ -18,7 +18,7 @@ import {
 } from '@discordjs/voice';
 import prism from 'prism-media';
 import wav from 'wav';
-import { buildAgentSettings, createAgentAdapter, isPatchLikeOutput } from './agent_adapters.mjs';
+import { buildAgentSettings, createAgentAdapter, isPatchLikeOutput, shellSplit } from './agent_adapters.mjs';
 import {
   appendJsonl,
   createLatencyTurn,
@@ -695,7 +695,7 @@ function adapterForBackend(backend, session = null) {
     warn(`adapterForBackend: cannot build settings for ${normalized}: ${e?.message || e}`);
     return null;
   }
-  const argv = String(routedSettings.command || '').trim().split(/\s+/);
+  const argv = shellSplit(String(routedSettings.command || ''));
   const binary = argv[0];
   if (binary && !commandIsInstalled(binary)) {
     warn(`adapterForBackend: ${normalized} binary not found on PATH: ${binary}`);
