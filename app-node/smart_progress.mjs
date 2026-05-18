@@ -23,7 +23,7 @@ export function createSmartProgressSummarizer({
   }
 
   async function summarize(events) {
-    const key = events.join('|');
+    const key = `${language}::${events.join('|')}`;
     const cached = cache.get(key);
     if (cached && Date.now() - cached.t < cacheMs) return cached.text;
     const ctl = new AbortController();
