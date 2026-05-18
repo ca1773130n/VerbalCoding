@@ -25,7 +25,8 @@ export function parsePlanOutput(text) {
     .map(line => line.match(/^\s*(\d+)\.\s*(.+)$/))
     .filter(Boolean)
     .map(m => ({ id: Number(m[1]), text: m[2].trim(), status: 'pending' }));
-  const decisions = parseDecisions(String(text || ''));
+  const afterPlan = String(text || '').slice(planMatch.index + planMatch[0].length);
+  const decisions = parseDecisions(afterPlan);
   return { steps, decisions };
 }
 

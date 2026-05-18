@@ -697,7 +697,7 @@ function adapterForBackend(backend, session = null) {
   let routedSettings;
   try {
     const scrubbed = { ...process.env };
-    for (const key of ['AGENT_BACKEND', 'AGENT_LABEL', 'AGENT_COMMAND', 'AGENT_SESSION_FILE', 'AGENT_PROJECT_CONTEXT', 'AGENT_WORKDIR', 'AGENT_CWD', 'HERMES_PROJECT_CONTEXT', 'HERMES_WORKDIR']) {
+    for (const key of ['AGENT_BACKEND', 'AGENT_LABEL', 'AGENT_COMMAND', 'AGENT_SESSION_FILE']) {
       delete scrubbed[key];
     }
     scrubbed.AGENT_BACKEND = normalized;

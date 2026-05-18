@@ -149,6 +149,21 @@ test('applyCommand two inserts after the same step get unique ids', () => {
   assert.equal(new Set(ids).size, ids.length, `expected unique ids, got ${ids.join(',')}`);
 });
 
+test('parsePlanOutput drops stale draft DECISIONS that precede the final PLAN', () => {
+  const text = [
+    'DECISIONS_BEGIN',
+    '- stale_slot | Old question? | a | b',
+    'DECISIONS_END',
+    '',
+    'PLAN_BEGIN',
+    '1. real step',
+    'PLAN_END',
+  ].join('\n');
+  const out = parsePlanOutput(text);
+  assert.deepEqual(out.steps.map(s => s.text), ['real step']);
+  assert.deepEqual(out.decisions, []);
+});
+
 test('parsePlanOutput picks the last PLAN/DECISIONS block when duplicates exist', () => {
   const text = [
     'PLAN_BEGIN',
