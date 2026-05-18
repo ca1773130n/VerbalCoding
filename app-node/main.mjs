@@ -662,6 +662,13 @@ function resetRoutingState(channelKey) {
   state.activeRouting = { backend: settings.agent.backend, sticky: false };
   state.pendingFallbackPrompt = null;
 }
+function clearTransientRouting(channelKey) {
+  const state = routingStateFor(channelKey);
+  state.pendingFallbackPrompt = null;
+  if (!state.activeRouting?.sticky) {
+    state.activeRouting = { backend: settings.agent.backend, sticky: false };
+  }
+}
 function invalidateBackendAdaptersForSession(sessionSlug) {
   if (!sessionSlug) return;
   for (const key of Array.from(agentAdaptersByBackend.keys())) {
@@ -1989,7 +1996,7 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
   } catch (e) {
     if (isAbortError(e) || interruptedTurns.has(turnId)) {
       log('turn aborted', userId, 'turn', turnId);
-      resetRoutingState(planChannelKey());
+      clearTransientRouting(planChannelKey());
       metricsTurn?.finish({ status: 'aborted' });
       return;
     }
