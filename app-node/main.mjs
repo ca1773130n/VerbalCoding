@@ -664,15 +664,26 @@ function invalidateBackendAdaptersForSession(sessionSlug) {
 const installedBinaryCache = new Map();
 function commandIsInstalled(binary) {
   if (!binary) return false;
-  if (binary.includes('/')) {
-    try { fs.accessSync(binary, fs.constants.X_OK); return true; } catch { return false; }
+  const isWindows = process.platform === 'win32';
+  const exts = isWindows
+    ? String(process.env.PATHEXT || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)
+    : [''];
+  function existsExecutable(candidate) {
+    try { fs.accessSync(candidate, fs.constants.X_OK); return true; } catch { return false; }
+  }
+  function existsAnyExt(candidate) {
+    if (existsExecutable(candidate)) return true;
+    if (isWindows && !/\.[^\\/.]+$/.test(candidate)) {
+      return exts.some(ext => existsExecutable(candidate + ext));
+    }
+    return false;
+  }
+  if (path.isAbsolute(binary) || binary.includes('/') || (isWindows && binary.includes('\\'))) {
+    return existsAnyExt(binary);
   }
   if (installedBinaryCache.has(binary)) return installedBinaryCache.get(binary);
   const pathEntries = String(process.env.PATH || '').split(path.delimiter).filter(Boolean);
-  const found = pathEntries.some(dir => {
-    try { fs.accessSync(path.join(dir, binary), fs.constants.X_OK); return true; }
-    catch { return false; }
-  });
+  const found = pathEntries.some(dir => existsAnyExt(path.join(dir, binary)));
   installedBinaryCache.set(binary, found);
   return found;
 }
