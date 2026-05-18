@@ -426,6 +426,8 @@ async function dispatchPlanModeUtterance(prompt, signal) {
     const controlCommand = parsePlanVoiceCommand(prompt, language);
     if (controlCommand.type === 'cancel') {
       planStates.delete(key);
+      resetRoutingState(key);
+      routingStateFor(key).lastResolvedDecisions = {};
       const msg = /^en/i.test(String(language || '')) ? 'Plan cancelled.' : '계획을 취소했어.';
       await sendText(`❎ ${msg}`);
       await speakText(msg, signal, null);
@@ -476,6 +478,7 @@ async function dispatchPlanModeUtterance(prompt, signal) {
     }
     if (cmd.type === 'cancel') {
       planStates.delete(key);
+      resetRoutingState(key);
       routingStateFor(key).lastResolvedDecisions = {};
       const msg = /^en/i.test(String(language || '')) ? 'Plan cancelled.' : '계획을 취소했어.';
       await sendText(`❎ ${msg}`);
@@ -1834,7 +1837,6 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
           : (en ? `Asking ${label} this turn.` : `이번 턴은 ${label}로 진행할게.`);
         await sendText(`↪ ${msg}`);
         await speakText(msg, signal, null);
-        routingState.lastUsedBackend = routing.backend;
         metricsTurn?.finish({ status: 'routing_only' });
         return;
       }
