@@ -40,16 +40,22 @@ test('cleanup runs after play', async () => {
   assert.deepEqual(cleaned, ['f-A.']);
 });
 
-test('synth error skips that sentence but continues', async () => {
+test('synth error skips that sentence but continues, and reports dropped count + onSynthError', async () => {
   const played = [];
+  const errors = [];
   const q = createStreamingTTSQueue({
     synth: async (t) => { if (t === 'A.') throw new Error('boom'); return `f-${t}`; },
     play: async (f) => { played.push(f); },
+    onSynthError: ev => errors.push(ev),
   });
   q.enqueue('A.');
   q.enqueue('B.');
   await q.drain();
   assert.deepEqual(played, ['f-B.']);
+  assert.equal(q.droppedCount, 1);
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0].text, 'A.');
+  assert.match(errors[0].error.message, /boom/);
 });
 
 test('throws when synth or play missing', () => {

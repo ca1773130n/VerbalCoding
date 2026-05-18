@@ -1,9 +1,10 @@
-export function createStreamingTTSQueue({ synth, play, signal, cleanup, log = () => {} } = {}) {
+export function createStreamingTTSQueue({ synth, play, signal, cleanup, log = () => {}, onSynthError = null } = {}) {
   if (typeof synth !== 'function') throw new Error('synth is required');
   if (typeof play !== 'function') throw new Error('play is required');
 
   const queue = [];
   let pumping = null;
+  let droppedCount = 0;
 
   async function pump() {
     while (queue.length && !signal?.aborted) {
@@ -13,6 +14,8 @@ export function createStreamingTTSQueue({ synth, play, signal, cleanup, log = ()
         file = await synth(text);
       } catch (e) {
         log('streaming tts synth failed', e?.message || e);
+        droppedCount += 1;
+        try { onSynthError?.({ text, error: e, droppedCount }); } catch {}
         continue;
       }
       if (!file) continue;
@@ -44,5 +47,6 @@ export function createStreamingTTSQueue({ synth, play, signal, cleanup, log = ()
       while (pumping) await pumping;
     },
     get size() { return queue.length; },
+    get droppedCount() { return droppedCount; },
   };
 }
