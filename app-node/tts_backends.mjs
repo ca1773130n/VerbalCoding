@@ -18,6 +18,11 @@ function execOptions(base, signal) {
   return signal ? { ...base, signal } : base;
 }
 
+export function notifyTtsFallback(deps, backend, error, kind) {
+  (deps.warn || (() => {}))(`${backend} failed; falling back to edge`, error?.message || error);
+  try { deps.onFallback?.({ backend, error, kind }); } catch {}
+}
+
 function openVoicePython(openvoice, existsSync = fs.existsSync) {
   const venvPython = path.join(openvoice.venv, 'bin', 'python');
   if (existsSync(venvPython)) return venvPython;
@@ -267,7 +272,7 @@ export function createOpenVoiceBackend(settings, deps = {}) {
         return validateOutput(out, fsApi);
       } catch (error) {
         fs.rm(out, { force: true }, () => {});
-        warn('openvoice failed; falling back to edge', error?.message || error);
+        notifyTtsFallback(deps, 'openvoice', error, kind);
         return edge.synthesize(text, { signal, kind });
       }
     },
@@ -312,7 +317,7 @@ export function createSpeechSwiftBackend(settings, deps = {}) {
         return validateOutput(out, fsApi);
       } catch (error) {
         fs.rm(out, { force: true }, () => {});
-        warn('speech-swift failed; falling back to edge', error?.message || error);
+        notifyTtsFallback(deps, 'speech-swift', error, kind);
         return edge.synthesize(text, { signal, kind });
       }
     },
@@ -350,7 +355,7 @@ export function createSupertonicBackend(settings, deps = {}) {
         return validateOutput(out, fsApi);
       } catch (error) {
         fs.rm(out, { force: true }, () => {});
-        warn('supertonic failed; falling back to edge', error?.message || error);
+        notifyTtsFallback(deps, 'supertonic', error, kind);
         return edge.synthesize(text, { signal, kind });
       }
     },
@@ -387,7 +392,7 @@ export function createOmniVoiceBackend(settings, deps = {}) {
         return validateOutput(out, fsApi);
       } catch (error) {
         fs.rm(out, { force: true }, () => {});
-        warn('omnivoice failed; falling back to edge', error?.message || error);
+        notifyTtsFallback(deps, 'omnivoice', error, kind);
         return edge.synthesize(text, { signal, kind });
       }
     },
@@ -424,7 +429,7 @@ export function createQwen3TtsBackend(settings, deps = {}) {
         return validateOutput(out, fsApi);
       } catch (error) {
         fs.rm(out, { force: true }, () => {});
-        warn('qwen3tts failed; falling back to edge', error?.message || error);
+        notifyTtsFallback(deps, 'qwen3tts', error, kind);
         return edge.synthesize(text, { signal, kind });
       }
     },
@@ -461,7 +466,7 @@ export function createMlxAudioBackend(settings, deps = {}) {
         return validateOutput(out, fsApi);
       } catch (error) {
         fs.rm(out, { force: true }, () => {});
-        warn('mlx-audio failed; falling back to edge', error?.message || error);
+        notifyTtsFallback(deps, 'mlxaudio', error, kind);
         return edge.synthesize(text, { signal, kind });
       }
     },
@@ -498,7 +503,7 @@ export function createNeuTtsAirBackend(settings, deps = {}) {
         return validateOutput(out, fsApi);
       } catch (error) {
         fs.rm(out, { force: true }, () => {});
-        warn('neuttsair failed; falling back to edge', error?.message || error);
+        notifyTtsFallback(deps, 'neuttsair', error, kind);
         return edge.synthesize(text, { signal, kind });
       }
     },
@@ -535,7 +540,7 @@ export function createFireRedTts2Backend(settings, deps = {}) {
         return validateOutput(out, fsApi);
       } catch (error) {
         fs.rm(out, { force: true }, () => {});
-        warn('fireredtts2 failed; falling back to edge', error?.message || error);
+        notifyTtsFallback(deps, 'fireredtts2', error, kind);
         return edge.synthesize(text, { signal, kind });
       }
     },
@@ -572,7 +577,7 @@ export function createMossTtsNanoBackend(settings, deps = {}) {
         return validateOutput(out, fsApi);
       } catch (error) {
         fs.rm(out, { force: true }, () => {});
-        warn('mossttsnano failed; falling back to edge', error?.message || error);
+        notifyTtsFallback(deps, 'mossttsnano', error, kind);
         return edge.synthesize(text, { signal, kind });
       }
     },
@@ -755,7 +760,7 @@ export function createMossTtsNanoMlxBackend(settings, deps = {}) {
         return validateOutput(out, fsApi);
       } catch (error) {
         fs.rm(out, { force: true }, () => {});
-        warn('mossttsnano_mlx failed; falling back to edge', error?.message || error);
+        notifyTtsFallback(deps, 'mossttsnano_mlx', error, kind);
         return edge.synthesize(text, { signal, kind });
       }
     },

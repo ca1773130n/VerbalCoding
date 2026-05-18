@@ -233,6 +233,29 @@ test('OpenVoice progress uses Edge fallback unless explicitly enabled', async ()
   assert.equal(calls[0].cmd, 'edge-tts');
 });
 
+test('createTtsBackend forwards backend label to onFallback when non-edge backend errors', async () => {
+  const settings = { ...baseSettings(), backend: 'openvoice' };
+  const events = [];
+  const backend = createTtsBackend(settings, {
+    tmpdir: '/tmp',
+    existsSync: () => true,
+    statSync: () => ({ size: 123 }),
+    warn: () => {},
+    onFallback: payload => events.push(payload),
+    execFileAsync: async cmd => {
+      if (cmd.includes('.venv-openvoice')) throw new Error('openvoice missing');
+    },
+  });
+
+  await backend.synthesize('first', { kind: 'final' });
+  await backend.synthesize('second', { kind: 'final' });
+
+  assert.equal(events.length, 2);
+  assert.equal(events[0].backend, 'openvoice');
+  assert.equal(events[0].kind, 'final');
+  assert.ok(events[0].error instanceof Error);
+});
+
 test('OpenVoice final synthesis falls back to Edge when wrapper fails', async () => {
   const calls = [];
   const settings = { ...baseSettings(), backend: 'openvoice' };
