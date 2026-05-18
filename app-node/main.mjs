@@ -662,7 +662,7 @@ function invalidateBackendAdaptersForSession(sessionSlug) {
   }
 }
 const installedBinaryCache = new Map();
-function commandIsInstalled(binary) {
+function commandIsInstalled(binary, { cwd = process.cwd() } = {}) {
   if (!binary) return false;
   const isWindows = process.platform === 'win32';
   const exts = isWindows
@@ -678,9 +678,9 @@ function commandIsInstalled(binary) {
     }
     return false;
   }
-  if (path.isAbsolute(binary) || binary.includes('/') || (isWindows && binary.includes('\\'))) {
-    return existsAnyExt(binary);
-  }
+  if (path.isAbsolute(binary)) return existsAnyExt(binary);
+  const hasPathSep = binary.includes('/') || (isWindows && binary.includes('\\'));
+  if (hasPathSep) return existsAnyExt(path.resolve(cwd, binary));
   if (installedBinaryCache.has(binary)) return installedBinaryCache.get(binary);
   const pathEntries = String(process.env.PATH || '').split(path.delimiter).filter(Boolean);
   const found = pathEntries.some(dir => existsAnyExt(path.join(dir, binary)));
@@ -711,7 +711,7 @@ function adapterForBackend(backend, session = null) {
   }
   const argv = shellSplit(String(routedSettings.command || ''));
   const binary = argv[0];
-  if (binary && !commandIsInstalled(binary)) {
+  if (binary && !commandIsInstalled(binary, { cwd: routedSettings.cwd || settings.agent.cwd || process.cwd() })) {
     warn(`adapterForBackend: ${normalized} binary not found on PATH: ${binary}`);
     return null;
   }
