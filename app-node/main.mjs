@@ -723,12 +723,6 @@ function adapterForBackend(backend, session = null) {
     warn(`adapterForBackend: cannot build settings for ${normalized}: ${e?.message || e}`);
     return null;
   }
-  const argv = shellSplit(String(routedSettings.command || ''));
-  const binary = argv[0];
-  if (binary && !commandIsInstalled(binary, { cwd: routedSettings.cwd || settings.agent.cwd || process.cwd() })) {
-    warn(`adapterForBackend: ${normalized} binary not found on PATH: ${binary}`);
-    return null;
-  }
   if (session) {
     routedSettings = {
       ...routedSettings,
@@ -737,6 +731,12 @@ function adapterForBackend(backend, session = null) {
       cwd: session.workdir || routedSettings.cwd,
       projectContext: projectSessionContextText(session),
     };
+  }
+  const argv = shellSplit(String(routedSettings.command || ''));
+  const binary = argv[0];
+  if (binary && !commandIsInstalled(binary, { cwd: routedSettings.cwd || settings.agent.cwd || process.cwd() })) {
+    warn(`adapterForBackend: ${normalized} binary not found on PATH: ${binary}`);
+    return null;
   }
   const adapter = createBridgeAgentAdapter(routedSettings);
   agentAdaptersByBackend.set(key, adapter);
