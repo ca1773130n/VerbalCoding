@@ -26,11 +26,14 @@ export function loadProjectSessions(configPath) {
 
 export function saveProjectSessions(configPath, state) {
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
-  fs.writeFileSync(configPath, `${JSON.stringify({
+  const payload = `${JSON.stringify({
     version: 1,
     sessions: state.sessions || {},
     channelSessions: state.channelSessions || {},
-  }, null, 2)}\n`, { mode: 0o600 });
+  }, null, 2)}\n`;
+  const tmpPath = `${configPath}.tmp-${process.pid}-${Date.now()}`;
+  fs.writeFileSync(tmpPath, payload, { mode: 0o600 });
+  fs.renameSync(tmpPath, configPath);
 }
 
 export function createProjectSession({ root, state, name, workdir, channelId, voiceChannelId = '', transcriptChannelId = '', mcpContext = '' }) {
