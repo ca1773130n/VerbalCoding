@@ -19,6 +19,7 @@ export function createSentencer({ minChars = 40, maxLatencyMs = 800 } = {}) {
   const ee = new EventEmitter();
   let buffer = '';
   let inFence = false;
+  let pendingFenceTail = '';
   let lastEmit = Date.now();
 
   function emit(text) {
@@ -28,12 +29,22 @@ export function createSentencer({ minChars = 40, maxLatencyMs = 800 } = {}) {
     lastEmit = Date.now();
   }
 
+  function trailingBackticks(text) {
+    let n = 0;
+    for (let i = text.length - 1; i >= 0 && text[i] === '`' && n < 2; i -= 1) n += 1;
+    return n;
+  }
+
   function ingest(text) {
-    let remaining = text;
+    let remaining = pendingFenceTail + text;
+    pendingFenceTail = '';
     while (remaining.length > 0) {
       const fence = remaining.indexOf('```');
       if (fence === -1) {
-        if (!inFence) buffer += remaining;
+        const heldCount = trailingBackticks(remaining);
+        const safe = heldCount > 0 ? remaining.slice(0, remaining.length - heldCount) : remaining;
+        pendingFenceTail = heldCount > 0 ? remaining.slice(remaining.length - heldCount) : '';
+        if (!inFence) buffer += safe;
         return;
       }
       const before = remaining.slice(0, fence);
@@ -70,6 +81,8 @@ export function createSentencer({ minChars = 40, maxLatencyMs = 800 } = {}) {
       scan();
     },
     flush() {
+      if (!inFence) buffer += pendingFenceTail;
+      pendingFenceTail = '';
       emit(buffer);
       buffer = '';
       inFence = false;
