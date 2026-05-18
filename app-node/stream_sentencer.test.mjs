@@ -62,3 +62,46 @@ test('emits multiple sentences in one push', () => {
   s.push('First. Second. Third.');
   assert.deepEqual(out, ['First.', 'Second.', 'Third.']);
 });
+
+test('does not split on common abbreviations', () => {
+  const out = [];
+  const s = createSentencer({ minChars: 1, maxLatencyMs: 999999 });
+  s.on('sentence', t => out.push(t));
+  s.push('Use e.g. main.mjs for the entry point. ');
+  assert.deepEqual(out, ['Use e.g. main.mjs for the entry point.']);
+});
+
+test('treats decimals as one sentence', () => {
+  const out = [];
+  const s = createSentencer({ minChars: 1, maxLatencyMs: 999999 });
+  s.on('sentence', t => out.push(t));
+  s.push('Version 3.14 is out. ');
+  assert.deepEqual(out, ['Version 3.14 is out.']);
+});
+
+test('drops fenced code blocks from speech', () => {
+  const out = [];
+  const s = createSentencer({ minChars: 1, maxLatencyMs: 999999 });
+  s.on('sentence', t => out.push(t));
+  s.push('Here is the change. ```js\nconst x = 1;\n``` Done.');
+  s.flush();
+  assert.deepEqual(out, ['Here is the change.', 'Done.']);
+});
+
+test('keeps fence state across pushes', () => {
+  const out = [];
+  const s = createSentencer({ minChars: 1, maxLatencyMs: 999999 });
+  s.on('sentence', t => out.push(t));
+  s.push('Open fence. ```python\nimport os');
+  s.push('\nprint(os.getcwd())\n``` Closed.');
+  s.flush();
+  assert.deepEqual(out, ['Open fence.', 'Closed.']);
+});
+
+test('terminates on Korean closing quote', () => {
+  const out = [];
+  const s = createSentencer({ minChars: 1, maxLatencyMs: 999999 });
+  s.on('sentence', t => out.push(t));
+  s.push('그가 말했다. "안녕." ');
+  assert.deepEqual(out, ['그가 말했다.', '"안녕."']);
+});

@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events';
 const ANSI_RE = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
 const BOX_RE = /[╭╮╰╯│┊─]/g;
 const PROGRESS_LINE_RE = /^VERBALCODING_PROGRESS\s*:.*$/i;
-const TERMINAL_RE = /[.!?。！？…]+(?=[\s"'\)\]\}]|$)/;
+const TERMINAL_RE = /(?<!\b(?:e\.g|i\.e|etc|cf|Mr|Mrs|Dr|Sr|Jr|St|Mt|vs|approx|al|aka|fig|eqn|inc|ltd|co))[.!?。！？…]+["'\)\]\}」』]*(?=\s|$)/;
 
 function clean(text) {
   return String(text || '')
@@ -18,6 +18,7 @@ function clean(text) {
 export function createSentencer({ minChars = 40, maxLatencyMs = 800 } = {}) {
   const ee = new EventEmitter();
   let buffer = '';
+  let inFence = false;
   let lastEmit = Date.now();
 
   function emit(text) {
@@ -25,6 +26,21 @@ export function createSentencer({ minChars = 40, maxLatencyMs = 800 } = {}) {
     if (!trimmed) return;
     ee.emit('sentence', trimmed);
     lastEmit = Date.now();
+  }
+
+  function ingest(text) {
+    let remaining = text;
+    while (remaining.length > 0) {
+      const fence = remaining.indexOf('```');
+      if (fence === -1) {
+        if (!inFence) buffer += remaining;
+        return;
+      }
+      const before = remaining.slice(0, fence);
+      if (!inFence) buffer += before;
+      inFence = !inFence;
+      remaining = remaining.slice(fence + 3);
+    }
   }
 
   function scan() {
@@ -50,12 +66,13 @@ export function createSentencer({ minChars = 40, maxLatencyMs = 800 } = {}) {
     push(text) {
       const cleaned = clean(text);
       if (!cleaned) return;
-      buffer += cleaned;
+      ingest(cleaned);
       scan();
     },
     flush() {
       emit(buffer);
       buffer = '';
+      inFence = false;
     },
   };
 }
