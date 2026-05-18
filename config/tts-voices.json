@@ -1,6 +1,6 @@
 {
-  "currentBackend": "mossttsnano_mlx",
-  "currentVoiceType": "prompt_reference",
+  "currentBackend": "edge",
+  "currentVoiceType": "korean_female",
   "backends": {
     "edge": {
       "currentVoiceType": "korean_male",
