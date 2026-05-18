@@ -150,6 +150,7 @@ export function planModePreamble(language = 'en') {
       '- <slot> | <한 문장 질문> | <옵션1> | <옵션2> | ...',
       'DECISIONS_END',
       '각 단계는 12단어 이하 한국어 한 줄. slot은 oauth_provider, session_store 같은 짧은 영문 키.',
+      'slot이 "which_agent"이면 다음에 답할 CLI 에이전트를 묻는 분기다 (options: codex, aider, claude, gemini, opencode, openclaw, cursor, hermes).',
       '결정이 필요 없으면 DECISIONS 블록 자체를 생략해라.',
     ].join('\n');
   }
@@ -164,6 +165,7 @@ export function planModePreamble(language = 'en') {
     '- <slot> | <one-sentence question> | <option1> | <option2> | ...',
     'DECISIONS_END',
     'Each step under 12 words. slot is a short snake_case key (e.g. oauth_provider).',
+    'Use slot "which_agent" when the choice is which CLI agent should answer next (options: codex, aider, claude, gemini, opencode, openclaw, cursor, hermes).',
     'Omit the DECISIONS block entirely if there is nothing to ask.',
   ].join('\n');
 }

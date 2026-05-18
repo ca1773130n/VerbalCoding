@@ -12,6 +12,7 @@ import {
   isPlanEntryUtterance,
   planModePreamble,
 } from './plan_mode.mjs';
+import { isAgentRoutingDecision } from './agent_routing.mjs';
 
 test('parsePlanOutput extracts numbered steps between markers', () => {
   const out = parsePlanOutput('intro\nPLAN_BEGIN\n1. Read auth.ts\n2. Add login route\n3. Write test\nPLAN_END\nthanks');
@@ -150,4 +151,26 @@ test('isPlanEntryUtterance detects entry phrases', () => {
 test('planModePreamble contains PLAN_BEGIN marker', () => {
   assert.match(planModePreamble('en'), /PLAN_BEGIN/);
   assert.match(planModePreamble('ko'), /PLAN_BEGIN/);
+});
+
+test('parsePlanOutput tags which_agent decision via isAgentRoutingDecision', () => {
+  const text = [
+    'PLAN_BEGIN',
+    '1. Survey the codebase',
+    'PLAN_END',
+    'DECISIONS_BEGIN',
+    '- which_agent | Who should answer? | codex | aider',
+    'DECISIONS_END',
+  ].join('\n');
+  const out = parsePlanOutput(text);
+  assert.equal(out.decisions[0].slot, 'which_agent');
+  assert.equal(isAgentRoutingDecision(out.decisions[0]), true);
+});
+
+test('planModePreamble in English mentions which_agent', () => {
+  assert.match(planModePreamble('en'), /which_agent/);
+});
+
+test('planModePreamble in Korean mentions which_agent', () => {
+  assert.match(planModePreamble('ko'), /which_agent/);
 });

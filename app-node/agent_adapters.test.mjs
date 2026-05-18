@@ -456,6 +456,20 @@ test('signal failure with patch-like output returns a concise interruption messa
   assert.doesNotMatch(answer, /@@|review diff|old|new/);
 });
 
+test('createAgentAdapter satisfies the agent adapter contract for every known backend', () => {
+  const backends = ['hermes', 'claude', 'codex', 'gemini', 'opencode', 'openclaw', 'aider', 'cursor'];
+  for (const backend of backends) {
+    const settings = buildAgentSettings({ ROOT: '/tmp/vc-test', env: { AGENT_BACKEND: backend } });
+    const adapter = createAgentAdapter(settings, {
+      execFileAsync: async () => ({ stdout: '', stderr: '' }),
+      log: () => {},
+      warn: () => {},
+    });
+    assert.doesNotThrow(() => assertAgentAdapterContract(adapter), `${backend} should satisfy contract`);
+    assert.equal(adapter.backend, backend);
+  }
+});
+
 test('hermes adapter spawn carries HERMES_HOME from instance env into child env', async () => {
   const { buildHermesSpawnOptions } = await import('./agent_adapters.mjs');
   const opts = buildHermesSpawnOptions({
