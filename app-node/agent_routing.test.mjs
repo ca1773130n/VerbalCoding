@@ -7,6 +7,7 @@ import {
   renderAgentPrefix,
   buildCrossAgentPrompt,
   buildFallbackDecision,
+  isRoutingOnlyUtterance,
 } from './agent_routing.mjs';
 
 test('parseAgentRoutingCommand recognizes "ask X" as single-turn', () => {
@@ -124,4 +125,14 @@ test('buildFallbackDecision yields a Korean prompt for ko', () => {
   const d = buildFallbackDecision('codex', 'Claude Code', 'ko');
   assert.match(d.question, /codex/);
   assert.match(d.question, /Claude Code/);
+});
+
+test('isRoutingOnlyUtterance detects command-only utterances', () => {
+  assert.equal(isRoutingOnlyUtterance('switch to codex'), true);
+  assert.equal(isRoutingOnlyUtterance('switch to Aider.'), true);
+  assert.equal(isRoutingOnlyUtterance('back to default'), true);
+  assert.equal(isRoutingOnlyUtterance('codex로 전환'), true);
+  assert.equal(isRoutingOnlyUtterance('기본으로 돌아가'), true);
+  assert.equal(isRoutingOnlyUtterance('switch to codex and write a test'), false);
+  assert.equal(isRoutingOnlyUtterance('ask codex what it thinks'), false);
 });

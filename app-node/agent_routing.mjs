@@ -40,12 +40,26 @@ const ASK_KO = /([가-힣A-Za-z][가-힣A-Za-z0-9\-]{1,30})(?:한테|에게|에)
 const SWITCH_KO = /([가-힣A-Za-z][가-힣A-Za-z0-9\-]{1,30})(?:로|으로)\s*(전환|바꿔|바꿔줘)/;
 const RESTORE_KO = /(기본(?:으로)?\s*(?:돌아|복귀)|기본\s*에이전트)/;
 
-export function resolveBackendAlias(rawName) {
+export function isRoutingOnlyUtterance(text) {
+  const t = String(text || '').trim();
+  if (!t) return false;
+  const normalized = t.toLowerCase().replace(/[.,!?]+$/u, '').trim();
+  if (/^(?:please\s+)?(?:back\s+to\s+default|use\s+the\s+default\s+agent|default\s+agent)$/i.test(normalized)) return true;
+  if (/^기본(?:으로)?\s*(?:돌아(?:가|가줘)?|복귀)$/.test(normalized)) return true;
+  const en = normalized.match(/^(?:please\s+)?(?:switch\s+to|use)\s+(.+)$/i);
+  if (en) return resolveBackendAlias(en[1], { strict: true }) !== null;
+  const ko = normalized.match(/^(.+?)(?:로|으로)\s*(?:전환|바꿔|바꿔줘)$/);
+  if (ko) return resolveBackendAlias(ko[1], { strict: true }) !== null;
+  return false;
+}
+
+export function resolveBackendAlias(rawName, { strict = false } = {}) {
   const needle = String(rawName || '').toLowerCase().trim();
   if (!needle) return null;
   for (const [alias, backend] of BACKEND_LOOKUP) {
     if (needle === alias) return backend;
   }
+  if (strict) return null;
   for (const [alias, backend] of BACKEND_LOOKUP) {
     if (needle.includes(alias)) return backend;
   }
