@@ -77,7 +77,8 @@ export function progressDetail(event, { language = 'ko' } = {}) {
   const category = progressCategory(text, { language });
   let detail = stripProgressPrefix(text, category, { language });
   if (!detail || detail.length < 2) return category?.label || '';
-  if (detail.length > 28) detail = detail.slice(0, 27).replace(/[\s,.;:，。]+$/u, '');
+  const codepoints = Array.from(detail);
+  if (codepoints.length > 28) detail = codepoints.slice(0, 27).join('').replace(/[\s,.;:，。]+$/u, '');
   return `${category?.label || labelsFor(language).work} ${detail}`.trim();
 }
 
@@ -88,6 +89,7 @@ export function formatProgressMessage(event, { language = 'ko' } = {}) {
   let detail = stripProgressPrefix(text, category, { language, keepPaths: true });
   const english = /^en/i.test(String(language || ''));
   if (english && /\p{Script=Hangul}/u.test(detail)) detail = '';
+  if (!english && /[A-Za-z]/.test(detail) && !/\p{Script=Hangul}/u.test(detail)) detail = '';
   const body = [category?.label || (english ? 'working' : '작업 처리'), detail].filter(Boolean).join(': ');
   const emoji = categoryEmoji(category?.key || 'work');
   return `${emoji} ${body}`.trim();
