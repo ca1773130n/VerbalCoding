@@ -32,6 +32,10 @@ export function createBridgeState({ log = () => {}, cleanupFile = () => {} } = {
 
   function deletePending(userId) {
     const pending = pendingUtterances.get(userId);
+    if (pending?.timer) {
+      clearTimeout(pending.timer);
+      pending.timer = null;
+    }
     pendingUtterances.delete(userId);
     return pending;
   }
