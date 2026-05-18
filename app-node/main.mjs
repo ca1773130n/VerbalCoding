@@ -425,9 +425,11 @@ async function dispatchPlanModeUtterance(prompt, signal) {
   if (existing && existing.pendingDecisionIndex < existing.decisions.length) {
     const controlCommand = parsePlanVoiceCommand(prompt, language);
     if (controlCommand.type === 'cancel') {
+      const cancelState = routingStateFor(key);
+      if (existing.routingSnapshot) cancelState.activeRouting = { ...existing.routingSnapshot };
+      cancelState.pendingFallbackPrompt = null;
+      cancelState.lastResolvedDecisions = {};
       planStates.delete(key);
-      resetRoutingState(key);
-      routingStateFor(key).lastResolvedDecisions = {};
       const msg = /^en/i.test(String(language || '')) ? 'Plan cancelled.' : '계획을 취소했어.';
       await sendText(`❎ ${msg}`);
       await speakText(msg, signal, null);
@@ -477,9 +479,11 @@ async function dispatchPlanModeUtterance(prompt, signal) {
       return { handled: true };
     }
     if (cmd.type === 'cancel') {
+      const cancelState = routingStateFor(key);
+      if (existing.routingSnapshot) cancelState.activeRouting = { ...existing.routingSnapshot };
+      cancelState.pendingFallbackPrompt = null;
+      cancelState.lastResolvedDecisions = {};
       planStates.delete(key);
-      resetRoutingState(key);
-      routingStateFor(key).lastResolvedDecisions = {};
       const msg = /^en/i.test(String(language || '')) ? 'Plan cancelled.' : '계획을 취소했어.';
       await sendText(`❎ ${msg}`);
       await speakText(msg, signal, null);
@@ -520,6 +524,8 @@ async function dispatchPlanModeUtterance(prompt, signal) {
       await sendText(`⚠️ ${failMsg}`);
       return { handled: false, prompt };
     }
+    const planKey = planChannelKey();
+    const routingSnapshot = { ...routingStateFor(planKey).activeRouting };
     const state = {
       steps,
       decisions,
@@ -527,8 +533,9 @@ async function dispatchPlanModeUtterance(prompt, signal) {
       pendingDecisionIndex: 0,
       originalPrompt: prompt,
       language,
+      routingSnapshot,
     };
-    planStates.set(planChannelKey(), state);
+    planStates.set(planKey, state);
     const narration = planNarrationLines(steps, language);
     await sendText(`📝 ${narration}`);
     await speakText(narration, signal, null);
