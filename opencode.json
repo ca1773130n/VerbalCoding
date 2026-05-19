@@ -1,0 +1,24 @@
+{
+  "mcp": {
+    "ouroboros": {
+      "type": "local",
+      "command": [
+        "uvx",
+        "--from",
+        "ouroboros-ai[mcp,claude]",
+        "ouroboros",
+        "mcp",
+        "serve"
+      ],
+      "enabled": true
+    }
+  },
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "bash": {
+      "mkdir -p /Users/neo/Developer/Projects/VerbalCoding/.claude": "allow",
+      "cp /Users/neo/Developer/Projects/VerbalCoding/.llm-wiki/agent_harness/claude/CLAUDE.md /Users/neo/Developer/Projects/VerbalCoding/CLAUDE.md": "allow",
+      "*": "ask"
+    }
+  }
+}

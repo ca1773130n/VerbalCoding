@@ -1,0 +1,71 @@
+## 2026-05-20T00:04:26   scope=all
+
+<!-- attribution: author: Cameleon X <ca1773130n@gmail.com> | commit: a8a0e81 — Document cross-agent voice routing and TTS fallback notice -->
+
+- **aider** ✓  synced=2 skipped=14 failed=0
+  - `/Users/neo/Developer/Projects/VerbalCoding/CONVENTIONS.md`
+  - `.aider.conf.yml`
+  - `.aider.conf.yml`
+  - `.aider.conf.yml`
+- **cline** ✓  synced=35 skipped=3 failed=0
+  - `/Users/neo/Developer/Projects/VerbalCoding/.roo/mcp.json`
+- **codex** ✗  synced=35 skipped=0 failed=1
+  - `/Users/neo/Developer/Projects/VerbalCoding/AGENTS.md`
+  - `pm (symlink)`
+  - `cancel (symlink)`
+  - `seed (symlink)`
+  - `tutorial (symlink)`
+  - `update (symlink)`
+  - `setup (symlink)`
+  - `unstuck (symlink)`
+  - `ralph (symlink)`
+  - `qa (symlink)`
+  - … and 25 more
+- **continue** ✓  synced=34 skipped=3 failed=0
+  - `/Users/neo/Developer/Projects/VerbalCoding/.continue/rules/harnesssync.md`
+  - `/Users/neo/Developer/Projects/VerbalCoding/.continue/config.yaml`
+- **cursor** ✓  synced=34 skipped=3 failed=0
+  - `/Users/neo/Developer/Projects/VerbalCoding/.cursor/mcp.json`
+- **gemini** ✗  synced=35 skipped=0 failed=1
+  - `/Users/neo/Developer/Projects/VerbalCoding/GEMINI.md`
+  - `/Users/neo/Developer/Projects/VerbalCoding/.gemini/skills/pm/SKILL.md`
+  - `/Users/neo/Developer/Projects/VerbalCoding/.gemini/skills/cancel/SKILL.md`
+  - `/Users/neo/Developer/Projects/VerbalCoding/.gemini/skills/seed/SKILL.md`
+  - `/Users/neo/Developer/Projects/VerbalCoding/.gemini/skills/tutorial/SKILL.md`
+  - `/Users/neo/Developer/Projects/VerbalCoding/.gemini/skills/update/SKILL.md`
+  - `/Users/neo/Developer/Projects/VerbalCoding/.gemini/skills/setup/SKILL.md`
+  - `/Users/neo/Developer/Projects/VerbalCoding/.gemini/skills/unstuck/SKILL.md`
+  - `/Users/neo/Developer/Projects/VerbalCoding/.gemini/skills/ralph/SKILL.md`
+  - `/Users/neo/Developer/Projects/VerbalCoding/.gemini/skills/qa/SKILL.md`
+  - … and 25 more
+- **neovim** ✓  synced=35 skipped=3 failed=0
+  - `/Users/neo/Developer/Projects/VerbalCoding/.avante/mcp.json`
+- **opencode** ✓  synced=36 skipped=0 failed=0
+  - `/Users/neo/Developer/Projects/VerbalCoding/AGENTS.md`
+  - `pm (symlink)`
+  - `cancel (symlink)`
+  - `seed (symlink)`
+  - `tutorial (symlink)`
+  - `update (symlink)`
+  - `setup (symlink)`
+  - `unstuck (symlink)`
+  - `ralph (symlink)`
+  - `qa (symlink)`
+  - … and 26 more
+- **vscode** ✓  synced=35 skipped=3 failed=0
+  - `.github/copilot-instructions.md`
+  - `.codeium/instructions.md`
+  - `.github/copilot-instructions.md`
+  - `.github/prompts/seed.prompt.md`
+  - `.github/prompts/setup.prompt.md`
+  - `.github/prompts/status.prompt.md`
+  - `.github/prompts/welcome.prompt.md`
+  - `.github/prompts/evaluate.prompt.md`
+  - `.github/prompts/help.prompt.md`
+  - `.github/prompts/ralph.prompt.md`
+  - … and 7 more
+- **windsurf** ✓  synced=0 skipped=1 failed=0
+- **zed** ✓  synced=34 skipped=3 failed=0
+  - `/Users/neo/Developer/Projects/VerbalCoding/.rules`
+  - `/Users/neo/Developer/Projects/VerbalCoding/.zed/settings.json`
+

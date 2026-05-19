@@ -1,0 +1,12 @@
+# Codex configuration managed by HarnessSync
+# Do not edit MCP servers section manually
+
+# MCP servers managed by HarnessSync
+
+# Do not edit manually - changes will be overwritten on next sync
+
+
+
+[mcp_servers."ouroboros"]
+command = "uvx"
+args = ["--from", "ouroboros-ai[mcp,claude]", "ouroboros", "mcp", "serve"]
