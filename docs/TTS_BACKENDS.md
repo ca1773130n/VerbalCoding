@@ -33,6 +33,12 @@ and `config/tts-voices.json`:
 
 The runtime re-reads voice config, so changing only `.env` can be overridden.
 
+### Fallback notice
+
+When a non-Edge backend fails to synthesize (model missing, runtime crash, timeout, install error), the bridge silently re-routes that utterance through Edge so the user still hears a response. The first time this happens for each backend in a session, VerbalCoding posts a one-shot warning to the active Discord text channel and speaks the same message ("`<backend>` synthesis failed; using Edge for the rest of this session." / "`<backend>` 음성 생성에 실패해서 이번 세션은 Edge로 진행할게."). Subsequent failures for the same backend stay silent.
+
+If you see the warning, check `vc doctor` and the backend's venv/model install — the bridge will keep using Edge until the next `vc start`.
+
 ## Supported backends
 
 | Backend | Purpose | Default path / command | Live-call suitability | Notes |

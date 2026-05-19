@@ -8,11 +8,11 @@ This roadmap covers five differentiation phases that separate VerbalCoding from 
 
 | # | Phase | Status | Plan |
 |---|---|---|---|
-| 1 | Streaming end-to-end pipeline | designed | [phase1-streaming-pipeline.md](./superpowers/plans/2026-05-13-phase1-streaming-pipeline.md) |
-| 2 | Agent-agnostic adapter completion | partial → designed | [phase2-agent-adapters.md](./superpowers/plans/2026-05-13-phase2-agent-adapters.md) |
-| 6 | Smart progress summarization | designed | [phase6-smart-progress.md](./superpowers/plans/2026-05-13-phase6-smart-progress.md) |
-| 7 | Voice plan mode | designed | [phase7-voice-plan-mode.md](./superpowers/plans/2026-05-13-phase7-voice-plan-mode.md) |
-| 10 | Push notification handoff | designed | [phase10-push-notifications.md](./superpowers/plans/2026-05-13-phase10-push-notifications.md) |
+| 1 | Streaming end-to-end pipeline | shipped | [phase1-streaming-pipeline.md](./superpowers/plans/2026-05-13-phase1-streaming-pipeline.md) |
+| 2 | Agent-agnostic adapter completion | shipped (incl. cross-agent voice routing) | [phase2-agent-adapters.md](./superpowers/plans/2026-05-13-phase2-agent-adapters.md), [cross-agent-voice-transfer.md](./superpowers/plans/2026-05-14-cross-agent-voice-transfer.md) |
+| 6 | Smart progress summarization | shipped | [phase6-smart-progress.md](./superpowers/plans/2026-05-13-phase6-smart-progress.md) |
+| 7 | Voice plan mode | shipped (incl. `which_agent` slot) | [phase7-voice-plan-mode.md](./superpowers/plans/2026-05-13-phase7-voice-plan-mode.md) |
+| 10 | Push notification handoff | shipped | [phase10-push-notifications.md](./superpowers/plans/2026-05-13-phase10-push-notifications.md) |
 
 ## Sequencing rationale
 

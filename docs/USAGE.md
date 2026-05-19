@@ -107,6 +107,28 @@ Then use `vc bot invite CLIENT_ID` to generate the VerbalCoding-specific invite 
 
 Voice equivalents such as “외부 모드”, “보수 모드”, “실내”, “기본 감도”, and clear stop phrases like “잠깐”, “멈춰”, “그만” are handled by the bridge. You can also say “상세 진행 켜” / “상세 진행 꺼” to toggle verbose progress by voice.
 
+## Cross-agent voice routing
+
+VerbalCoding can route a single turn (or the rest of the session) to a different installed CLI agent without restarting.
+
+| Voice phrase (en) | Voice phrase (ko) | Behavior |
+|---|---|---|
+| `ask Codex what it thinks` | `코덱스한테 물어봐` | Single-turn route to Codex; next utterance returns to the default. |
+| `switch to Aider` | `aider로 전환` | Sticky route — every following utterance goes to Aider. |
+| `back to default` | `기본으로 돌아가` | Restore the default agent (`AGENT_BACKEND` / `vc setup` selection). |
+| `let Claude finish this` | — | Treated as sticky route to Claude Code. |
+
+Recognized aliases: `hermes`, `claude` / `claude code`, `codex` / `코덱스`, `gemini` / `gemini cli` / `제미나이`, `opencode`, `openclaw`, `aider` / `에이더`, `cursor` / `cursor cli`.
+
+Behaviors on top:
+
+- **Missing-binary fallback** — if the requested backend's binary is not on `PATH` (resolved against the active project session's workdir when applicable), the bridge asks "Want me to use the default agent instead?" Answer "yes" / "예" to retry on the default; "no" / "아니오" to cancel.
+- **TTS prefix on backend change** — when the active backend changes between turns, the spoken answer is prefixed (`Codex says: …` / `코덱스: …`). No prefix on stable backends.
+- **Cross-agent context handoff** — the routed agent receives a prompt block containing the prior agent label, recent voice utterances (last 4), and the most recently resolved plan decisions, so it doesn't restart cold.
+- **Plan-mode `which_agent` slot** — plans can include a `which_agent` decision listing CLI options (e.g. `codex, aider, claude, gemini, opencode, openclaw, cursor, hermes`); the user's voice answer selects which agent executes that plan.
+- **Per-channel state** — routing is scoped per Discord channel; switching agents in one project room does not affect others.
+- **Sticky survives interrupts** — barge-in or aborted turns keep a sticky route intact; only single-turn routes are cleared.
+
 ## Changing the Voice
 
 `vc language ko|en|auto` changes STT language, progress language, and the matching default TTS voice together. If you only want to change the speaker/voice while the bridge is running, say it in Discord voice:

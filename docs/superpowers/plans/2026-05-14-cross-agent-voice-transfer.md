@@ -1,4 +1,9 @@
 Cross-Agent Voice Routing — Implementation Plan
+
+**Status: shipped** (commits `ab5bd93` → `60d50bc`, hardened through `a674d87`). User-facing docs: [docs/USAGE.md § Cross-agent voice routing](../../USAGE.md#cross-agent-voice-routing). This file is preserved for historical/design reference.
+
+---
+
 Goal: Route a VerbalCoding voice turn to any installed CLI agent (Codex, Aider, Claude Code, Gemini, OpenCode, OpenClaw, Cursor, Hermes) by voice — either explicitly ("ask Codex", "switch to Aider") or via a which_agent slot in the agent's DECISIONS_BEGIN/END block — with graceful fallback when the routed agent isn't installed.
 
 Architecture: New pure module agent_routing.mjs. plan_mode.mjs preamble update. main.mjs gets a per-backend adapter cache + routing state. Single-turn default; "switch to X" makes it sticky. TTS prefixes the agent's name only on backend change.

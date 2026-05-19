@@ -34,6 +34,7 @@ VerbalCoding turns a Discord voice channel into a hands-free cockpit for **any**
 - **Streaming pipeline** — first sentence plays while the agent is still writing (Hermes lists this as a future Phase-4 item).
 - **Smart progress narration** — describes intent ("wiring the new login route"), not file lists.
 - **Voice plan mode** — say "plan it first", edit by voice ("skip step 3"), say "approve" to execute.
+- **Cross-agent routing by voice** — "ask Codex what it thinks" for a single turn, "switch to Aider" to make it sticky, "back to default" to restore. The plan can also emit a `which_agent` slot so the agent itself picks the next backend.
 - **Phone-down mode** — push notification with a voice summary when a long task completes and the room is empty.
 
 ## What feels different
@@ -41,6 +42,7 @@ VerbalCoding turns a Discord voice channel into a hands-free cockpit for **any**
 | Capability | Why it matters |
 |---|---|
 | Agent choice, first-class | Hermes Agent, Claude Code, Codex, Gemini CLI, OpenCode, OpenClaw, Aider, Cursor CLI, or any custom command. `vc setup` auto-detects what's installed. |
+| Cross-agent voice routing | Say "ask Codex …" (single turn), "switch to Aider" (sticky), or "back to default". Missing binaries are detected and the bridge offers to fall back to the default agent. Handoff prompts carry recent utterances + last plan decisions to the new agent. |
 | Real barge-in | VAD thresholds tuned for indoor and noisy rooms; cut in mid-utterance and resume the conversation. |
 | Streaming end-to-end | `STREAMING_TTS=1` plays sentences as the agent produces them; first audio in well under a second on a warm cache. |
 | Smart progress | Optional LLM summarizer collapses raw events into one human sentence; falls back to the existing regex labels when no key is set. |
