@@ -30,7 +30,8 @@ VerbalCoding 把 Discord 语音房间变成编码代理的免提驾驶舱。你�
 | 电话式工作流 | 在同一个 Discord 语音频道里说话、收听、打断、继续。 |
 | 面向人的引导设置 | `vc setup` 一次引导 prerequisites、Discord token/client ID、voice channel、transcript target、backend 和 TTS 设置。 |
 | 本地语音闭环 | Discord audio → local `whisper-cli` → selected CLI agent → TTS reply。 |
-| 可选代理 | 支持 Hermes Agent、Claude Code、Codex、Gemini CLI、OpenCode、OpenClaw 或 custom command。 |
+| 可选代理 | 支持 Hermes Agent、Claude Code、Codex、Gemini CLI、OpenCode、OpenClaw、Aider、Cursor CLI 或 custom command。`vc setup` 自动检测已安装项。 |
+| 语音切换代理 | `"ask Codex what it thinks"` 单 turn 路由,`"switch to Aider"` 粘性切换,`"back to default"` 回默认。未安装的二进制会被检测并询问是否回退到默认代理。 |
 | 超越 Hermes 内置语音 | 在同一个 VC 语音闭环上增加项目房间、`!ask` 共享上下文、细粒度打断处理、进度/状态语音和多代理后端控制。 |
 | 真实运维支持 | 内置 doctor auto-fix、Docker UDP 指南、latency metrics、multi-instance rooms 和 redacted config checks。 |
 
@@ -90,6 +91,7 @@ vc instance start NAME                   # 后台运行该 bot
 | [文档中心](docs/i18n/README.zh.md) | 本地化指南索引。 |
 | [Fresh Install](docs/i18n/FRESH_INSTALL.zh.md) | npm/global setup、Discord 设置、首次运行。 |
 | [Usage](docs/i18n/USAGE.zh.md) | CLI 命令、Discord 命令、运行模式、latency。 |
+| [Harness 使用](docs/i18n/HARNESSES.zh.md) | Claude Code、Codex、Aider 等各后端的安装、配置与语音路由。 |
 | [Configuration](docs/i18n/CONFIGURATION.zh.md) | .env、agent backends、MCP、TTS、运维。 |
 | [Troubleshooting](docs/i18n/TROUBLESHOOTING.zh.md) | Docker UDP、token/channel 缺失检查。 |
 | [Multi-Instance](docs/i18n/MULTI_INSTANCE.zh.md) | 每个项目一个固定语音房间。 |

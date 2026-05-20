@@ -30,7 +30,8 @@ VerbalCoding は Discord の音声ルームを、コーディングエージェ�
 | 電話のような流れ | 同じ Discord 音声チャンネルで話す、聞く、割り込む、続けるができます。 |
 | 人向けのガイド付き設定 | `vc setup` が prerequisites、Discord token/client ID、voice channel、transcript target、backend、TTS 設定を一連の流れで確認します。 |
 | ローカル音声ループ | Discord audio → local `whisper-cli` → selected CLI agent → TTS response。 |
-| エージェント選択 | Hermes Agent、Claude Code、Codex、Gemini CLI、OpenCode、OpenClaw、custom command に対応します。 |
+| エージェント選択 | Hermes Agent、Claude Code、Codex、Gemini CLI、OpenCode、OpenClaw、Aider、Cursor CLI または custom command に対応します。`vc setup` がインストール済みのものを自動検出します。 |
+| 音声でエージェントを切替 | `"ask Codex what it thinks"` で 1 ターンのみ、`"switch to Aider"` で sticky、`"back to default"` で復帰。未インストールのバイナリを検出して既定エージェントへの fallback を提案します。 |
 | Hermes 標準音声の先 | 同じ VC 音声ループを土台に、プロジェクトルーム、`!ask` 共有コンテキスト、細かな割り込み処理、進捗/状態の音声案内、複数エージェントバックエンド制御を追加します。 |
 | 運用向け機能 | doctor auto-fix、Docker UDP ガイド、latency metrics、multi-instance rooms、redacted config checks を備えています。 |
 
@@ -90,6 +91,7 @@ vc instance start NAME                   # その bot を background で実行
 | [ドキュメントハブ](docs/i18n/README.ja.md) | ローカライズ済みガイドの索引。 |
 | [Fresh Install](docs/i18n/FRESH_INSTALL.ja.md) | npm/global setup、Discord 設定、初回起動。 |
 | [Usage](docs/i18n/USAGE.ja.md) | CLI コマンド、Discord コマンド、実行モード、latency。 |
+| [Harness 別の使い方](docs/i18n/HARNESSES.ja.md) | Claude Code、Codex、Aider などバックエンド別のインストール・設定・音声ルーティング。 |
 | [Hermes 標準音声 vs VerbalCoding](docs/i18n/HERMES_VOICE.ja.md) | Hermes がすでに提供する Discord 音声と VerbalCoding の違い。 |
 | [Configuration](docs/i18n/CONFIGURATION.ja.md) | .env、agent backends、MCP、TTS、運用。 |
 | [Troubleshooting](docs/i18n/TROUBLESHOOTING.ja.md) | Docker UDP、token/channel 不足チェック。 |

@@ -36,3 +36,18 @@ This roadmap covers five differentiation phases that separate VerbalCoding from 
 - PSTN bridge / actual phone calls (Phase 4 of the broader pitch; deferred).
 - Local-first one-flag preset (Phase 5; deferred but trivial follow-up).
 - Multi-agent in one VC with distinct voices (Phase 3; needs Phase 2 to land first).
+
+## What's next (2026 H2 candidates)
+
+The differentiation push above shipped — the foundation is in. Candidate next phases, not yet planned:
+
+| # | Candidate | Why | Status |
+|---|---|---|---|
+| 11 | Push-to-talk and wake-word v2 | Reduce false barge-ins in shared rooms; pair with hardware push-to-talk via a Discord overlay or a key-binding companion. | candidate |
+| 12 | Multi-user voice in one VC | Each speaker resolves to a distinct routing/session; per-speaker plan-mode and decision answers. Builds on the per-channel routing state. | candidate |
+| 13 | Output voice cloning per agent | Distinct voices per backend (e.g. Codex gets a different TTS voice than Claude Code); piggybacks on the existing voice-clone capture flow. | candidate |
+| 14 | Latency benchmarking + regression gate | Codify the latency_metrics output into a benchmark harness + CI threshold so any regression in STT/agent/TTS stages is caught. | candidate |
+| 15 | Phone-app companion (deferred) | The push-handoff notification deeplinks back to Discord today; a thin phone app or PWA could replay a redacted transcript on demand. | candidate |
+| 16 | Voice-clone reference auto-detect | Detect that an OpenVoice/FireRedTTS reference sample is missing and propose `!voice-clone capture` proactively when the user selects a clone-only backend. | candidate |
+
+These aren't sequenced yet. Phases 11/12/14 are the highest-leverage if the goal is making the bridge feel solid in shared rooms; 13/16 are quality-of-life on top of the existing voice stack.

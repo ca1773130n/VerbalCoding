@@ -30,7 +30,8 @@ VerbalCoding convierte una sala de voz de Discord en una cabina manos libres par
 | Flujo tipo llamada | Habla, escucha, interrumpe y continúa en el mismo canal de voz de Discord. |
 | Configuración guiada | `vc setup` reúne prerequisites, Discord token/client ID, voice channel, transcript target, backend y TTS settings en un solo flujo. |
 | Bucle de voz local | Discord audio → local `whisper-cli` → selected CLI agent → TTS reply. |
-| Elección de agente | Hermes Agent, Claude Code, Codex, Gemini CLI, OpenCode, OpenClaw o custom command. |
+| Elección de agente | Hermes Agent, Claude Code, Codex, Gemini CLI, OpenCode, OpenClaw, Aider, Cursor CLI o custom command. `vc setup` autodetecta lo que tienes instalado. |
+| Enrutamiento de agente por voz | `"ask Codex what it thinks"` (un turno), `"switch to Aider"` (sticky), `"back to default"` para volver. Si el binario no está instalado, el puente ofrece fallback al agente por defecto. |
 | Más allá de la voz integrada de Hermes | Mantiene el mismo bucle de voz en VC y añade salas de proyecto, contexto compartido con `!ask`, interrupciones afinadas, voz de progreso/estado y control de backends multiagente. |
 | Operación real | Incluye doctor auto-fix, guía Docker UDP, latency metrics, multi-instance rooms y redacted config checks. |
 
@@ -90,6 +91,7 @@ vc instance start NAME                   # ejecutar ese bot en background
 | [Centro de documentación](docs/i18n/README.es.md) | Índice de guías localizadas. |
 | [Fresh Install](docs/i18n/FRESH_INSTALL.es.md) | npm/global setup, configuración de Discord y primera ejecución. |
 | [Usage](docs/i18n/USAGE.es.md) | Comandos CLI, comandos Discord, modos de ejecución y latency. |
+| [Uso por harness](docs/i18n/HARNESSES.es.md) | Instalación, configuración y enrutamiento por voz para Claude Code, Codex, Aider y demás. |
 | [Voz integrada de Hermes vs VerbalCoding](docs/i18n/HERMES_VOICE.es.md) | La voz Discord que Hermes ya ofrece y la diferencia de VerbalCoding. |
 | [Configuration](docs/i18n/CONFIGURATION.es.md) | .env, agent backends, MCP, TTS y operación. |
 | [Troubleshooting](docs/i18n/TROUBLESHOOTING.es.md) | Docker UDP y comprobaciones de token/channel. |

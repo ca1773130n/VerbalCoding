@@ -30,7 +30,8 @@ VerbalCoding은 Discord 음성 방을 코딩 에이전트용 핸즈프리 조종
 | 통화 같은 작업 흐름 | 한 Discord 음성 채널에서 말하고, 듣고, 끼어들고, 이어서 작업합니다. |
 | 안내형 사람용 설정 | `vc setup`이 prerequisites, Discord token/client ID, voice channel, transcript target, backend, TTS 설정을 한 흐름으로 묻습니다. |
 | 로컬 음성 루프 | Discord audio → local `whisper-cli` → selected CLI agent → TTS 답변. |
-| 에이전트 선택 | Hermes Agent, Claude Code, Codex, Gemini CLI, OpenCode, OpenClaw, custom command를 지원합니다. |
+| 에이전트 선택 | Hermes Agent, Claude Code, Codex, Gemini CLI, OpenCode, OpenClaw, Aider, Cursor CLI 또는 custom command를 지원합니다. `vc setup`이 설치된 것을 자동 감지해요. |
+| 음성으로 에이전트 라우팅 | `"코덱스한테 물어봐"`로 한 턴만 보내거나 `"aider로 전환"`으로 sticky 전환. `"기본으로 돌아가"`로 복귀. 없는 바이너리는 감지해서 기본 에이전트로 fallback할지 물어봐. |
 | Hermes 기본 음성 너머 | 같은 VC 음성 루프를 기반으로 프로젝트 방, `!ask` 공유 컨텍스트, 세밀한 끼어들기 처리, 진행/상태 음성 안내, 다중 에이전트 백엔드 제어를 더합니다. |
 | 운영 친화 기능 | doctor auto-fix, Docker UDP 안내, latency metrics, multi-instance rooms, redacted config checks가 포함됩니다. |
 
@@ -90,6 +91,7 @@ vc instance start NAME                   # 해당 bot을 background로 실행
 | [문서 허브](docs/i18n/README.ko.md) | 현지화된 가이드 색인. |
 | [Fresh Install](docs/i18n/FRESH_INSTALL.ko.md) | npm/global setup, Discord 설정, 첫 실행. |
 | [Usage](docs/i18n/USAGE.ko.md) | CLI 명령, Discord 명령, 실행 모드, latency. |
+| [하니스 사용법](docs/i18n/HARNESSES.ko.md) | Claude Code, Codex, Aider 등 백엔드별 설치·설정·음성 라우팅. |
 | [Hermes 기본 음성 vs VerbalCoding](docs/i18n/HERMES_VOICE.ko.md) | Hermes가 이미 지원하는 Discord 음성과 VerbalCoding의 차이. |
 | [Configuration](docs/i18n/CONFIGURATION.ko.md) | .env, agent backends, MCP, TTS, 운영. |
 | [Troubleshooting](docs/i18n/TROUBLESHOOTING.ko.md) | Docker UDP, token/channel 누락 점검. |

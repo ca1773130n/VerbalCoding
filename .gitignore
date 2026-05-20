@@ -53,6 +53,9 @@ instances/*.local.env
 .gemini/
 .roo/
 .zed/
+.agents/
+.cline/
+.vscode/
 
 # Local project/session runtime state; examples/templates should use distinct names.
 config/project-sessions*.json

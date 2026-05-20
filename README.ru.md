@@ -30,7 +30,8 @@ VerbalCoding превращает голосовую комнату Discord в h
 | Работа как звонок | Говорите, слушайте, перебивайте и продолжайте в одном голосовом канале Discord. |
 | Пошаговая настройка | `vc setup` проводит через prerequisites, Discord token/client ID, voice channel, transcript target, backend и TTS settings за один проход. |
 | Локальный голосовой цикл | Discord audio → local `whisper-cli` → selected CLI agent → TTS reply. |
-| Выбор агента | Hermes Agent, Claude Code, Codex, Gemini CLI, OpenCode, OpenClaw или custom command. |
+| Выбор агента | Hermes Agent, Claude Code, Codex, Gemini CLI, OpenCode, OpenClaw, Aider, Cursor CLI или custom command. `vc setup` автоматически находит установленные. |
+| Голосовая маршрутизация агента | `"ask Codex what it thinks"` — на один turn, `"switch to Aider"` — sticky, `"back to default"` — возврат. Отсутствующие бинарники определяются и мост предлагает fallback к агенту по умолчанию. |
 | Больше, чем встроенный голос Hermes | Сохраняет тот же VC-голосовой цикл и добавляет проектные комнаты, общий контекст `!ask`, тонкую обработку прерываний, голос прогресса/статуса и управление multi-agent бэкендами. |
 | Готовность к эксплуатации | doctor auto-fix, Docker UDP guide, latency metrics, multi-instance rooms и redacted config checks встроены. |
 
@@ -90,6 +91,7 @@ vc instance start NAME                   # запустить этот bot в ba
 | [Центр документации](docs/i18n/README.ru.md) | Индекс локализованных гайдов. |
 | [Fresh Install](docs/i18n/FRESH_INSTALL.ru.md) | npm/global setup, настройка Discord и первый запуск. |
 | [Usage](docs/i18n/USAGE.ru.md) | CLI-команды, Discord-команды, режимы запуска и latency. |
+| [Использование по harness](docs/i18n/HARNESSES.ru.md) | Установка, настройка и голосовая маршрутизация для Claude Code, Codex, Aider и других. |
 | [Встроенный голос Hermes vs VerbalCoding](docs/i18n/HERMES_VOICE.ru.md) | Что Hermes уже умеет в Discord voice и чем отличается VerbalCoding. |
 | [Configuration](docs/i18n/CONFIGURATION.ru.md) | .env, agent backends, MCP, TTS и эксплуатация. |
 | [Troubleshooting](docs/i18n/TROUBLESHOOTING.ru.md) | Docker UDP и проверки token/channel. |
