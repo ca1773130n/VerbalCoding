@@ -56,6 +56,8 @@ instances/*.local.env
 .agents/
 .cline/
 .vscode/
+# .opencode/ holds machine-local symlinks into ~/.claude plugin caches.
+.opencode/
 
 # Local project/session runtime state; examples/templates should use distinct names.
 config/project-sessions*.json
