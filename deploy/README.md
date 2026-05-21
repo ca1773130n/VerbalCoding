@@ -11,12 +11,13 @@ Templates and helpers for running VerbalCoding as a long-lived service.
 1. Copy and edit:
 
    ```bash
-   mkdir -p .logs                                                                   # launchd opens StandardOut/ErrorPath BEFORE run.sh starts, so create the dir first
    cp deploy/launchd/com.verbalcoding.bot.plist ~/Library/LaunchAgents/com.verbalcoding.bot.plist
    sed -i '' "s|/Users/YOU|$HOME|g" ~/Library/LaunchAgents/com.verbalcoding.bot.plist
    ```
 
-   Then open the file and replace `Developer/Projects/VerbalCoding` with your actual checkout path if it differs, and the `v24.14.0` node version with `node --version` output (drop the leading `v` only if your nvm path uses that style). The plist's `ProgramArguments` also runs `mkdir -p .logs` defensively each restart so this doesn't bite again after a `git clean -fdx`.
+   Then open the file and replace `Developer/Projects/VerbalCoding` with your actual checkout path if it differs, and the `v24.14.0` node version with `node --version` output (drop the leading `v` only if your nvm path uses that style).
+
+   The `.logs/` directory is tracked via `.logs/.gitkeep`, so it exists on every fresh clone and launchd can open `StandardOutPath` / `StandardErrorPath` before `run.sh` starts. If you wipe state with `git clean -fdx`, run `git checkout -- .logs/.gitkeep` (or just `mkdir -p .logs`) before re-bootstrapping.
 
 2. Load it:
 
