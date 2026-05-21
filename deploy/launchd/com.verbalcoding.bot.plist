@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  VerbalCoding launchd template. Copy to ~/Library/LaunchAgents/, edit the
+  marked paths for your machine, then run:
+
+      launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.verbalcoding.bot.plist
+
+  See deploy/README.md for the full setup + restart + uninstall flow.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.verbalcoding.bot</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <!-- EDIT: absolute path to your VerbalCoding checkout. The .logs/
+         directory exists on every fresh clone via .logs/.gitkeep, so
+         launchd can open StandardOut/ErrorPath before run.sh starts. -->
+    <string>cd /Users/YOU/Developer/Projects/VerbalCoding &amp;&amp; exec ./run.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <!-- EDIT: same absolute path -->
+  <string>/Users/YOU/Developer/Projects/VerbalCoding</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <!-- EDIT: prepend the absolute path of the Node binary you want to run.
+         For nvm, this is /Users/YOU/.nvm/versions/node/<vN.N.N>/bin -->
+    <string>/Users/YOU/.nvm/versions/node/v24.14.0/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>HOME</key>
+    <!-- EDIT: your home directory -->
+    <string>/Users/YOU</string>
+    <key>LANG</key>
+    <string>en_US.UTF-8</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+    <key>Crashed</key>
+    <true/>
+  </dict>
+
+  <key>ThrottleInterval</key>
+  <integer>15</integer>
+
+  <key>StandardOutPath</key>
+  <!-- EDIT: matches WorkingDirectory above -->
+  <string>/Users/YOU/Developer/Projects/VerbalCoding/.logs/launchd.out</string>
+
+  <key>StandardErrorPath</key>
+  <string>/Users/YOU/Developer/Projects/VerbalCoding/.logs/launchd.err</string>
+
+  <key>ProcessType</key>
+  <string>Background</string>
+</dict>
+</plist>

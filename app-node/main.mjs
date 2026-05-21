@@ -51,6 +51,8 @@ import {
   buildFallbackDecision,
   isRoutingOnlyUtterance,
 } from './agent_routing.mjs';
+import { createSessionOntology } from './session_ontology.mjs';
+import { parseResearchCommand, runResearchTurn } from './research_mode.mjs';
 import { createNotifier, buildDiscordDeepLink } from './notify.mjs';
 import { progressCategory, summarizeProgressEvents, formatProgressMessage } from './progress_speech.mjs';
 import { buildTtsSettings } from './tts_settings.mjs';
@@ -657,6 +659,30 @@ function recordUtterance(channelKey, text) {
   state.recentUtterances.push(text);
   while (state.recentUtterances.length > 4) state.recentUtterances.shift();
 }
+
+const ontologyByChannel = new Map();
+function ontologyStateFor(channelKey) {
+  const key = String(channelKey || 'default');
+  let store = ontologyByChannel.get(key);
+  if (!store) {
+    store = createSessionOntology({ channelKey: key });
+    try { store.load(); } catch {}
+    ontologyByChannel.set(key, store);
+  }
+  return store;
+}
+function captureOntologyFromTurn(channelKey, { prompt, answer, backend }) {
+  try {
+    const store = ontologyStateFor(channelKey);
+    const promptEntities = store.entitiesFromText(String(prompt || ''), { by: backend, kind: 'utterance' });
+    const answerEntities = store.entitiesFromText(String(answer || ''), { by: backend, kind: 'result' });
+    store.add(promptEntities);
+    store.add(answerEntities);
+    store.save();
+  } catch (e) {
+    warn('ontology capture failed', e?.message || e);
+  }
+}
 function resetRoutingState(channelKey) {
   const state = routingStateFor(channelKey);
   state.activeRouting = { backend: settings.agent.backend, sticky: false };
@@ -976,7 +1002,27 @@ async function handleTtsVoiceCommand(prompt, signal) {
     FIREREDTTS2_PRETRAINED_DIR: selection.backend === 'fireredtts2' ? (process.env.FIREREDTTS2_PRETRAINED_DIR || 'pretrained_models/FireRedTTS2') : process.env.FIREREDTTS2_PRETRAINED_DIR,
   });
   await speakText(voiceChangedText(selection), signal);
+  notifyVoiceCloneSampleGapIfNeeded(selection, signal).catch(e => warn('voice clone gap notice failed', e?.message || e));
   return true;
+}
+
+function isCloneVoiceType(voiceType) {
+  return /^(cloned_reference|prompt_reference|cosyvoice_reference)$/i.test(String(voiceType || ''));
+}
+
+async function notifyVoiceCloneSampleGapIfNeeded(selection, signal) {
+  if (!selection || selection.backend === 'edge') return;
+  if (!isCloneVoiceType(selection.voiceType)) return;
+  const ref = String(selection.voice?.voice || '').trim();
+  if (!ref) return;
+  const candidatePath = path.isAbsolute(ref) ? ref : path.resolve(ROOT, ref);
+  if (fs.existsSync(candidatePath)) return;
+  const en = /^en/i.test(String(settings.voiceLanguage || ''));
+  const msg = en
+    ? `${selection.backend} needs a voice clone sample at ${ref}. Say "voice clone capture" to record one, or pick a non-clone voice.`
+    : `${selection.backend} 백엔드는 음성 클론 샘플(${ref})이 필요해. "보이스 클로닝 캡처"라고 하거나 다른 보이스를 골라줘.`;
+  await sendText(`🎙️ ${msg}`);
+  await speakText(msg, signal, null);
 }
 
 async function handleLanguageCommand(prompt, signal) {
@@ -1035,6 +1081,21 @@ async function sendText(text) {
     log,
     warn,
   });
+}
+
+async function sendEmbed(embed, { content = '' } = {}) {
+  if (!embed) return false;
+  try {
+    const channelId = activeTranscriptChannelId || settings.transcriptChannelId;
+    if (!channelId) return false;
+    const channel = await client.channels.fetch(channelId).catch(() => null);
+    if (!channel?.send) return false;
+    await channel.send(content ? { content, embeds: [embed] } : { embeds: [embed] });
+    return true;
+  } catch (e) {
+    warn('sendEmbed failed', e?.message || e);
+    return false;
+  }
 }
 
 async function sendChannelText(channel, text) {
@@ -1830,6 +1891,65 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
       prompt = previous.originalPrompt;
     }
 
+    const researchCmd = parseResearchCommand(prompt, settings.voiceLanguage);
+    if (researchCmd.type === 'research') {
+      const preemptiveRouting = parseAgentRoutingCommand(prompt, settings.voiceLanguage);
+      let researchBackend = routingState.activeRouting.backend;
+      if (preemptiveRouting.type === 'route') {
+        const routedCandidate = adapterForBackend(preemptiveRouting.backend, session);
+        if (routedCandidate) {
+          researchBackend = preemptiveRouting.backend;
+          if (preemptiveRouting.sticky) routingState.activeRouting = { backend: preemptiveRouting.backend, sticky: true };
+        } else {
+          const en = /^en/i.test(String(settings.voiceLanguage || ''));
+          const msg = en
+            ? `${preemptiveRouting.backend} is not installed. Want me to research with ${settings.agent.label} instead?`
+            : `${preemptiveRouting.backend}이(가) 설치되어 있지 않아. ${settings.agent.label}로 리서치할까?`;
+          await sendText(`⚠️ ${msg}`);
+          await speakText(msg, signal, null);
+          routingState.pendingFallbackPrompt = {
+            requestedBackend: preemptiveRouting.backend,
+            originalPrompt: `research ${researchCmd.query}`,
+          };
+          metricsTurn?.finish({ status: 'research_routing_fallback_pending' });
+          return;
+        }
+      }
+      const en = /^en/i.test(String(settings.voiceLanguage || ''));
+      const startMsg = en ? `Researching ${researchCmd.query}.` : `${researchCmd.query} 리서치할게.`;
+      await sendText(`🔎 ${startMsg}`);
+      await speakText(startMsg, signal, null);
+      const adapter = adapterForBackend(researchBackend, session) || adapterForProjectSession(session);
+      const synthesize = async (synthPrompt) => {
+        const out = await adapter.ask(synthPrompt, signal, { task: false, label: adapter.label, language: settings.voiceLanguage });
+        return String(out || '');
+      };
+      const result = await runResearchTurn({ query: researchCmd.query, language: settings.voiceLanguage, synthesize, signal })
+        .catch(e => ({ status: 'error', error: e?.message || String(e), query: researchCmd.query }));
+      if (result.status === 'ok') {
+        const sentEmbed = await sendEmbed(result.embed);
+        if (!sentEmbed) await sendText(result.markdown);
+        await speakText(result.speech, signal, null);
+        captureOntologyFromTurn(routingKey, { prompt, answer: result.bullets.join('\n'), backend: 'research' });
+      } else if (result.status === 'empty') {
+        await sendText(result.markdown);
+        await speakText(result.speech, signal, null);
+      } else if (result.status === 'no_backend') {
+        const msg = en ? 'No search backend is configured. Set TAVILY_API_KEY or BRAVE_SEARCH_API_KEY.' : '검색 백엔드가 설정돼 있지 않아. TAVILY_API_KEY 또는 BRAVE_SEARCH_API_KEY 환경변수가 필요해.';
+        await sendText(`⚠️ ${msg}`);
+        await speakText(msg, signal, null);
+      } else {
+        const msg = en ? `Research failed: ${result.error || result.status}` : `리서치 실패: ${result.error || result.status}`;
+        await sendText(`⚠️ ${msg}`);
+        await speakText(en ? 'Research failed.' : '리서치 실패.', signal, null);
+      }
+      if (preemptiveRouting.type === 'route' && !preemptiveRouting.sticky && researchBackend !== settings.agent.backend) {
+        routingState.activeRouting = { backend: settings.agent.backend, sticky: false };
+      }
+      metricsTurn?.finish({ status: `research_${result.status}` });
+      return;
+    }
+
     const routing = parseAgentRoutingCommand(prompt, settings.voiceLanguage);
     if (routing.type === 'restore') {
       routingState.activeRouting = { backend: settings.agent.backend, sticky: false };
@@ -1884,6 +2004,10 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     const isHandoff = routingState.lastUsedBackend !== routedBackend;
     const ttsPrefix = isHandoff ? renderAgentPrefix(routedBackend, settings.voiceLanguage) : '';
     if (isHandoff) {
+      const ontologyStore = ontologyStateFor(routingKey);
+      const ontologyBlock = ontologyStore.nodeCount > 0
+        ? ontologyStore.serializeForHandoff({ language: settings.voiceLanguage })
+        : '';
       promptForAgent = buildCrossAgentPrompt({
         prompt: promptForAgent,
         fromBackend: routingState.lastUsedBackend,
@@ -1892,6 +2016,10 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
         priorUtterances: routingState.recentUtterances.slice(0, -1),
         language: settings.voiceLanguage,
       });
+      if (ontologyBlock) {
+        const header = /^en/i.test(String(settings.voiceLanguage || '')) ? '\n\n[Session ontology]\n' : '\n\n[세션 온톨로지]\n';
+        promptForAgent = `${promptForAgent}${header}${ontologyBlock}`;
+      }
     }
     routingState.lastUsedBackend = routedBackend;
     if (!routingState.activeRouting.sticky) routingState.activeRouting = { backend: settings.agent.backend, sticky: false };
@@ -1968,6 +2096,7 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     if (interruptedTurns.has(turnId) || signal.aborted) { metricsTurn?.finish({ status: 'aborted_after_agent' }); return; }
 
     log('Agent answer', selectedAgentAdapter.label, answer.slice(0, 200));
+    captureOntologyFromTurn(routingKey, { prompt, answer, backend: routedBackend });
     const spokenAnswerCore = spokenResultOnly(prompt, answer, settings.voiceLanguage);
     const spokenAnswer = ttsPrefix ? `${ttsPrefix}${spokenAnswerCore}` : spokenAnswerCore;
     const fullAnswerText = `${agentAnswerHeader(settings.voiceLanguage, selectedAgentAdapter.label)}\n${answer || emptyAgentAnswer(settings.voiceLanguage)}`;
@@ -2122,7 +2251,11 @@ async function autoJoin() {
   for (const guild of client.guilds.cache.values()) {
     await guild.channels.fetch().catch(e => warn('auto-join channel fetch failed', guild.name, e?.message || e));
   }
-  const occupied = pickOccupiedUserVoiceChannel(client.guilds.cache.values(), settings.allowedUsers);
+  const activeGuildId = activeVoiceChannelId ? client.channels.cache.get(activeVoiceChannelId)?.guild?.id || '' : '';
+  const occupied = pickOccupiedUserVoiceChannel(client.guilds.cache.values(), settings.allowedUsers, {
+    activeVoiceChannelId,
+    activeGuildId,
+  });
   if (occupied) {
     attempted.push(`${occupied.guild.name}/${occupied.name}`);
     try {

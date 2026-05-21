@@ -1,0 +1,3 @@
+# Keep this directory on fresh clones so launchd can open
+# .logs/launchd.{out,err} before run.sh starts. The contents
+# remain gitignored — see .gitignore for the .logs/* rule.

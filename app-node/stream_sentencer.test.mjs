@@ -88,6 +88,17 @@ test('drops fenced code blocks from speech', () => {
   assert.deepEqual(out, ['Here is the change.', 'Done.']);
 });
 
+test('detects fence marker split 1+1+1 backticks across three pushes', () => {
+  const out = [];
+  const s = createSentencer({ minChars: 1, maxLatencyMs: 999999 });
+  s.on('sentence', t => out.push(t));
+  s.push('Open fence. `');
+  s.push('`');
+  s.push('`python\nconst x = 1\n```\nClosed.');
+  s.flush();
+  assert.deepEqual(out, ['Open fence.', 'Closed.']);
+});
+
 test('detects fence marker split across pushes', () => {
   const out = [];
   const s = createSentencer({ minChars: 1, maxLatencyMs: 999999 });
