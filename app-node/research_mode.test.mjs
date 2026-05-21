@@ -34,6 +34,20 @@ test('parseResearchCommand returns none for unrelated input', () => {
   assert.equal(parseResearchCommand('hi how are you', 'en').type, 'none');
 });
 
+test('parseResearchCommand does not hijack coding utterances containing the word "research"', () => {
+  assert.equal(parseResearchCommand('implement research mode', 'en').type, 'none');
+  assert.equal(parseResearchCommand('fix the research_mode regex', 'en').type, 'none');
+  assert.equal(parseResearchCommand('add docs about research turn', 'en').type, 'none');
+  assert.equal(parseResearchCommand('리서치 모드 코드 좀 봐', 'ko').type, 'none');
+  assert.equal(parseResearchCommand('리서치 코드 리팩토링해줘', 'ko').type, 'none');
+});
+
+test('parseResearchCommand still triggers on agent-routed forms', () => {
+  const c = parseResearchCommand('ask codex to research Node.js streams', 'en');
+  assert.equal(c.type, 'research');
+  assert.equal(c.query, 'Node.js streams');
+});
+
 test('parseResearchCommand preserves internal punctuation in technical queries', () => {
   const cases = [
     ['research Node.js streams', 'Node.js streams'],

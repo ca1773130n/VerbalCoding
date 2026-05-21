@@ -1,5 +1,5 @@
-const RESEARCH_EN = /\b(?:deep\s+)?(?:research|look\s+up|find\s+out\s+about)\s+(.+)$/i;
-const RESEARCH_KO = /(.+?)\s*(?:리서치(?:해줘?)?|조사(?:해줘?)?|찾아봐)/;
+const RESEARCH_EN = /^(?:please\s+)?(?:(?:ask|tell|have|let)\s+[a-z][a-z0-9 \-]{1,30}?\s+(?:to\s+)?)?(?:deep\s+)?(?:research|look\s+up|find\s+out\s+about)\s+(.+)$/i;
+const RESEARCH_KO = /^(.+?)\s*(?:리서치(?:해줘?)?|조사(?:해줘?)?|찾아봐)\s*$/;
 
 export function parseResearchCommand(text, language = 'en') {
   const t = String(text || '').trim();
