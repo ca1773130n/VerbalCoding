@@ -6,6 +6,7 @@ import {
   parseSynthesisOutput,
   renderResearchSpeech,
   renderResearchMarkdown,
+  buildResearchEmbed,
   runResearchTurn,
 } from './research_mode.mjs';
 
@@ -59,10 +60,15 @@ test('parseSynthesisOutput extracts bullets and sources block', () => {
   assert.match(bullets[0], /STORM uses/);
 });
 
-test('renderResearchSpeech joins intro plus bullets', () => {
+test('renderResearchSpeech joins intro plus bullets and tags with prefix', () => {
   const speech = renderResearchSpeech(['A.', 'B.', 'C.'], 'en');
-  assert.match(speech, /Here is what I found/);
+  assert.match(speech, /^Research finding:/);
   assert.match(speech, /A\./);
+});
+
+test('renderResearchSpeech uses Korean prefix for ko', () => {
+  const speech = renderResearchSpeech(['ㄱ.', 'ㄴ.', 'ㄷ.'], 'ko');
+  assert.match(speech, /^리서치 결과:/);
 });
 
 test('renderResearchMarkdown numbers sources', () => {
@@ -99,6 +105,22 @@ test('runResearchTurn happy path with mocked fetch and synth', async () => {
 test('runResearchTurn reports no_backend when both keys missing', async () => {
   const result = await runResearchTurn({ query: 'x', env: {}, fetchImpl: async () => {}, synthesize: async () => '' });
   assert.equal(result.status, 'no_backend');
+});
+
+test('buildResearchEmbed numbers source fields', () => {
+  const embed = buildResearchEmbed({
+    query: 'GraphRAG',
+    bullets: ['summary'],
+    sources: [
+      { title: 'MS GraphRAG', url: 'https://example.com/g' },
+      { title: 'LightRAG', url: 'https://example.com/l' },
+    ],
+    language: 'en',
+  });
+  assert.match(embed.title, /Research: GraphRAG/);
+  assert.equal(embed.fields.length, 2);
+  assert.match(embed.fields[0].name, /^\[1\] MS GraphRAG/);
+  assert.equal(embed.fields[1].value, 'https://example.com/l');
 });
 
 test('runResearchTurn handles empty search gracefully', async () => {

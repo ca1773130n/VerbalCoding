@@ -1002,7 +1002,27 @@ async function handleTtsVoiceCommand(prompt, signal) {
     FIREREDTTS2_PRETRAINED_DIR: selection.backend === 'fireredtts2' ? (process.env.FIREREDTTS2_PRETRAINED_DIR || 'pretrained_models/FireRedTTS2') : process.env.FIREREDTTS2_PRETRAINED_DIR,
   });
   await speakText(voiceChangedText(selection), signal);
+  notifyVoiceCloneSampleGapIfNeeded(selection, signal).catch(e => warn('voice clone gap notice failed', e?.message || e));
   return true;
+}
+
+function isCloneVoiceType(voiceType) {
+  return /^(cloned_reference|prompt_reference|cosyvoice_reference)$/i.test(String(voiceType || ''));
+}
+
+async function notifyVoiceCloneSampleGapIfNeeded(selection, signal) {
+  if (!selection || selection.backend === 'edge') return;
+  if (!isCloneVoiceType(selection.voiceType)) return;
+  const ref = String(selection.voice?.voice || '').trim();
+  if (!ref) return;
+  const candidatePath = path.isAbsolute(ref) ? ref : path.resolve(ROOT, ref);
+  if (fs.existsSync(candidatePath)) return;
+  const en = /^en/i.test(String(settings.voiceLanguage || ''));
+  const msg = en
+    ? `${selection.backend} needs a voice clone sample at ${ref}. Say "voice clone capture" to record one, or pick a non-clone voice.`
+    : `${selection.backend} 백엔드는 음성 클론 샘플(${ref})이 필요해. "보이스 클로닝 캡처"라고 하거나 다른 보이스를 골라줘.`;
+  await sendText(`🎙️ ${msg}`);
+  await speakText(msg, signal, null);
 }
 
 async function handleLanguageCommand(prompt, signal) {
@@ -1061,6 +1081,21 @@ async function sendText(text) {
     log,
     warn,
   });
+}
+
+async function sendEmbed(embed, { content = '' } = {}) {
+  if (!embed) return false;
+  try {
+    const channelId = activeTranscriptChannelId || settings.transcriptChannelId;
+    if (!channelId) return false;
+    const channel = await client.channels.fetch(channelId).catch(() => null);
+    if (!channel?.send) return false;
+    await channel.send(content ? { content, embeds: [embed] } : { embeds: [embed] });
+    return true;
+  } catch (e) {
+    warn('sendEmbed failed', e?.message || e);
+    return false;
+  }
 }
 
 async function sendChannelText(channel, text) {
@@ -1870,7 +1905,8 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
       const result = await runResearchTurn({ query: researchCmd.query, language: settings.voiceLanguage, synthesize, signal })
         .catch(e => ({ status: 'error', error: e?.message || String(e), query: researchCmd.query }));
       if (result.status === 'ok') {
-        await sendText(result.markdown);
+        const sentEmbed = await sendEmbed(result.embed);
+        if (!sentEmbed) await sendText(result.markdown);
         await speakText(result.speech, signal, null);
         captureOntologyFromTurn(routingKey, { prompt, answer: result.bullets.join('\n'), backend: 'research' });
       } else if (result.status === 'no_backend') {
@@ -2187,7 +2223,11 @@ async function autoJoin() {
   for (const guild of client.guilds.cache.values()) {
     await guild.channels.fetch().catch(e => warn('auto-join channel fetch failed', guild.name, e?.message || e));
   }
-  const occupied = pickOccupiedUserVoiceChannel(client.guilds.cache.values(), settings.allowedUsers);
+  const activeGuildId = activeVoiceChannelId ? client.channels.cache.get(activeVoiceChannelId)?.guild?.id || '' : '';
+  const occupied = pickOccupiedUserVoiceChannel(client.guilds.cache.values(), settings.allowedUsers, {
+    activeVoiceChannelId,
+    activeGuildId,
+  });
   if (occupied) {
     attempted.push(`${occupied.guild.name}/${occupied.name}`);
     try {

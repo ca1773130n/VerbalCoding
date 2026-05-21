@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { createSessionOntology } from './session_ontology.mjs';
+import { createSessionOntology, buildExtractionPrompt, parseExtractionJson } from './session_ontology.mjs';
 
 function tmpDir(label) {
   return fs.mkdtempSync(path.join(os.tmpdir(), `vc-onto-${label}-`));
@@ -74,6 +74,32 @@ test('serializeForHandoff groups decisions, files, tools, results', () => {
   assert.match(md, /Relevant files/);
   assert.match(md, /main\.mjs/);
   assert.match(md, /Recent results/);
+});
+
+test('buildExtractionPrompt mentions the schema and the message body', () => {
+  const p = buildExtractionPrompt({ text: 'Routed to codex for the auth refactor', language: 'en' });
+  assert.match(p, /JSON of shape/);
+  assert.match(p, /D=Decision/);
+  assert.match(p, /auth refactor/);
+});
+
+test('parseExtractionJson recovers JSON from fenced output', () => {
+  const raw = '```json\n{"nodes":[{"t":"D","n":"db=postgres"}],"edges":[]}\n```';
+  const out = parseExtractionJson(raw);
+  assert.equal(out.nodes.length, 1);
+  assert.equal(out.nodes[0].t, 'D');
+  assert.equal(out.nodes[0].n, 'db=postgres');
+});
+
+test('parseExtractionJson tolerates surrounding prose', () => {
+  const raw = 'Sure, here is the graph: {"nodes":[{"t":"F","n":"app.mjs"}],"edges":[]} let me know if you need more.';
+  const out = parseExtractionJson(raw);
+  assert.equal(out.nodes.length, 1);
+});
+
+test('parseExtractionJson returns empty on garbage input', () => {
+  const out = parseExtractionJson('totally not json');
+  assert.deepEqual(out, { nodes: [], edges: [] });
 });
 
 test('save/load round-trips state to disk', () => {

@@ -93,12 +93,30 @@ export function parseSynthesisOutput(text) {
 export function renderResearchSpeech(bullets, language = 'en') {
   if (!bullets || !bullets.length) {
     return /^en/i.test(String(language || ''))
-      ? 'I could not find useful sources for that query.'
-      : '쓸 만한 자료를 찾지 못했어.';
+      ? 'Research finding: I could not find useful sources for that query.'
+      : '리서치 결과: 쓸 만한 자료를 찾지 못했어.';
   }
   const en = /^en/i.test(String(language || ''));
-  const intro = en ? 'Here is what I found.' : '찾은 내용 정리할게.';
+  const intro = en ? 'Research finding: here is what I found.' : '리서치 결과: 찾은 내용 정리할게.';
   return [intro, ...bullets].join(' ');
+}
+
+export function buildResearchEmbed({ query, bullets, sources, language = 'en' } = {}) {
+  const en = /^en/i.test(String(language || ''));
+  const description = (bullets || []).map(b => `• ${b}`).join('\n').slice(0, 4000) || (en ? '(no synthesis)' : '(요약 없음)');
+  const fields = (sources || []).slice(0, 5).map((s, i) => ({
+    name: `[${i + 1}] ${(s.title || 'source').slice(0, 240)}`,
+    value: (s.url || '').slice(0, 1000),
+    inline: false,
+  }));
+  return {
+    title: `${en ? '🔎 Research:' : '🔎 리서치:'} ${String(query || '').slice(0, 240)}`,
+    description,
+    color: 0x4F46E5,
+    fields,
+    footer: { text: en ? 'VerbalCoding research turn' : 'VerbalCoding 리서치 턴' },
+    timestamp: new Date().toISOString(),
+  };
 }
 
 export function renderResearchMarkdown({ query, bullets, sources, language = 'en' }) {
@@ -140,6 +158,7 @@ export async function runResearchTurn({ query, language = 'en', env = process.en
     query,
     speech: renderResearchSpeech(useBullets, language),
     markdown: renderResearchMarkdown({ query, bullets: useBullets, sources: searchResult.sources, language }),
+    embed: buildResearchEmbed({ query, bullets: useBullets, sources: searchResult.sources, language }),
     bullets: useBullets,
     sources: searchResult.sources,
   };

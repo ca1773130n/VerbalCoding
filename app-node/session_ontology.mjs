@@ -32,6 +32,44 @@ function emptyState(channelKey) {
   };
 }
 
+export function buildExtractionPrompt({ text, language = 'en', knownNames = [] } = {}) {
+  const en = /^en/i.test(String(language || ''));
+  const lines = [];
+  lines.push(en
+    ? 'Extract a tiny knowledge graph from the message below. Reply ONLY with JSON of shape {"nodes":[{"t":"D|F|T|C|A|R","n":"name"}],"edges":[{"s":"name","p":"d|t|u|p|r|s","o":"name"}]}.'
+    : '아래 메시지에서 작은 지식 그래프를 추출해. JSON만 응답: {"nodes":[{"t":"D|F|T|C|A|R","n":"name"}],"edges":[{"s":"name","p":"d|t|u|p|r|s","o":"name"}]}.');
+  lines.push(en
+    ? 'Types: D=Decision (slot=value), F=File (path), T=Tool (command), C=Concept (noun), A=Agent (backend), R=Result (short summary).'
+    : '타입: D=결정(slot=value), F=파일, T=도구, C=개념, A=에이전트, R=결과 요약.');
+  lines.push(en
+    ? 'Predicates: d=decided, t=touched, u=used, p=produced, r=referenced, s=superseded_by.'
+    : '엣지: d=결정, t=수정, u=사용, p=생성, r=참조, s=덮어쓰기.');
+  if (knownNames.length) {
+    lines.push(en ? `Already known names (prefer these for dedup): ${knownNames.slice(0, 20).join(', ')}` : `이미 등록된 이름(중복 방지에 우선): ${knownNames.slice(0, 20).join(', ')}`);
+  }
+  lines.push(en ? `Message:\n${text}` : `메시지:\n${text}`);
+  lines.push(en ? 'Return ONLY the JSON object, no markdown.' : 'JSON 객체만 반환, 마크다운 없이.');
+  return lines.join('\n\n');
+}
+
+export function parseExtractionJson(raw) {
+  const t = String(raw || '').trim();
+  const fenceMatch = t.match(/```(?:json)?\s*([\s\S]+?)```/);
+  const body = fenceMatch ? fenceMatch[1] : t;
+  const firstBrace = body.indexOf('{');
+  const lastBrace = body.lastIndexOf('}');
+  if (firstBrace === -1 || lastBrace <= firstBrace) return { nodes: [], edges: [] };
+  try {
+    const parsed = JSON.parse(body.slice(firstBrace, lastBrace + 1));
+    const nodes = Array.isArray(parsed?.nodes) ? parsed.nodes : [];
+    const edges = Array.isArray(parsed?.edges) ? parsed.edges : [];
+    return {
+      nodes: nodes.map(n => ({ id: `e_${n.t}_${String(n.n || '').toLowerCase()}`, t: n.t, n: n.n })).filter(n => n.t && n.n),
+      edges: edges.map(e => ({ s: `e_${String(e.s || '').toLowerCase()}`, p: e.p, o: `e_${String(e.o || '').toLowerCase()}` })).filter(e => e.p),
+    };
+  } catch { return { nodes: [], edges: [] }; }
+}
+
 export function createSessionOntology({ rootDir, channelKey, maxNodes = 40, maxEdges = 80, fsApi = fs } = {}) {
   const root = rootDir || defaultRootDir();
   const channel = safeChannelKey(channelKey);
