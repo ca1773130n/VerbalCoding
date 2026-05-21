@@ -1893,11 +1893,20 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
 
     const researchCmd = parseResearchCommand(prompt, settings.voiceLanguage);
     if (researchCmd.type === 'research') {
+      const preemptiveRouting = parseAgentRoutingCommand(prompt, settings.voiceLanguage);
+      let researchBackend = routingState.activeRouting.backend;
+      if (preemptiveRouting.type === 'route') {
+        const routedCandidate = adapterForBackend(preemptiveRouting.backend, session);
+        if (routedCandidate) {
+          researchBackend = preemptiveRouting.backend;
+          if (preemptiveRouting.sticky) routingState.activeRouting = { backend: preemptiveRouting.backend, sticky: true };
+        }
+      }
       const en = /^en/i.test(String(settings.voiceLanguage || ''));
       const startMsg = en ? `Researching ${researchCmd.query}.` : `${researchCmd.query} 리서치할게.`;
       await sendText(`🔎 ${startMsg}`);
       await speakText(startMsg, signal, null);
-      const adapter = adapterForBackend(routingState.activeRouting.backend, session) || adapterForProjectSession(session);
+      const adapter = adapterForBackend(researchBackend, session) || adapterForProjectSession(session);
       const synthesize = async (synthPrompt) => {
         const out = await adapter.ask(synthPrompt, signal, { task: false, label: adapter.label, language: settings.voiceLanguage });
         return String(out || '');
@@ -1909,6 +1918,9 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
         if (!sentEmbed) await sendText(result.markdown);
         await speakText(result.speech, signal, null);
         captureOntologyFromTurn(routingKey, { prompt, answer: result.bullets.join('\n'), backend: 'research' });
+      } else if (result.status === 'empty') {
+        await sendText(result.markdown);
+        await speakText(result.speech, signal, null);
       } else if (result.status === 'no_backend') {
         const msg = en ? 'No search backend is configured. Set TAVILY_API_KEY or BRAVE_SEARCH_API_KEY.' : '검색 백엔드가 설정돼 있지 않아. TAVILY_API_KEY 또는 BRAVE_SEARCH_API_KEY 환경변수가 필요해.';
         await sendText(`⚠️ ${msg}`);
@@ -1917,6 +1929,9 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
         const msg = en ? `Research failed: ${result.error || result.status}` : `리서치 실패: ${result.error || result.status}`;
         await sendText(`⚠️ ${msg}`);
         await speakText(en ? 'Research failed.' : '리서치 실패.', signal, null);
+      }
+      if (preemptiveRouting.type === 'route' && !preemptiveRouting.sticky && researchBackend !== settings.agent.backend) {
+        routingState.activeRouting = { backend: settings.agent.backend, sticky: false };
       }
       metricsTurn?.finish({ status: `research_${result.status}` });
       return;
