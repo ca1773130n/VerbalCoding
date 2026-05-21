@@ -1900,6 +1900,16 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
         if (routedCandidate) {
           researchBackend = preemptiveRouting.backend;
           if (preemptiveRouting.sticky) routingState.activeRouting = { backend: preemptiveRouting.backend, sticky: true };
+        } else {
+          const en = /^en/i.test(String(settings.voiceLanguage || ''));
+          const msg = en
+            ? `${preemptiveRouting.backend} is not installed. Want me to research with ${settings.agent.label} instead?`
+            : `${preemptiveRouting.backend}이(가) 설치되어 있지 않아. ${settings.agent.label}로 리서치할까?`;
+          await sendText(`⚠️ ${msg}`);
+          await speakText(msg, signal, null);
+          routingState.pendingFallbackPrompt = { requestedBackend: preemptiveRouting.backend, originalPrompt: prompt };
+          metricsTurn?.finish({ status: 'research_routing_fallback_pending' });
+          return;
         }
       }
       const en = /^en/i.test(String(settings.voiceLanguage || ''));

@@ -97,6 +97,15 @@ test('parseExtractionJson tolerates surrounding prose', () => {
   assert.equal(out.nodes.length, 1);
 });
 
+test('parseExtractionJson resolves edge endpoints by name to canonical node ids', () => {
+  const raw = '{"nodes":[{"t":"D","n":"db=postgres"},{"t":"F","n":"schema.sql"}],"edges":[{"s":"db=postgres","p":"t","o":"schema.sql"}]}';
+  const out = parseExtractionJson(raw);
+  assert.equal(out.nodes.length, 2);
+  assert.equal(out.edges.length, 1);
+  assert.equal(out.edges[0].s, 'e_D_db=postgres');
+  assert.equal(out.edges[0].o, 'e_F_schema.sql');
+});
+
 test('parseExtractionJson returns empty on garbage input', () => {
   const out = parseExtractionJson('totally not json');
   assert.deepEqual(out, { nodes: [], edges: [] });

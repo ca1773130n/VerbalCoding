@@ -17,8 +17,10 @@
   <array>
     <string>/bin/bash</string>
     <string>-lc</string>
-    <!-- EDIT: absolute path to your VerbalCoding checkout -->
-    <string>cd /Users/YOU/Developer/Projects/VerbalCoding &amp;&amp; exec ./run.sh</string>
+    <!-- EDIT: absolute path to your VerbalCoding checkout.
+         `mkdir -p .logs` guarantees launchd can open StandardOut/ErrorPath
+         even on a fresh clone (the .logs/ directory is gitignored). -->
+    <string>cd /Users/YOU/Developer/Projects/VerbalCoding &amp;&amp; mkdir -p .logs &amp;&amp; exec ./run.sh</string>
   </array>
 
   <key>WorkingDirectory</key>

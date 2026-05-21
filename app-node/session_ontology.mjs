@@ -63,10 +63,23 @@ export function parseExtractionJson(raw) {
     const parsed = JSON.parse(body.slice(firstBrace, lastBrace + 1));
     const nodes = Array.isArray(parsed?.nodes) ? parsed.nodes : [];
     const edges = Array.isArray(parsed?.edges) ? parsed.edges : [];
-    return {
-      nodes: nodes.map(n => ({ id: `e_${n.t}_${String(n.n || '').toLowerCase()}`, t: n.t, n: n.n })).filter(n => n.t && n.n),
-      edges: edges.map(e => ({ s: `e_${String(e.s || '').toLowerCase()}`, p: e.p, o: `e_${String(e.o || '').toLowerCase()}` })).filter(e => e.p),
-    };
+    const nameToId = new Map();
+    const parsedNodes = [];
+    for (const n of nodes) {
+      if (!n || !n.t || !n.n) continue;
+      const id = `e_${n.t}_${String(n.n).toLowerCase()}`;
+      nameToId.set(String(n.n).toLowerCase(), id);
+      parsedNodes.push({ id, t: n.t, n: n.n });
+    }
+    const parsedEdges = [];
+    for (const e of edges) {
+      if (!e || !e.p) continue;
+      const s = nameToId.get(String(e.s || '').toLowerCase());
+      const o = nameToId.get(String(e.o || '').toLowerCase());
+      if (!s || !o) continue;
+      parsedEdges.push({ s, p: e.p, o });
+    }
+    return { nodes: parsedNodes, edges: parsedEdges };
   } catch { return { nodes: [], edges: [] }; }
 }
 
