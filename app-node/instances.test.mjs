@@ -14,8 +14,15 @@ import {
   statusForInstance,
 } from './instances.mjs';
 
+const __tempRoots = [];
+test.after(() => {
+  for (const root of __tempRoots) try { fs.rmSync(root, { recursive: true, force: true }); } catch {}
+});
+
 function tempDir() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'vc-instances-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vc-instances-'));
+  __tempRoots.push(root);
+  return root;
 }
 
 test('listInstanceEnvFiles finds env files except example', () => {

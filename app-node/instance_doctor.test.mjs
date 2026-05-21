@@ -6,9 +6,15 @@ import path from 'node:path';
 
 import { checkInstanceConfigs, tokenFingerprint } from './instance_doctor.mjs';
 
+const __tempRoots = [];
+test.after(() => {
+  for (const root of __tempRoots) try { fs.rmSync(root, { recursive: true, force: true }); } catch {}
+});
+
 function tempRepo() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vc-instance-doctor-'));
   fs.mkdirSync(path.join(root, 'instances'), { recursive: true });
+  __tempRoots.push(root);
   return root;
 }
 
@@ -68,6 +74,7 @@ test('checkInstanceConfigs treats omitted runtime paths as effective default col
 
 test('checkInstanceConfigs warns when HERMES_HOME points at a missing profile', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vc-doctor-'));
+  __tempRoots.push(root);
   const instancesDir = path.join(root, 'instances');
   fs.mkdirSync(instancesDir, { recursive: true });
   fs.writeFileSync(path.join(instancesDir, 'llm-wiki.env'), [
@@ -84,6 +91,7 @@ test('checkInstanceConfigs warns when HERMES_HOME points at a missing profile', 
 
 test('checkInstanceConfigs errors when profile terminal.cwd differs from AGENT_CWD', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vc-doctor-'));
+  __tempRoots.push(root);
   const instancesDir = path.join(root, 'instances');
   const profileDir = path.join(root, '.hermes', 'profiles', 'llm-wiki');
   fs.mkdirSync(instancesDir, { recursive: true });
@@ -106,6 +114,7 @@ test('checkInstanceConfigs errors when profile terminal.cwd differs from AGENT_C
 
 test('checkInstanceConfigs reads only terminal.cwd, ignoring sibling cwd keys', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vc-doctor-'));
+  __tempRoots.push(root);
   const instancesDir = path.join(root, 'instances');
   const profileDir = path.join(root, '.hermes', 'profiles', 'llm-wiki');
   fs.mkdirSync(instancesDir, { recursive: true });

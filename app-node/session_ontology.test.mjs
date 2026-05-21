@@ -5,8 +5,15 @@ import path from 'node:path';
 import os from 'node:os';
 import { createSessionOntology, buildExtractionPrompt, parseExtractionJson } from './session_ontology.mjs';
 
+const __tempRoots = [];
+test.after(() => {
+  for (const root of __tempRoots) try { fs.rmSync(root, { recursive: true, force: true }); } catch {}
+});
+
 function tmpDir(label) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), `vc-onto-${label}-`));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), `vc-onto-${label}-`));
+  __tempRoots.push(root);
+  return root;
 }
 
 test('add inserts nodes and dedupes by (type, lowercase name)', () => {

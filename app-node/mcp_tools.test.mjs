@@ -7,6 +7,11 @@ import path from 'node:path';
 import { createVerbalCodingMcpTools, readEnvFile } from './mcp_tools.mjs';
 import { AUTO_RESTART_ENV_KEY } from './restart_policy.mjs';
 
+const __tempRoots = [];
+test.after(() => {
+  for (const root of __tempRoots) try { fs.rmSync(root, { recursive: true, force: true }); } catch {}
+});
+
 test('MCP tool definitions expose VerbalCoding control surface', () => {
   const { toolDefs, tools } = createVerbalCodingMcpTools({ root: process.cwd() });
   const names = toolDefs.map(tool => tool.name).sort();
@@ -16,6 +21,7 @@ test('MCP tool definitions expose VerbalCoding control surface', () => {
 
 test('set_auto_restart MCP tool writes the default-off restart flag', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vc-mcp-'));
+  __tempRoots.push(dir);
   const envPath = path.join(dir, '.env');
   const { tools } = createVerbalCodingMcpTools({ root: dir, envPath });
   const off = await tools.get('set_auto_restart').handler({ enabled: false });
@@ -28,6 +34,7 @@ test('set_auto_restart MCP tool writes the default-off restart flag', async () =
 
 test('set_language MCP tool updates STT, progress, and TTS language together', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vc-mcp-lang-'));
+  __tempRoots.push(dir);
   const envPath = path.join(dir, '.env');
   const { tools } = createVerbalCodingMcpTools({ root: dir, envPath });
   const result = await tools.get('set_language').handler({ language: 'en' });

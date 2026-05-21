@@ -10,6 +10,19 @@ node_modules/
 !.logs/.gitkeep
 .agent-sessions/
 .verbalcoding-session
+
+# Leaked test temp dirs when TMPDIR is sandboxed onto cwd (e.g. context-mode).
+vc-doctor-*/
+vc-hermes-home-*/
+vc-home-*/
+vc-instance-doctor-*/
+vc-instances-*/
+vc-mcp-*/
+vc-mcp-lang-*/
+vc-onto-*/
+vc-sessions-*/
+vc-soul-*/
+voice-config-test-*/
 .venv-openvoice/
 .venv-omnivoice/
 .venv-supertonic/

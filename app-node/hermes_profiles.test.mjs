@@ -21,8 +21,15 @@ import path from 'node:path';
 
 import { hermesProfilesRoot, hermesProfileDir, profileExists } from './hermes_profiles.mjs';
 
+const __tempRoots = [];
+test.after(() => {
+  for (const root of __tempRoots) try { fs.rmSync(root, { recursive: true, force: true }); } catch {}
+});
+
 function tempHome() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'vc-hermes-home-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vc-hermes-home-'));
+  __tempRoots.push(root);
+  return root;
 }
 
 test('hermesProfilesRoot resolves under HOME', () => {
@@ -208,6 +215,7 @@ import { applyProjectContextToSoul, VC_SOUL_MARKER_START, VC_SOUL_MARKER_END } f
 
 test('applyProjectContextToSoul appends a marker block to existing SOUL.md', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'vc-soul-'));
+  __tempRoots.push(tmp);
   const soulPath = path.join(tmp, 'SOUL.md');
   const persona = 'You are Hermes Agent, an intelligent AI assistant.';
   fs.writeFileSync(soulPath, persona);
@@ -222,6 +230,7 @@ test('applyProjectContextToSoul appends a marker block to existing SOUL.md', () 
 
 test('applyProjectContextToSoul updates an existing marker block in place (idempotent)', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'vc-soul-'));
+  __tempRoots.push(tmp);
   const soulPath = path.join(tmp, 'SOUL.md');
   fs.writeFileSync(soulPath, 'Persona text.');
   applyProjectContextToSoul(soulPath, 'first context');
@@ -237,6 +246,7 @@ test('applyProjectContextToSoul updates an existing marker block in place (idemp
 
 test('applyProjectContextToSoul writes a fresh SOUL.md when none exists', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'vc-soul-'));
+  __tempRoots.push(tmp);
   const soulPath = path.join(tmp, 'SOUL.md');
   applyProjectContextToSoul(soulPath, 'fresh project context');
   const out = fs.readFileSync(soulPath, 'utf8');
@@ -247,6 +257,7 @@ test('applyProjectContextToSoul writes a fresh SOUL.md when none exists', () => 
 
 test('applyProjectContextToSoul is a no-op when projectContext is empty', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'vc-soul-'));
+  __tempRoots.push(tmp);
   const soulPath = path.join(tmp, 'SOUL.md');
   fs.writeFileSync(soulPath, 'persona');
   applyProjectContextToSoul(soulPath, '   ');

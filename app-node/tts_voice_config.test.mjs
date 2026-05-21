@@ -15,6 +15,11 @@ import {
   writeTtsVoiceConfig,
 } from './tts_voice_config.mjs';
 
+const __tempRoots = [];
+test.after(() => {
+  for (const root of __tempRoots) try { fs.rmSync(root, { recursive: true, force: true }); } catch {}
+});
+
 test('effectiveTtsVoiceSelection reads backend and voice type from config', () => {
   const config = defaultTtsVoiceConfig();
   config.currentBackend = 'edge';
@@ -142,6 +147,7 @@ test('updateTtsVoiceConfig can switch to OmniVoice backend default voice', () =>
 
 test('read and write voice config round trips current selection', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-config-test-'));
+  __tempRoots.push(dir);
   const file = path.join(dir, 'tts-voices.json');
   const config = updateTtsVoiceConfig(defaultTtsVoiceConfig(), { voiceType: 'korean_female' });
 

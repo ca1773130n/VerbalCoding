@@ -8,6 +8,11 @@ import { healInstanceProfileFromEnv } from './instance_profile_lifecycle.mjs';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 
+const __tempRoots = [];
+test.after(() => {
+  for (const root of __tempRoots) try { fs.rmSync(root, { recursive: true, force: true }); } catch {}
+});
+
 test('package exposes a short vc shell command', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 
@@ -150,6 +155,7 @@ test('Ubuntu Docker smoke script validates clean install without secrets', () =>
 
 test('healInstanceProfileFromEnv ensures profile when HERMES_HOME is set', async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'vc-home-'));
+  __tempRoots.push(home);
   const calls = [];
   const ensure = async args => {
     calls.push(args);

@@ -16,8 +16,14 @@ import {
   slugifySessionName,
 } from './project_sessions.mjs';
 
+const __tempRoots = [];
+test.after(() => {
+  for (const root of __tempRoots) try { fs.rmSync(root, { recursive: true, force: true }); } catch {}
+});
+
 test('project sessions map Discord text and voice channel ids to isolated Hermes session files', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vc-sessions-'));
+  __tempRoots.push(root);
   const state = loadProjectSessions(path.join(root, 'sessions.json'));
   const session = createProjectSession({ root, state, name: 'LLM Wiki', workdir: '/tmp/llm-wiki', channelId: 'text-1', voiceChannelId: 'voice-1', mcpContext: 'llm-wiki graph' });
   assert.equal(session.slug, 'llm-wiki');
@@ -30,6 +36,7 @@ test('project sessions map Discord text and voice channel ids to isolated Hermes
 
 test('project sessions persist and can be rebound to another channel', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vc-sessions-persist-'));
+  __tempRoots.push(root);
   const configPath = path.join(root, 'sessions.json');
   const state = loadProjectSessions(configPath);
   createProjectSession({ root, state, name: 'Other Project', workdir: root, channelId: 'a' });
