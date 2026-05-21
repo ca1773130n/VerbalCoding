@@ -34,6 +34,27 @@ test('parseResearchCommand returns none for unrelated input', () => {
   assert.equal(parseResearchCommand('hi how are you', 'en').type, 'none');
 });
 
+test('parseResearchCommand preserves internal punctuation in technical queries', () => {
+  const cases = [
+    ['research Node.js streams', 'Node.js streams'],
+    ['look up GPT-4.1 vs Claude 4.7', 'GPT-4.1 vs Claude 4.7'],
+    ['research https://example.com/foo?bar=1', 'https://example.com/foo?bar=1'],
+    ['research what is 1.5 vs 2.0', 'what is 1.5 vs 2.0'],
+  ];
+  for (const [input, expected] of cases) {
+    const c = parseResearchCommand(input, 'en');
+    assert.equal(c.type, 'research', `failed parse for ${input}`);
+    assert.equal(c.query, expected, `expected '${expected}' from '${input}', got '${c.query}'`);
+  }
+});
+
+test('parseResearchCommand strips only trailing sentence punctuation', () => {
+  const c = parseResearchCommand('research Node.js streams.', 'en');
+  assert.equal(c.query, 'Node.js streams');
+  const q = parseResearchCommand('research GPT-4.1?', 'en');
+  assert.equal(q.query, 'GPT-4.1');
+});
+
 test('buildSynthesisPrompt embeds query and sources', () => {
   const p = buildSynthesisPrompt({
     query: 'STORM autoresearch',

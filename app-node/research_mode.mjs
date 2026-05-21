@@ -1,4 +1,4 @@
-const RESEARCH_EN = /\b(?:deep\s+)?(?:research|look\s+up|find\s+out\s+about)\s+(.+?)(?:[?.!]|$)/i;
+const RESEARCH_EN = /\b(?:deep\s+)?(?:research|look\s+up|find\s+out\s+about)\s+(.+)$/i;
 const RESEARCH_KO = /(.+?)\s*(?:리서치(?:해줘?)?|조사(?:해줘?)?|찾아봐)/;
 
 export function parseResearchCommand(text, language = 'en') {

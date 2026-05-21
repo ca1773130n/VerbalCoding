@@ -1907,7 +1907,10 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
             : `${preemptiveRouting.backend}이(가) 설치되어 있지 않아. ${settings.agent.label}로 리서치할까?`;
           await sendText(`⚠️ ${msg}`);
           await speakText(msg, signal, null);
-          routingState.pendingFallbackPrompt = { requestedBackend: preemptiveRouting.backend, originalPrompt: prompt };
+          routingState.pendingFallbackPrompt = {
+            requestedBackend: preemptiveRouting.backend,
+            originalPrompt: `research ${researchCmd.query}`,
+          };
           metricsTurn?.finish({ status: 'research_routing_fallback_pending' });
           return;
         }
