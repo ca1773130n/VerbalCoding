@@ -1920,8 +1920,12 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
       await sendText(`🔎 ${startMsg}`);
       await speakText(startMsg, signal, null);
       const adapter = adapterForBackend(researchBackend, session) || adapterForProjectSession(session);
-      const synthesize = async (synthPrompt) => {
-        const out = await adapter.ask(synthPrompt, signal, { task: false, label: adapter.label, language: settings.voiceLanguage });
+      const synthesize = async (synthPrompt, opts = {}) => {
+        const out = await adapter.ask(synthPrompt, signal, {
+          task: Boolean(opts.task),
+          label: adapter.label,
+          language: settings.voiceLanguage,
+        });
         return String(out || '');
       };
       const result = await runResearchTurn({ query: researchCmd.query, language: settings.voiceLanguage, synthesize, signal })
@@ -1935,7 +1939,9 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
         await sendText(result.markdown);
         await speakText(result.speech, signal, null);
       } else if (result.status === 'no_backend') {
-        const msg = en ? 'No search backend is configured. Set TAVILY_API_KEY or BRAVE_SEARCH_API_KEY.' : '검색 백엔드가 설정돼 있지 않아. TAVILY_API_KEY 또는 BRAVE_SEARCH_API_KEY 환경변수가 필요해.';
+        const msg = en
+          ? 'No search backend is configured. Set TAVILY_API_KEY, BRAVE_SEARCH_API_KEY, SEARXNG_URL, or SEARCH_BACKEND_AGENT_FALLBACK=1 to delegate research to the active agent.'
+          : '검색 백엔드가 설정돼 있지 않아. TAVILY_API_KEY, BRAVE_SEARCH_API_KEY, SEARXNG_URL 중 하나를 설정하거나 SEARCH_BACKEND_AGENT_FALLBACK=1로 활성 에이전트에게 위임할 수 있어.';
         await sendText(`⚠️ ${msg}`);
         await speakText(msg, signal, null);
       } else {

@@ -8,6 +8,9 @@ import {
   renderResearchMarkdown,
   buildResearchEmbed,
   runResearchTurn,
+  selectSearchBackend,
+  buildAgentDelegatedResearchPrompt,
+  parseAgentDelegatedOutput,
 } from './research_mode.mjs';
 
 test('parseResearchCommand picks up English "research X"', () => {
@@ -156,6 +159,100 @@ test('buildResearchEmbed numbers source fields', () => {
   assert.equal(embed.fields.length, 2);
   assert.match(embed.fields[0].name, /^\[1\] MS GraphRAG/);
   assert.equal(embed.fields[1].value, 'https://example.com/l');
+});
+
+test('selectSearchBackend honors explicit SEARCH_BACKEND override', () => {
+  assert.equal(selectSearchBackend({ SEARCH_BACKEND: 'agent' }).kind, 'agent');
+  assert.equal(selectSearchBackend({ SEARCH_BACKEND: 'tavily', TAVILY_API_KEY: 'k' }).kind, 'tavily');
+  // explicit pick without matching key falls through to discovery order
+  assert.equal(selectSearchBackend({ SEARCH_BACKEND: 'brave' }).kind, 'none');
+  assert.equal(selectSearchBackend({ SEARCH_BACKEND: 'brave', TAVILY_API_KEY: 'k' }).kind, 'tavily');
+});
+
+test('selectSearchBackend default priority is tavily → brave → searxng → none', () => {
+  assert.equal(selectSearchBackend({}).kind, 'none');
+  assert.equal(selectSearchBackend({ SEARXNG_URL: 'http://localhost:8888' }).kind, 'searxng');
+  assert.equal(selectSearchBackend({ BRAVE_API_KEY: 'b', SEARXNG_URL: 'http://x' }).kind, 'brave');
+  assert.equal(selectSearchBackend({ TAVILY_API_KEY: 't', BRAVE_API_KEY: 'b' }).kind, 'tavily');
+});
+
+test('selectSearchBackend uses agent fallback opt-in when no key is present', () => {
+  assert.equal(selectSearchBackend({ SEARCH_BACKEND_AGENT_FALLBACK: '1' }).kind, 'agent');
+});
+
+test('runResearchTurn with SEARXNG_URL builds JSON request and synthesises bullets', async () => {
+  const env = { SEARXNG_URL: 'http://searx.local' };
+  const captured = [];
+  const fetchImpl = async (url) => {
+    captured.push(url);
+    return {
+      ok: true,
+      json: async () => ({
+        results: [
+          { title: 'LightRAG', url: 'https://arxiv.org/abs/2410.05779', content: 'LightRAG dual-level retrieval.' },
+          { title: 'HippoRAG', url: 'https://arxiv.org/abs/2405.14831', content: 'PPR-based memory.' },
+        ],
+      }),
+    };
+  };
+  const synthesize = async () => '- LightRAG is dual-level retrieval.\n- HippoRAG uses PPR.\n- GraphRAG uses Leiden clusters.\n\nSOURCES:\n[1] LightRAG\n[2] HippoRAG';
+  const result = await runResearchTurn({ query: 'GraphRAG family', env, fetchImpl, synthesize, language: 'en' });
+  assert.equal(result.status, 'ok');
+  assert.equal(result.sources.length, 2);
+  assert.equal(result.bullets.length, 3);
+  assert.match(captured[0], /searx\.local\/search\?.*q=GraphRAG/);
+  assert.match(captured[0], /format=json/);
+});
+
+test('runResearchTurn agent-delegated path skips performSearch and parses agent output', async () => {
+  const env = { SEARCH_BACKEND: 'agent' };
+  let fetchCalled = false;
+  const fetchImpl = async () => { fetchCalled = true; return { ok: false, json: async () => ({}) }; };
+  const synthCalls = [];
+  const synthesize = async (prompt, opts) => {
+    synthCalls.push({ prompt, opts });
+    return [
+      '- ACE evolves a per-project playbook that beats fine-tuning.',
+      '- It compounds across sessions without changing model weights.',
+      '- Open implementation available from the paper authors.',
+      '',
+      'SOURCES:',
+      '[1] ACE paper | https://arxiv.org/abs/2510.04618',
+      '[2] Project README | https://github.com/example/ace-repo',
+    ].join('\n');
+  };
+  const result = await runResearchTurn({ query: 'Agentic Context Engineering ACE', env, fetchImpl, synthesize, language: 'en' });
+  assert.equal(fetchCalled, false);
+  assert.equal(result.status, 'ok');
+  assert.equal(result.backend, 'agent');
+  assert.equal(result.bullets.length, 3);
+  assert.equal(result.sources.length, 2);
+  assert.equal(result.sources[0].url, 'https://arxiv.org/abs/2510.04618');
+  assert.equal(synthCalls[0].opts.task, true, 'agent-delegated synthesise call sets task=true for longer timeout');
+});
+
+test('parseAgentDelegatedOutput tolerates dash separators and missing brackets', () => {
+  const text = [
+    '- A.',
+    '- B.',
+    '- C.',
+    '',
+    'SOURCES:',
+    '[1] Foo paper — https://example.com/foo',
+    'Bar - https://example.com/bar',
+  ].join('\n');
+  const { bullets, sources } = parseAgentDelegatedOutput(text);
+  assert.equal(bullets.length, 3);
+  assert.equal(sources.length, 2);
+  assert.equal(sources[0].url, 'https://example.com/foo');
+  assert.equal(sources[1].url, 'https://example.com/bar');
+});
+
+test('buildAgentDelegatedResearchPrompt names the query and the strict format', () => {
+  const p = buildAgentDelegatedResearchPrompt({ query: 'STORM autoresearch', language: 'en' });
+  assert.match(p, /You have web access/);
+  assert.match(p, /STORM autoresearch/);
+  assert.match(p, /SOURCES:/);
 });
 
 test('runResearchTurn handles empty search gracefully', async () => {
