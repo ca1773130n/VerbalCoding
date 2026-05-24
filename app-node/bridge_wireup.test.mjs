@@ -21,6 +21,7 @@ import { createTtsRuntime } from './tts_runtime.mjs';
 import { createVoiceIO } from './voice_io.mjs';
 import { createDiscordVoiceSetup } from './discord_voice_setup.mjs';
 import { createUtteranceRouter } from './utterance_router.mjs';
+import { createVoiceTurnRunner } from './voice_turn_runner.mjs';
 import { createAgentTurnLifecycle } from './agent_turn.mjs';
 
 const noop = () => {};
@@ -114,8 +115,9 @@ function buildSystem(overrides = {}) {
 
   const agentAdapter = { label: 'hermes', backend: 'hermes', readSessionId: () => null, ask: async () => 'mock answer' };
 
-  // --- circular dep resolution: forward-declared utteranceRouter + thunk ---
+  // --- circular dep resolution: forward-declared voiceTurnRunner + thunk ---
   let utteranceRouter;
+  let voiceTurnRunner;
   const voiceIO = createVoiceIO({
     bridge, settings, client,
     execFileAsync: sharedHelpers.execFileAsync,
@@ -139,9 +141,9 @@ function buildSystem(overrides = {}) {
     validateProcessingBargeIn: async () => ({ action: 'ignore', text: '' }),
     enqueueDeferredProcessingUtterance: () => true,
     newLatencyTurn: () => ({ mark: () => {}, addMeta: () => {}, stage: () => {}, finish: () => {} }),
-    // THUNK: at construction time utteranceRouter is undefined; the thunk
+    // THUNK: at construction time voiceTurnRunner is undefined; the thunk
     // defers the lookup until the call actually happens.
-    handleRecording: (...args) => utteranceRouter.handleRecording(...args),
+    handleRecording: (...args) => voiceTurnRunner.handleRecording(...args),
   });
 
   const discordVoiceSetup = createDiscordVoiceSetup({
@@ -208,30 +210,48 @@ function buildSystem(overrides = {}) {
     applyRuntimeLanguage: noop,
     persistEnvValues: noop,
     discardVoiceInputQueues: () => 0,
-    // Phase 4b deps
+    ...overrides,
+  });
+
+  voiceTurnRunner = createVoiceTurnRunner({
+    bridge, agentTurnLifecycle, settings, client,
+    log: sharedHelpers.log, warn: sharedHelpers.warn, fs: { rm: (_p, _o, cb) => cb && cb() },
     transcribe: voiceIO.transcribe,
     beginStreamingTurn: ttsPlayer.beginStreamingTurn,
     endStreamingTurn: ttsPlayer.endStreamingTurn,
-    client,
+    speakText: ttsPlayer.speakText,
+    queueProgressSpeechText: progressHandler.queueProgressSpeechText,
+    stopProgressSpeech: progressHandler.stopProgressSpeech,
+    speakImmediateNotice: progressHandler.speakImmediateNotice,
+    maybeNotifyTaskComplete: notificationHandler.maybeNotifyTaskComplete,
+    handleLanguageCommand: utteranceRouter.handleLanguageCommand,
+    handleTtsVoiceCommand: utteranceRouter.handleTtsVoiceCommand,
+    handleVoiceCloneCommand: utteranceRouter.handleVoiceCloneCommand,
+    dispatchPlanModeUtterance: utteranceRouter.dispatchPlanModeUtterance,
+    adapterForBackend: utteranceRouter.adapterForBackend,
+    adapterForProjectSession: utteranceRouter.adapterForProjectSession,
+    planChannelKey: utteranceRouter.planChannelKey,
+    routingStateFor: utteranceRouter.routingStateFor,
+    recordUtterance: utteranceRouter.recordUtterance,
+    clearTransientRouting: utteranceRouter.clearTransientRouting,
     isAllowed: sharedHelpers.isAllowed,
     isAbortError: sharedHelpers.isAbortError,
     sleep: sharedHelpers.sleep,
+    sendText: sharedHelpers.sendText,
     sendEmbed: sharedHelpers.sendEmbed,
-    speakImmediateNotice: progressHandler.speakImmediateNotice,
     reloadRuntimeLanguageFromEnv: sharedHelpers.reloadRuntimeLanguageFromEnv,
     drainDeferredProcessingUtterances: noopAsync,
-    maybeNotifyTaskComplete: notificationHandler.maybeNotifyTaskComplete,
+    resolveProjectSessionForChannel: () => null,
+    projectSessionContextText: () => '',
     ontologyStateFor: () => ({ nodeCount: 0, serializeForHandoff: () => '' }),
     captureOntologyFromTurn: noop,
-    queueProgressSpeechText: progressHandler.queueProgressSpeechText,
-    stopProgressSpeech: progressHandler.stopProgressSpeech,
-    agentAnswerHeader: () => 'agent says:',
-    emptyAgentAnswer: () => '(empty)',
     formatRecentDiscordContext: () => '',
     formatSttResultMessage: (_lang, _u, t) => `you said: ${t}`,
     formatSttStartMessage: () => '🎧',
     formatVoiceErrorMessage: (_lang, m) => m,
     formatWakeRejectedMessage: () => 'no wake word',
+    agentAnswerHeader: () => 'agent says:',
+    emptyAgentAnswer: () => '(empty)',
     spokenResultOnly: (_p, a) => a,
     stripWake: t => t,
     acceptsWake: () => true,
@@ -250,6 +270,7 @@ function buildSystem(overrides = {}) {
     renderAgentPrefix: () => '',
     buildCrossAgentPrompt: ({ prompt }) => prompt,
     buildFallbackDecision: () => ({ slot: 'fallback' }),
+    parseDecisionAnswer: () => ({ type: 'unknown' }),
     parseResearchCommand: () => ({ type: 'none' }),
     runResearchTurn: async () => ({ status: 'no_backend' }),
     PROGRESS_IDLE_CHECK_MS: 5000,
@@ -258,15 +279,17 @@ function buildSystem(overrides = {}) {
     PROGRESS_IDLE_NOTICE_MAX_MS: 30000,
     PROGRESS_IDLE_NOTICE_MULTIPLIER: 1.8,
     STT_START_VOICE_NOTICE: false,
+    // Apply user overrides to voiceTurnRunner too (deps like `transcribe` live
+    // here in Phase 7a+ — they used to be on the utteranceRouter factory).
     ...overrides,
   });
 
-  return { bridge, settings, client, agentAdapter, ttsPlayer, progressHandler, notificationHandler, ttsRuntime, voiceIO, discordVoiceSetup, utteranceRouter, getUtteranceRouter: () => utteranceRouter };
+  return { bridge, settings, client, agentAdapter, ttsPlayer, progressHandler, notificationHandler, ttsRuntime, voiceIO, discordVoiceSetup, utteranceRouter, voiceTurnRunner, getUtteranceRouter: () => utteranceRouter };
 }
 
 // --- wire-up correctness -------------------------------------------------
 
-test('the forward-declared utteranceRouter thunk resolves at invocation time', async () => {
+test('the forward-declared voiceTurnRunner thunk resolves at invocation time', async () => {
   // Reproduce main.mjs's exact pattern: voiceIO is built first with a
   // closure that references `utteranceRouter` before it's assigned. If
   // the thunk accidentally captured the (still-undefined) value at
@@ -279,10 +302,10 @@ test('the forward-declared utteranceRouter thunk resolves at invocation time', a
   // real PATH via commandIsInstalled; see the end-to-end test below for the
   // strict round-trip via voiceIO.transcribe instead.)
   const system = buildSystem();
-  assert.equal(typeof system.utteranceRouter.handleRecording, 'function');
+  assert.equal(typeof system.voiceTurnRunner.handleRecording, 'function');
   let threw = null;
   try {
-    await system.utteranceRouter.handleRecording('user-1', '/tmp/u.wav', 8192, 1, null);
+    await system.voiceTurnRunner.handleRecording('user-1', '/tmp/u.wav', 8192, 1, null);
   } catch (e) { threw = e; }
   assert.equal(threw, null, 'handleRecording reachable via thunk closure; no TDZ throw');
   assert.equal(system.bridge.processing, false, 'turn cleaned up');
@@ -311,29 +334,30 @@ test('bridge state is shared by reference across factory closures', () => {
   assert.equal(bridge.speaking, false, 'progress handler cleared shared speaking flag');
 });
 
-test('voice_io.transcribe is reachable from utterance_router via deps', async () => {
-  // Reproduces the other half of the circular dep: utterance_router calls
+test('voice_io.transcribe is reachable from voice_turn_runner via deps', async () => {
+  // Reproduces the other half of the circular dep: voice_turn_runner calls
   // voice_io.transcribe through its deps. Patch voice_io.transcribe and
   // verify handleRecording reaches it.
   let transcribedPath = null;
   const system = buildSystem({
     transcribe: async wav => { transcribedPath = wav; return 'hermes say hi'; },
   });
-  await system.utteranceRouter.handleRecording('user-1', '/tmp/wired.wav', 4096, 1, null);
-  assert.equal(transcribedPath, '/tmp/wired.wav', 'router reached voice_io.transcribe through deps');
+  await system.voiceTurnRunner.handleRecording('user-1', '/tmp/wired.wav', 4096, 1, null);
+  assert.equal(transcribedPath, '/tmp/wired.wav', 'runner reached voice_io.transcribe through deps');
 });
 
-test('utteranceRouter destructured exports include handleRecording', () => {
-  // Explicit check (the per-module test had this gap before — Codex flagged it).
-  const { utteranceRouter } = buildSystem();
+test('utteranceRouter destructured exports include dispatch handlers + adapter selection', () => {
+  // handleRecording moved to voice_turn_runner in Phase 7a.
+  const { utteranceRouter, voiceTurnRunner } = buildSystem();
   for (const name of [
     'planChannelKey', 'askNextDecision', 'finalizePlanReady', 'dispatchPlanModeUtterance',
     'planNarrationLines', 'adapterForProjectSession', 'routingStateFor', 'recordUtterance',
     'clearTransientRouting', 'adapterForBackend', 'handleTtsVoiceCommand', 'handleLanguageCommand',
-    'handleVoiceCloneCommand', 'interruptCurrentResponse', 'handleRecording',
+    'handleVoiceCloneCommand', 'interruptCurrentResponse',
   ]) {
     assert.equal(typeof utteranceRouter[name], 'function', `utterance_router.${name} bound after factory call`);
   }
+  assert.equal(typeof voiceTurnRunner.handleRecording, 'function', 'voice_turn_runner.handleRecording bound');
 });
 
 test('voiceIO destructured exports include transcribe + subscribeUser', () => {
@@ -386,8 +410,8 @@ test('end-to-end: queueSegment timer triggers flushUtterance which calls handleR
   // Override handleRecording entirely so we can observe the thunk path.
   // We need to re-build the system in a way that lets us patch the router
   // post-construction. Easiest: monkey-patch the returned router instance.
-  const originalHandleRecording = system.utteranceRouter.handleRecording;
-  system.utteranceRouter.handleRecording = async (...args) => {
+  const originalHandleRecording = system.voiceTurnRunner.handleRecording;
+  system.voiceTurnRunner.handleRecording = async (...args) => {
     handleRecordingCalled = true;
     return originalHandleRecording(...args);
   };

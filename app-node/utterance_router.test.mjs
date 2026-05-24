@@ -121,12 +121,14 @@ function makeDeps(overrides = {}) {
 }
 
 test('createUtteranceRouter exposes the expected functions', () => {
+  // handleRecording moved to voice_turn_runner in Phase 7a — see
+  // voice_turn_runner.test.mjs for its behaviour tests.
   const router = createUtteranceRouter(makeDeps());
   for (const name of [
     'planChannelKey', 'askNextDecision', 'finalizePlanReady', 'dispatchPlanModeUtterance',
     'planNarrationLines', 'adapterForProjectSession', 'routingStateFor', 'recordUtterance',
     'clearTransientRouting', 'adapterForBackend', 'handleTtsVoiceCommand', 'handleLanguageCommand',
-    'handleVoiceCloneCommand', 'interruptCurrentResponse', 'handleRecording',
+    'handleVoiceCloneCommand', 'interruptCurrentResponse',
   ]) {
     assert.equal(typeof router[name], 'function', `${name} is exposed`);
   }
@@ -207,126 +209,9 @@ test('adapterForProjectSession caches per-session adapters', () => {
   assert.equal(deps.bridge.agentAdaptersBySession.size, 1);
 });
 
-// --- handleRecording: full flow integration ------------------------------
-
-test('handleRecording happy path: transcribes, asks agent, sends + speaks answer, cleans up', async () => {
-  const calls = { transcribe: 0, askPrompt: '', sendText: [], speakText: [], notify: [] };
-  const deps = makeDeps({
-    transcribe: async wav => { calls.transcribe++; assert.equal(wav, '/tmp/u.wav'); return 'hermes do the thing'; },
-    sendText: async t => { calls.sendText.push(t); return true; },
-    speakText: async t => { calls.speakText.push(t); },
-    maybeNotifyTaskComplete: async ({ answer, label }) => { calls.notify.push({ answer, label }); },
-    agentAdapter: { label: 'hermes', backend: 'hermes', readSessionId: () => null, ask: async (prompt, _signal, plan) => { calls.askPrompt = prompt; assert.equal(plan.label, 'hermes'); return 'twelve apples'; } },
-  });
-  const { handleRecording } = createUtteranceRouter(deps);
-
-  assert.equal(deps.bridge.processing, false);
-  await handleRecording('user-1', '/tmp/u.wav', 8192, 1, null);
-
-  assert.equal(calls.transcribe, 1, 'transcribe called once');
-  assert.equal(calls.askPrompt, 'hermes do the thing', 'agent receives the post-wake prompt');
-  assert.deepEqual(calls.speakText.at(-1), 'twelve apples', 'agent answer is spoken');
-  assert.ok(calls.sendText.some(s => /you said: hermes do the thing/.test(s)), 'STT result echoed to text channel');
-  assert.equal(calls.notify.length, 1, 'maybeNotifyTaskComplete fires once');
-  assert.equal(deps.bridge.processing, false, 'processing flag cleared in finally');
-  assert.equal(deps.bridge.activeTurnId, 0, 'activeTurnId cleared');
-  assert.equal(deps.bridge.activeProgressAbortController, null, 'progress controller cleared');
-});
-
-test('handleRecording drops when bridge.processing is already true', async () => {
-  let agentCalls = 0;
-  const deps = makeDeps({
-    agentAdapter: { label: 'hermes', backend: 'hermes', readSessionId: () => null, ask: async () => { agentCalls++; return ''; } },
-  });
-  deps.bridge.processing = true;
-  const { handleRecording } = createUtteranceRouter(deps);
-  let finishStatus = null;
-  const metricsTurn = { mark: () => {}, addMeta: () => {}, stage: () => {}, finish: r => { finishStatus = r.status; } };
-  await handleRecording('user-1', '/tmp/u.wav', 8192, 1, metricsTurn);
-  assert.equal(agentCalls, 0, 'agent is not invoked when busy');
-  assert.equal(finishStatus, 'drop_processing');
-  assert.equal(deps.bridge.processing, true, 'processing flag is left intact (other turn owns it)');
-});
-
-test('handleRecording rejects unauthorized users', async () => {
-  let agentCalls = 0;
-  const deps = makeDeps({
-    isAllowed: () => false,
-    agentAdapter: { label: 'hermes', backend: 'hermes', readSessionId: () => null, ask: async () => { agentCalls++; return ''; } },
-  });
-  const { handleRecording } = createUtteranceRouter(deps);
-  let finishStatus = null;
-  const metricsTurn = { mark: () => {}, addMeta: () => {}, stage: () => {}, finish: r => { finishStatus = r.status; } };
-  await handleRecording('intruder', '/tmp/u.wav', 8192, 1, metricsTurn);
-  assert.equal(agentCalls, 0);
-  assert.equal(finishStatus, 'unauthorized');
-});
-
-test('handleRecording short-circuits on empty transcript', async () => {
-  let asked = false;
-  const deps = makeDeps({
-    transcribe: async () => '',
-    agentAdapter: { label: 'hermes', backend: 'hermes', readSessionId: () => null, ask: async () => { asked = true; return ''; } },
-  });
-  const { handleRecording } = createUtteranceRouter(deps);
-  let finishStatus = null;
-  const metricsTurn = { mark: () => {}, addMeta: () => {}, stage: () => {}, finish: r => { finishStatus = r.status; } };
-  await handleRecording('user-1', '/tmp/u.wav', 8192, 1, metricsTurn);
-  assert.equal(asked, false, 'agent never asked when transcript empty');
-  assert.equal(finishStatus, 'empty_transcript');
-  assert.equal(deps.bridge.processing, false, 'processing flag still cleaned up');
-});
-
-test('handleRecording short-circuits when wake word missing', async () => {
-  let asked = false;
-  const sentTexts = [];
-  const deps = makeDeps({
-    acceptsWake: () => false,
-    sendText: async t => { sentTexts.push(t); return true; },
-    agentAdapter: { label: 'hermes', backend: 'hermes', readSessionId: () => null, ask: async () => { asked = true; return ''; } },
-  });
-  const { handleRecording } = createUtteranceRouter(deps);
-  let finishStatus = null;
-  const metricsTurn = { mark: () => {}, addMeta: () => {}, stage: () => {}, finish: r => { finishStatus = r.status; } };
-  await handleRecording('user-1', '/tmp/u.wav', 8192, 1, metricsTurn);
-  assert.equal(asked, false);
-  assert.equal(finishStatus, 'wake_rejected');
-  assert.ok(sentTexts.some(t => /no wake word/.test(t)), 'wake-rejected message sent');
-});
-
-test('handleRecording cleans up progress controller even when agent throws', async () => {
-  const deps = makeDeps({
-    agentAdapter: { label: 'hermes', backend: 'hermes', readSessionId: () => null, ask: async () => { throw new Error('agent boom'); } },
-  });
-  const { handleRecording } = createUtteranceRouter(deps);
-  let finishStatus = null;
-  let finishError = null;
-  const metricsTurn = { mark: () => {}, addMeta: () => {}, stage: () => {}, finish: r => { finishStatus = r.status; finishError = r.error; } };
-  await handleRecording('user-1', '/tmp/u.wav', 8192, 1, metricsTurn);
-  assert.equal(finishStatus, 'error');
-  assert.match(finishError || '', /agent boom/);
-  // Cleanup invariants
-  assert.equal(deps.bridge.processing, false);
-  assert.equal(deps.bridge.activeProgressAbortController, null);
-  assert.equal(deps.bridge.currentAbortController, null);
-});
-
-test('handleRecording with stale language reload aborts before agent call', async () => {
-  let asked = false;
-  let transcribed = false;
-  const deps = makeDeps({
-    reloadRuntimeLanguageFromEnv: () => ({ changed: true, voiceLanguage: 'en', whisperLanguage: 'en' }),
-    transcribe: async () => { transcribed = true; return 'hi'; },
-    agentAdapter: { label: 'hermes', backend: 'hermes', readSessionId: () => null, ask: async () => { asked = true; return ''; } },
-  });
-  const { handleRecording } = createUtteranceRouter(deps);
-  let finishStatus = null;
-  const metricsTurn = { mark: () => {}, addMeta: () => {}, stage: () => {}, finish: r => { finishStatus = r.status; } };
-  await handleRecording('user-1', '/tmp/u.wav', 8192, 1, metricsTurn);
-  assert.equal(transcribed, false, 'transcribe not called when language changed');
-  assert.equal(asked, false);
-  assert.equal(finishStatus, 'drop_stale_language_change');
-});
+// handleRecording behaviour tests moved to voice_turn_runner.test.mjs in
+// Phase 7a, when handleRecording itself moved out of utterance_router.mjs
+// into voice_turn_runner.mjs.
 
 // --- cross-module state interactions ------------------------------------
 

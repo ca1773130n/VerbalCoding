@@ -61,6 +61,7 @@ import { createTtsRuntime } from './tts_runtime.mjs';
 import { createDiscordVoiceSetup } from './discord_voice_setup.mjs';
 import { createAgentTurnLifecycle } from './agent_turn.mjs';
 import { createDiscordCommandRouter } from './discord_command_router.mjs';
+import { createVoiceTurnRunner } from './voice_turn_runner.mjs';
 import { sendDiscordText, splitDiscordMessage } from './discord_text.mjs';
 import { shouldPassWhisperLanguage, voiceLanguageCommandFromTranscript, languagePreset } from './language_config.mjs';
 import { whisperFailureMessage, whisperTimeoutMs } from './stt_whisper.mjs';
@@ -653,6 +654,7 @@ function waitEvent(emitter, event, timeoutMs = 60000) {
 // a thunk so the deps for createVoiceIO resolve before createUtteranceRouter
 // is constructed.
 let utteranceRouter;
+let voiceTurnRunner;
 const voiceIO = createVoiceIO({
   bridge,
   settings,
@@ -680,7 +682,7 @@ const voiceIO = createVoiceIO({
   validateProcessingBargeIn,
   enqueueDeferredProcessingUtterance,
   newLatencyTurn,
-  handleRecording: (...args) => utteranceRouter.handleRecording(...args),
+  handleRecording: (...args) => voiceTurnRunner.handleRecording(...args),
 });
 const { transcribeOnce, transcribe, cleanTranscript, queueSegment, flushUtterance, subscribeUser } = voiceIO;
 
@@ -824,8 +826,48 @@ const {
   handleLanguageCommand,
   handleVoiceCloneCommand,
   interruptCurrentResponse,
-  handleRecording,
 } = utteranceRouter;
+
+voiceTurnRunner = createVoiceTurnRunner({
+  bridge,
+  agentTurnLifecycle,
+  settings, client, log, warn, fs,
+  // From voice_io
+  transcribe,
+  // From tts_player
+  beginStreamingTurn, endStreamingTurn, speakText,
+  // From progress_handler
+  queueProgressSpeechText, stopProgressSpeech, speakImmediateNotice,
+  // From notification_handler
+  maybeNotifyTaskComplete,
+  // From utterance_router (sibling-module dispatch + adapter selection)
+  handleLanguageCommand, handleTtsVoiceCommand, handleVoiceCloneCommand,
+  dispatchPlanModeUtterance,
+  adapterForBackend, adapterForProjectSession,
+  planChannelKey, routingStateFor, recordUtterance, clearTransientRouting,
+  // Direct (imported in main or hoisted helpers)
+  isAllowed, isAbortError, sleep, sendText, sendEmbed,
+  reloadRuntimeLanguageFromEnv, drainDeferredProcessingUtterances,
+  resolveProjectSessionForChannel, projectSessionContextText,
+  ontologyStateFor, captureOntologyFromTurn,
+  formatRecentDiscordContext,
+  formatSttResultMessage, formatSttStartMessage,
+  formatVoiceErrorMessage, formatWakeRejectedMessage,
+  agentAnswerHeader, emptyAgentAnswer, spokenResultOnly,
+  stripWake, acceptsWake,
+  sensitivityChangedSpeech, sensitivityModeFromTranscript, sensitivityStatusText,
+  setSensitivityMode, isSensitivityOnlyRequest,
+  verboseChangedSpeech, verboseModeFromTranscript, verboseStatusText,
+  setVerboseProgress, isVerboseOnlyRequest,
+  isRoutingOnlyUtterance, parseAgentRoutingCommand, renderAgentPrefix,
+  buildCrossAgentPrompt, buildFallbackDecision,
+  parseDecisionAnswer,
+  parseResearchCommand, runResearchTurn,
+  PROGRESS_IDLE_CHECK_MS, PROGRESS_IDLE_NOTICE_INITIAL_MS,
+  PROGRESS_IDLE_NOTICE_LIMIT, PROGRESS_IDLE_NOTICE_MAX_MS,
+  PROGRESS_IDLE_NOTICE_MULTIPLIER, STT_START_VOICE_NOTICE,
+});
+const { handleRecording } = voiceTurnRunner;
 
 function isAbortError(e) {
   return e?.name === 'AbortError' || e?.code === 'ABORT_ERR';
