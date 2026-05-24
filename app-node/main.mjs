@@ -738,11 +738,10 @@ function saveProjectSessionsState() {
   saveProjectSessions(settings.projectSessionsPath, projectSessionsState);
 }
 bridge.sensitivityMode = SENSITIVITY_MODE_DEFAULT;
-let sensitivityModeExpiresAt = 0;
 function currentBargeInThresholds() {
-  if (sensitivityModeExpiresAt && Date.now() > sensitivityModeExpiresAt) {
+  if (bridge.sensitivityModeExpiresAt && Date.now() > bridge.sensitivityModeExpiresAt) {
     bridge.sensitivityMode = SENSITIVITY_MODE_DEFAULT;
-    sensitivityModeExpiresAt = 0;
+    bridge.sensitivityModeExpiresAt = 0;
     log('barge-in sensitivity mode expired; restored', bridge.sensitivityMode);
   }
   return bargeInThresholdsForMode(bridge.sensitivityMode, {
@@ -766,16 +765,16 @@ function currentPlaybackBargeInThresholds() {
 }
 function setSensitivityMode(mode, reason = 'manual') {
   bridge.sensitivityMode = mode === 'conservative' ? 'conservative' : 'normal';
-  sensitivityModeExpiresAt = bridge.sensitivityMode === 'conservative' && SENSITIVITY_OUTDOOR_SECONDS > 0
+  bridge.sensitivityModeExpiresAt = bridge.sensitivityMode === 'conservative' && SENSITIVITY_OUTDOOR_SECONDS > 0
     ? Date.now() + SENSITIVITY_OUTDOOR_SECONDS * 1000
     : 0;
   const thresholds = currentBargeInThresholds();
-  log('barge-in sensitivity mode set', bridge.sensitivityMode, 'reason', reason, 'expiresAt', sensitivityModeExpiresAt || 'never', 'thresholds', thresholds);
+  log('barge-in sensitivity mode set', bridge.sensitivityMode, 'reason', reason, 'expiresAt', bridge.sensitivityModeExpiresAt || 'never', 'thresholds', thresholds);
   return thresholds;
 }
 function sensitivityStatusText() {
   const thresholds = currentBargeInThresholds();
-  const ttl = sensitivityModeExpiresAt ? Math.max(0, Math.round((sensitivityModeExpiresAt - Date.now()) / 1000)) : 0;
+  const ttl = bridge.sensitivityModeExpiresAt ? Math.max(0, Math.round((bridge.sensitivityModeExpiresAt - Date.now()) / 1000)) : 0;
   return sensitivityStatusTextForLanguage(thresholds, ttl, settings.voiceLanguage);
 }
 

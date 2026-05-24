@@ -64,7 +64,7 @@ export function createBridge() {
 
     // Barge-in sensitivity
     sensitivityMode: 'normal',
-    sensitivityOutdoorUntilMs: 0,
+    sensitivityModeExpiresAt: 0,
 
     // Smart progress summarizer
     smartProgressEnabled: false,
