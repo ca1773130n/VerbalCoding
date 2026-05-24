@@ -21,6 +21,7 @@ import { createTtsRuntime } from './tts_runtime.mjs';
 import { createVoiceIO } from './voice_io.mjs';
 import { createDiscordVoiceSetup } from './discord_voice_setup.mjs';
 import { createUtteranceRouter } from './utterance_router.mjs';
+import { createAgentTurnLifecycle } from './agent_turn.mjs';
 
 const noop = () => {};
 const noopAsync = async () => {};
@@ -159,8 +160,13 @@ function buildSystem(overrides = {}) {
     VOICE_CONNECT_TIMEOUT_MS: 5000,
   });
 
+  const agentTurnLifecycle = createAgentTurnLifecycle({
+    bridge,
+    warn: sharedHelpers.warn,
+  });
   utteranceRouter = createUtteranceRouter({
     bridge,
+    agentTurnLifecycle,
     log: sharedHelpers.log, warn: sharedHelpers.warn,
     path: { join: (...a) => a.join('/') },
     fs: { rm: (_p, _o, cb) => cb && cb() },

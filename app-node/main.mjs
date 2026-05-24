@@ -59,6 +59,7 @@ import { createProgressHandler } from './progress_handler.mjs';
 import { createNotificationHandler } from './notification_handler.mjs';
 import { createTtsRuntime } from './tts_runtime.mjs';
 import { createDiscordVoiceSetup } from './discord_voice_setup.mjs';
+import { createAgentTurnLifecycle } from './agent_turn.mjs';
 import { sendDiscordText, splitDiscordMessage } from './discord_text.mjs';
 import { shouldPassWhisperLanguage, voiceLanguageCommandFromTranscript, languagePreset } from './language_config.mjs';
 import { whisperFailureMessage, whisperTimeoutMs } from './stt_whisper.mjs';
@@ -346,6 +347,8 @@ const {
   clearProgressSpeechBatch,
   stopProgressSpeech,
 } = progressHandler;
+
+const agentTurnLifecycle = createAgentTurnLifecycle({ bridge, warn });
 
 const notificationHandler = createNotificationHandler({ bridge, client, log, warn });
 const {
@@ -713,6 +716,7 @@ const {
 } = discordVoiceSetup;
 utteranceRouter = createUtteranceRouter({
   bridge,
+  agentTurnLifecycle,
   log,
   warn,
   path,
@@ -875,15 +879,8 @@ async function handleTextAgentMessage(msg, text, { speakResponse = false } = {})
     await msg.reply('지금 이전 작업을 처리 중이야. 끝나면 다시 보내줘.');
     return;
   }
-  bridge.processing = true;
-  const controller = new AbortController();
-  bridge.currentAbortController = controller;
-  const signal = controller.signal;
-  const progressController = new AbortController();
-  bridge.activeProgressAbortController = progressController;
-  bridge.activeProgressSignal = progressController.signal;
-  bridge.activeProgressLastEventAt = Date.now();
-  const previousTranscriptChannelId = bridge.activeTranscriptChannelId;
+  const turn = agentTurnLifecycle.start();
+  const { controller, signal, progressController } = turn;
   const session = resolveProjectSessionForChannel(msg.channelId);
   bridge.activeTranscriptChannelId = session?.transcriptChannelId || msg.channelId;
   const selectedAgentAdapter = adapterForProjectSession(session);
@@ -917,15 +914,11 @@ async function handleTextAgentMessage(msg, text, { speakResponse = false } = {})
     warn('text agent request failed', e?.stack || e);
     await sendChannelText(msg.channel, formatVoiceErrorMessage(settings.voiceLanguage, String(e?.message || e).slice(0, 800)));
   } finally {
-    if (bridge.activeProgressAbortController && bridge.activeProgressAbortController.signal === progressController.signal && !bridge.activeProgressAbortController.signal.aborted) {
-      try { bridge.activeProgressAbortController.abort(); } catch (e) { warn('abort text progress speech failed', e?.stack || e); }
-    }
-    if (bridge.activeProgressSignal === progressController.signal) bridge.activeProgressSignal = null;
-    if (bridge.activeProgressAbortController?.signal === progressController.signal) bridge.activeProgressAbortController = null;
+    // Text-path-only behaviour pre-refactor: drain the verbose-progress batch
+    // before tearing the controllers down. Kept explicit so the lifecycle's
+    // finish() can stay path-agnostic.
     clearProgressSpeechBatch(progressController.signal);
-    if (bridge.currentAbortController === controller) bridge.currentAbortController = null;
-    bridge.activeTranscriptChannelId = previousTranscriptChannelId;
-    bridge.processing = false;
+    agentTurnLifecycle.finish(turn);
   }
 }
 

@@ -12,6 +12,7 @@
 export function createUtteranceRouter(deps) {
   const {
     bridge,
+    agentTurnLifecycle,
     log,
     warn,
     path,
@@ -433,13 +434,9 @@ function interruptCurrentResponse(userId, reason = 'barge-in') {
 async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsTurn = null) {
   if (bridge.processing) { log('drop while processing', userId); metricsTurn?.finish({ status: 'drop_processing' }); return; }
   if (!isAllowed(userId)) { warn('ignore unauthorized', userId); metricsTurn?.finish({ status: 'unauthorized' }); return; }
-  bridge.processing = true;
-  const turnId = ++bridge.activeTurnId;
-  const controller = new AbortController();
-  bridge.currentAbortController = controller;
-  const signal = controller.signal;
+  const turn = agentTurnLifecycle.start({ withTurnId: true });
+  const { controller, signal, turnId } = turn;
   const sessionForVoice = resolveProjectSessionForChannel(bridge.activeVoiceChannelId || settings.transcriptChannelId);
-  const previousTranscriptChannelId = bridge.activeTranscriptChannelId;
   bridge.activeTranscriptChannelId = sessionForVoice?.transcriptChannelId || settings.transcriptChannelId;
   try {
     const runtimeLanguage = reloadRuntimeLanguageFromEnv();
@@ -686,9 +683,10 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     };
     log('Agent plan', plan.label, 'backend', selectedAgentAdapter.backend, 'task', plan.task, 'language', plan.language, session ? `project=${session.slug}` : 'project=default');
     const agentStart = Date.now();
-    const progressController = new AbortController();
-    bridge.activeProgressAbortController = progressController;
-    bridge.activeProgressSignal = progressController.signal;
+    // agentTurnLifecycle.start() already seeded bridge.activeProgressAbortController
+    // and bridge.activeProgressSignal at the top of the turn. Reuse the lifecycle's
+    // progressController so cleanup ownership stays consistent.
+    const progressController = turn.progressController;
     bridge.activeProgressLastEventAt = Date.now();
     const streamingTurnActive = beginStreamingTurn(signal);
     if (streamingTurnActive && ttsPrefix && bridge.activeStreamingQueue) {
@@ -782,16 +780,7 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     metricsTurn?.finish({ status: 'error', error: shortMsg });
     await sendText(formatVoiceErrorMessage(settings.voiceLanguage, shortMsg));
   } finally {
-    if (bridge.activeProgressAbortController && !bridge.activeProgressAbortController.signal.aborted) {
-      try { bridge.activeProgressAbortController.abort(); } catch (e) { warn('abort progress speech in cleanup failed', e?.stack || e); }
-    }
-    if (bridge.activeProgressSignal === bridge.activeProgressAbortController?.signal) bridge.activeProgressSignal = null;
-    bridge.activeProgressAbortController = null;
-    if (bridge.currentAbortController === controller) bridge.currentAbortController = null;
-    bridge.activeTranscriptChannelId = previousTranscriptChannelId;
-    bridge.interruptedTurns.delete(turnId);
-    if (bridge.activeTurnId === turnId) bridge.activeTurnId = 0;
-    bridge.processing = false;
+    agentTurnLifecycle.finish(turn);
     if (bridge.bridgeState.deferredSize() > 0) {
       setImmediate(() => drainDeferredProcessingUtterances().catch(e => warn('drain deferred utterance failed', e?.stack || e)));
     }

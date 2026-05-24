@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createUtteranceRouter } from './utterance_router.mjs';
 import { createBridge } from './bridge_context.mjs';
+import { createAgentTurnLifecycle } from './agent_turn.mjs';
 
 function noop() {}
 async function noopAsync() {}
@@ -15,6 +16,7 @@ function makeDeps(overrides = {}) {
     currentEpoch: () => 1,
     discardQueues: () => 0,
   };
+  const agentTurnLifecycle = createAgentTurnLifecycle({ bridge, warn: noop });
   const agentAdapter = {
     label: 'default-agent',
     backend: 'hermes',
@@ -23,6 +25,7 @@ function makeDeps(overrides = {}) {
   };
   return {
     bridge,
+    agentTurnLifecycle,
     log: noop, warn: noop, path: { join: (...a) => a.join('/') }, fs: { rm: (_p, _o, cb) => cb && cb() },
     ROOT: '/tmp/vc', TTS_VOICE_CONFIG_PATH: '/tmp/voices.json',
     agentAdapter,
