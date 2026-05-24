@@ -115,6 +115,7 @@ test('FireRedTTS-2 backend has package-managed installer and wrapper', () => {
   const config = fs.readFileSync(path.join(ROOT, 'app-node', 'install_config.mjs'), 'utf8');
   const settings = fs.readFileSync(path.join(ROOT, 'app-node', 'tts_settings.mjs'), 'utf8');
   const main = fs.readFileSync(path.join(ROOT, 'app-node', 'main.mjs'), 'utf8');
+  const ttsRuntime = fs.readFileSync(path.join(ROOT, 'app-node', 'tts_runtime.mjs'), 'utf8');
   const wrapper = fs.readFileSync(path.join(ROOT, 'integrations', 'fireredtts2', 'synth.py'), 'utf8');
 
   assert.match(installer, /FireRedTeam\/FireRedTTS2\.git/);
@@ -123,8 +124,10 @@ test('FireRedTTS-2 backend has package-managed installer and wrapper', () => {
   assert.match(config, /fireredtts2/);
   assert.match(config, /FIREREDTTS2_COMMAND/);
   assert.match(settings, /\.\/\.local\/bin\/fireredtts2/);
+  // ensureSelectedTtsBackendInstalled was extracted into tts_runtime.mjs;
+  // main.mjs still imports / destructures it from the factory.
   assert.match(main, /ensureSelectedTtsBackendInstalled/);
-  assert.match(main, /install_fireredtts2\.sh/);
+  assert.match(ttsRuntime, /install_fireredtts2\.sh/);
   assert.match(wrapper, /generate_monologue/);
 });
 
