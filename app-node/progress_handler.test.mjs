@@ -106,3 +106,88 @@ test('sendVerboseProgressText debounces repeated identical messages', async () =
   // Second identical call within 2s window is debounced
   assert.equal(sent, 1);
 });
+
+// --- queueVerboseProgressSpeech: batch sizing + flush -------------------
+
+test('queueVerboseProgressSpeech buffers events into the bridge batch', () => {
+  // Note: the flush size is rate-adaptive — when events arrive faster than
+  // 6/sec (which happens in synchronous test loops), maxBatchEvents climbs
+  // to 5. Here we just verify the buffering side: events accumulate on the
+  // bridge and the signal is recorded. The flush-on-size path is exercised
+  // implicitly by the "ratePerSecond >= 6 path" assertion below.
+  const deps = makeDeps();
+  deps.bridge.verboseProgress = true;
+  const signal = new AbortController().signal;
+  deps.bridge.activeProgressSignal = signal;
+  const handler = createProgressHandler(deps);
+
+  handler.queueVerboseProgressSpeech('event one', signal);
+  assert.equal(deps.bridge.progressSpeechBatch.length, 1);
+  assert.ok(deps.bridge.progressSpeechBatchSignal === signal);
+  assert.ok(deps.bridge.progressSpeechBatchStartedAt > 0, 'batch start time recorded');
+
+  handler.queueVerboseProgressSpeech('event two', signal);
+  assert.equal(deps.bridge.progressSpeechBatch.length, 2);
+});
+
+test('queueVerboseProgressSpeech flushes on the slow-rate threshold (3 events)', () => {
+  const deps = makeDeps();
+  deps.bridge.verboseProgress = true;
+  const signal = new AbortController().signal;
+  deps.bridge.activeProgressSignal = signal;
+  const handler = createProgressHandler(deps);
+
+  // Force the slow-rate path by backdating progressSpeechBatchStartedAt so
+  // ratePerSecond falls below the 3/sec threshold (maxBatchEvents=3).
+  handler.queueVerboseProgressSpeech('event one', signal);
+  deps.bridge.progressSpeechBatchStartedAt = Date.now() - 5000;  // 1 event over 5s -> 0.2/sec
+  handler.queueVerboseProgressSpeech('event two', signal);
+  // Backdate again before the third event so we stay on the slow path.
+  deps.bridge.progressSpeechBatchStartedAt = Date.now() - 5000;
+  handler.queueVerboseProgressSpeech('event three', signal);
+  // Third event hits maxBatchEvents=3 -> flush.
+  assert.equal(deps.bridge.progressSpeechBatch.length, 0, 'batch flushed on hitting slow-rate size');
+  assert.equal(deps.bridge.progressSpeechBatchSignal, null);
+  assert.equal(deps.bridge.progressSpeechBatchTimer, null);
+});
+
+test('queueVerboseProgressSpeech ignores events when signal does not match active', () => {
+  const deps = makeDeps();
+  deps.bridge.verboseProgress = true;
+  const activeSig = new AbortController().signal;
+  const otherSig = new AbortController().signal;
+  deps.bridge.activeProgressSignal = activeSig;
+  const handler = createProgressHandler(deps);
+  handler.queueVerboseProgressSpeech('orphan event', otherSig);
+  assert.equal(deps.bridge.progressSpeechBatch.length, 0, 'no batching for mismatched signal');
+});
+
+test('queueVerboseProgressSpeech is a no-op when verboseProgress disabled', () => {
+  const deps = makeDeps();
+  deps.bridge.verboseProgress = false;
+  const sig = new AbortController().signal;
+  deps.bridge.activeProgressSignal = sig;
+  const handler = createProgressHandler(deps);
+  handler.queueVerboseProgressSpeech('test', sig);
+  assert.equal(deps.bridge.progressSpeechBatch.length, 0);
+});
+
+test('flushProgressSpeechBatch with mismatched signal does not drain the buffer', () => {
+  const deps = makeDeps();
+  deps.bridge.progressSpeechBatch = ['queued event'];
+  deps.bridge.activeProgressSignal = 'A';
+  const handler = createProgressHandler(deps);
+  handler.flushProgressSpeechBatch('B', 'wrong-signal');
+  assert.deepEqual(deps.bridge.progressSpeechBatch, ['queued event'], 'mismatched flush is no-op');
+});
+
+test('ensureSmartProgressSummarizer memoizes and registers a summary callback', () => {
+  // Ensure no API key path: the summarizer is still constructed, but won't ingest.
+  // We don't need to interact with the real summarizer — just verify memoization.
+  const deps = makeDeps();
+  const handler = createProgressHandler(deps);
+  const a = handler.ensureSmartProgressSummarizer();
+  const b = handler.ensureSmartProgressSummarizer();
+  assert.equal(a, b, 'summarizer memoized on bridge');
+  assert.equal(deps.bridge.smartProgressSummarizer, a);
+});

@@ -70,7 +70,6 @@ test('getVoiceChannelHumanCount excludes bots', async () => {
 
 test('maybeNotifyTaskComplete returns early when provider is unset/noop', async () => {
   const prev = process.env.NOTIFY_PROVIDER;
-  let notifierCalls = 0;
   try {
     delete process.env.NOTIFY_PROVIDER;
     const deps = makeDeps();
@@ -83,5 +82,106 @@ test('maybeNotifyTaskComplete returns early when provider is unset/noop', async 
   } finally {
     if (prev === undefined) delete process.env.NOTIFY_PROVIDER;
     else process.env.NOTIFY_PROVIDER = prev;
+  }
+});
+
+// --- happy-path send + debounce + body construction ----------------------
+
+test('maybeNotifyTaskComplete fires notifier.send with last sentence as body, deep link, and tracks lastNotify state', async () => {
+  const prev = { ...process.env };
+  const calls = [];
+  process.env.NOTIFY_PROVIDER = 'ntfy';
+  process.env.NTFY_TOPIC = 'topic-x';
+  process.env.NOTIFY_MIN_TASK_MS = '0';      // pass the min-task gate
+  process.env.NOTIFY_DEBOUNCE_MS = '5000';
+  try {
+    const deps = makeDeps();
+    deps.bridge.notifyUserOptIn = true;        // bypass humanCount/empty-channel gate
+    deps.bridge.activeVoiceChannelId = 'vc-1'; // for deepLink construction
+    // Pre-seed a notifier so we don't depend on createNotifier internals.
+    deps.bridge.notifierInstance = {
+      shouldNotify: () => true,
+      send: async payload => { calls.push(payload); return { ok: true, status: 200 }; },
+    };
+    const { maybeNotifyTaskComplete } = createNotificationHandler(deps);
+    const answer = 'first sentence here. SECOND SENTENCE is the body.';
+    await maybeNotifyTaskComplete({ answer, label: 'hermes', elapsedMs: 5000, guildId: 'g-1' });
+    assert.equal(calls.length, 1, 'notifier.send called exactly once');
+    assert.equal(calls[0].title, 'hermes finished');
+    assert.equal(calls[0].body, 'SECOND SENTENCE is the body.', 'body = last sentence');
+    assert.match(calls[0].deepLink, /g-1/, 'deep link includes guild id');
+    assert.ok(deps.bridge.lastNotifyAt > 0, 'lastNotifyAt updated');
+    assert.equal(deps.bridge.lastNotifyBody, 'SECOND SENTENCE is the body.');
+  } finally {
+    Object.keys(process.env).forEach(k => { if (!(k in prev)) delete process.env[k]; });
+    Object.assign(process.env, prev);
+  }
+});
+
+test('maybeNotifyTaskComplete debounces identical body within debounce window', async () => {
+  const prev = { ...process.env };
+  process.env.NOTIFY_PROVIDER = 'ntfy';
+  process.env.NTFY_TOPIC = 'topic-x';
+  process.env.NOTIFY_MIN_TASK_MS = '0';
+  process.env.NOTIFY_DEBOUNCE_MS = '60000';
+  try {
+    let sendCalls = 0;
+    const deps = makeDeps();
+    deps.bridge.notifyUserOptIn = true;
+    deps.bridge.notifierInstance = {
+      shouldNotify: () => true,
+      send: async () => { sendCalls++; return { ok: true }; },
+    };
+    const { maybeNotifyTaskComplete } = createNotificationHandler(deps);
+    const answer = 'identical message';
+    await maybeNotifyTaskComplete({ answer, label: 'a', elapsedMs: 5000, guildId: 'g' });
+    await maybeNotifyTaskComplete({ answer, label: 'a', elapsedMs: 5000, guildId: 'g' });
+    assert.equal(sendCalls, 1, 'second identical call is debounced');
+  } finally {
+    Object.keys(process.env).forEach(k => { if (!(k in prev)) delete process.env[k]; });
+    Object.assign(process.env, prev);
+  }
+});
+
+test('maybeNotifyTaskComplete respects shouldNotify=false (e.g. occupied channel, opt-out)', async () => {
+  const prev = { ...process.env };
+  process.env.NOTIFY_PROVIDER = 'ntfy';
+  process.env.NOTIFY_MIN_TASK_MS = '0';
+  try {
+    let sendCalls = 0;
+    const deps = makeDeps();
+    deps.bridge.notifierInstance = {
+      shouldNotify: () => false,
+      send: async () => { sendCalls++; return { ok: true }; },
+    };
+    const { maybeNotifyTaskComplete } = createNotificationHandler(deps);
+    await maybeNotifyTaskComplete({ answer: 'hi', label: 'x', elapsedMs: 9999, guildId: 'g' });
+    assert.equal(sendCalls, 0, 'send not called when shouldNotify returns false');
+    assert.equal(deps.bridge.lastNotifyAt, 0, 'lastNotifyAt untouched');
+  } finally {
+    Object.keys(process.env).forEach(k => { if (!(k in prev)) delete process.env[k]; });
+    Object.assign(process.env, prev);
+  }
+});
+
+test('maybeNotifyTaskComplete swallows notifier.send errors and warns', async () => {
+  const prev = { ...process.env };
+  process.env.NOTIFY_PROVIDER = 'ntfy';
+  process.env.NOTIFY_MIN_TASK_MS = '0';
+  try {
+    const warnCalls = [];
+    const deps = makeDeps({ warn: (...args) => warnCalls.push(args) });
+    deps.bridge.notifyUserOptIn = true;
+    deps.bridge.notifierInstance = {
+      shouldNotify: () => true,
+      send: async () => { throw new Error('network down'); },
+    };
+    const { maybeNotifyTaskComplete } = createNotificationHandler(deps);
+    // Must not reject the calling code.
+    await maybeNotifyTaskComplete({ answer: 'hi', label: 'x', elapsedMs: 9999, guildId: 'g' });
+    assert.ok(warnCalls.some(args => /notify send failed/.test(args[0])), 'warn called with explanatory message');
+  } finally {
+    Object.keys(process.env).forEach(k => { if (!(k in prev)) delete process.env[k]; });
+    Object.assign(process.env, prev);
   }
 });
