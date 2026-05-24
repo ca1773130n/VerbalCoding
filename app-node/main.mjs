@@ -60,21 +60,19 @@ import { createNotificationHandler } from './notification_handler.mjs';
 import { createTtsRuntime } from './tts_runtime.mjs';
 import { createDiscordVoiceSetup } from './discord_voice_setup.mjs';
 import { createAgentTurnLifecycle } from './agent_turn.mjs';
+import { createDiscordCommandRouter } from './discord_command_router.mjs';
 import { sendDiscordText, splitDiscordMessage } from './discord_text.mjs';
 import { shouldPassWhisperLanguage, voiceLanguageCommandFromTranscript, languagePreset } from './language_config.mjs';
 import { whisperFailureMessage, whisperTimeoutMs } from './stt_whisper.mjs';
 import { formatRestartCompleteNotice } from './restart_notice.mjs';
 import {
-  appendRecentDiscordText,
   formatRecentDiscordContext,
-  shouldRouteDiscordTextToAgent,
 } from './text_routing.mjs';
 import {
   bindProjectSessionToChannel,
   createProjectSession,
   listProjectSessions,
   loadProjectSessions,
-  parseProjectSessionCommand,
   projectSessionContextText,
   projectSessionForChannel,
   saveProjectSessions,
@@ -1128,131 +1126,22 @@ client.once('ready', async () => {
   await announceRestartComplete();
 });
 
-client.on('messageCreate', async msg => {
-  const content = msg.content.trim();
-  if (msg.author.bot && !content.startsWith('!say ')) return;
-  if (!msg.author.bot && !isAllowed(msg.author.id)) return;
-  appendRecentDiscordText(bridge.recentDiscordTextByChannel, {
-    channelId: msg.channelId,
-    authorLabel: msg.member?.displayName || msg.author?.username || 'user',
-    content,
-    messageId: msg.id,
-  });
-  const projectSessionCommand = parseProjectSessionCommand(content);
-  if (projectSessionCommand) {
-    try {
-      await handleProjectSessionCommand(msg, projectSessionCommand);
-    } catch (e) {
-      warn('project session command failed', e?.stack || e);
-      await msg.reply(String(e?.message || e).slice(0, 700));
-    }
-    return;
-  }
-  if (content === '!ping') return void msg.reply('pong');
-  if (content === '!verbose') return void msg.reply(verboseStatusText());
-  if (['!verbose on', '!verbose true', '!verbose 1', '!verbose 켜', '!verbose 켜줘'].includes(content.toLowerCase())) {
-    setVerboseProgress(true, 'discord-command');
-    return void msg.reply(verboseStatusText());
-  }
-  if (['!verbose off', '!verbose false', '!verbose 0', '!verbose 꺼', '!verbose 꺼줘'].includes(content.toLowerCase())) {
-    setVerboseProgress(false, 'discord-command');
-    return void msg.reply(verboseStatusText());
-  }
-  if (content === '!notify') return void msg.reply(notifyStatusText());
-  if (['!notify on', '!notify always', '!notify 1'].includes(content.toLowerCase())) {
-    bridge.notifyUserOptIn = true;
-    return void msg.reply(notifyStatusText());
-  }
-  if (['!notify off', '!notify auto', '!notify 0'].includes(content.toLowerCase())) {
-    bridge.notifyUserOptIn = false;
-    return void msg.reply(notifyStatusText());
-  }
-  if (content === '!smart-progress' || content === '!smart_progress') return void msg.reply(smartProgressStatusText());
-  if (['!smart-progress on', '!smart-progress true', '!smart-progress 1', '!smart_progress on'].includes(content.toLowerCase())) {
-    bridge.smartProgressEnabled = true;
-    return void msg.reply(smartProgressStatusText());
-  }
-  if (['!smart-progress off', '!smart-progress false', '!smart-progress 0', '!smart_progress off'].includes(content.toLowerCase())) {
-    bridge.smartProgressEnabled = false;
-    return void msg.reply(smartProgressStatusText());
-  }
-  if (content === '!sensitivity') return void msg.reply(sensitivityStatusText());
-  if (content === '!latency' || content === '!metrics') {
-    const summary = summarizeLatencyRecords(readJsonlRecords(settings.latencyLogPath, { limit: 200 }));
-    return void msg.reply(`최근 latency 요약 (${settings.latencyLogPath}):\n${formatLatencySummary(summary)}`.slice(0, 1900));
-  }
-  if (content === '!sensitivity conservative') {
-    setSensitivityMode('conservative', 'discord-command');
-    return void msg.reply(sensitivityStatusText());
-  }
-  if (content === '!sensitivity normal') {
-    setSensitivityMode('normal', 'discord-command');
-    return void msg.reply(sensitivityStatusText());
-  }
-  if (content === '!session') return void handleProjectSessionCommand(msg, { action: 'status' });
-  if (content === '!reset-session') return void handleProjectSessionCommand(msg, { action: 'reset' });
-  if (content === '!join') {
-    const ch = msg.member?.voice?.channel;
-    if (!ch) return void msg.reply('먼저 음성 채널에 들어가줘.');
-    await connectTo(ch);
-    return void msg.reply('들어왔어. Node receiver로 듣는 중.');
-  }
-  if (content === '!leave') {
-    try { bridge.connection?.destroy(); } catch {}
-    bridge.connection = null;
-    bridge.activeVoiceChannelId = '';
-    return void msg.reply('나갈게.');
-  }
-  if (content.startsWith('!say ')) {
-    const text = content.slice(5).trim();
-    const mp3 = await synthTTS(text);
-    await playAudio(mp3);
-    return;
-  }
-  if (content.startsWith('!voice-test ')) {
-    const text = content.slice('!voice-test '.length).trim();
-    if (!text) return void msg.reply('테스트할 문장을 붙여줘.');
-    const started = Date.now();
-    try {
-      await msg.reply(`TTS 백엔드 ${bridge.ttsBackend.name}로 음성 테스트할게.`);
-      await speakText(text);
-      await msg.channel.send(`음성 테스트 완료: ${bridge.ttsBackend.name}, ${Date.now() - started}ms`);
-    } catch (e) {
-      warn('voice-test failed', e?.stack || e);
-      await msg.channel.send(`음성 테스트 실패: ${String(e?.message || e).slice(0, 700)}`);
-    }
-    return;
-  }
-  if (content === '!voice-clone' || content === '!voice-clone status') {
-    const current = voiceCloneCapture.current();
-    if (current?.userId === String(msg.author.id)) {
-      return void msg.reply(`다음 유효한 음성을 ${path.relative(ROOT, current.targetPath)}에 저장할게.`);
-    }
-    return void msg.reply('대기 중인 보이스 클로닝 샘플 캡처가 없어. `!voice-clone capture`로 시작해.');
-  }
-  if (content === '!voice-clone cancel') {
-    const cancelled = voiceCloneCapture.cancel(msg.author.id);
-    return void msg.reply(cancelled ? '보이스 클로닝 샘플 캡처를 취소했어.' : '대기 중인 캡처가 없어.');
-  }
-  if (content === '!voice-clone capture') {
-    const armed = voiceCloneCapture.arm({ userId: msg.author.id, source: 'discord-command' });
-    return void msg.reply(`다음 유효한 음성을 ${path.relative(ROOT, armed.targetPath)}에 저장할게. 음성 채널에서 10~30초 정도 말해줘.`);
-  }
-  if (content.startsWith('!ask ')) {
-    const text = content.slice(5).trim();
-    if (!text) return void msg.reply('물어볼 내용을 붙여줘.');
-    await handleTextAgentMessage(msg, text, { speakResponse: true });
-    return;
-  }
-  if (shouldRouteDiscordTextToAgent({
-    content,
-    channelId: msg.channelId,
-    transcriptChannelId: settings.transcriptChannelId,
-  }) || resolveProjectSessionForChannel(msg.channelId)) {
-    await handleTextAgentMessage(msg, content, { speakResponse: false });
-    return;
-  }
+const discordCommandRouter = createDiscordCommandRouter({
+  bridge, settings, warn, path, ROOT,
+  isAllowed,
+  handleProjectSessionCommand,
+  handleTextAgentMessage,
+  resolveProjectSessionForChannel,
+  verboseStatusText, setVerboseProgress,
+  notifyStatusText,
+  smartProgressStatusText,
+  sensitivityStatusText, setSensitivityMode,
+  summarizeLatencyRecords, readJsonlRecords, formatLatencySummary,
+  connectTo,
+  synthTTS, playAudio, speakText,
+  voiceCloneCapture,
 });
+client.on('messageCreate', msg => discordCommandRouter.handleDiscordMessage(msg).catch(e => warn('discord command router failed', e?.stack || e)));
 
 process.stdout?.on?.('error', error => {
   if (isBenignTransientNetworkError(error)) {
