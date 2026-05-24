@@ -69,6 +69,7 @@ import {
 } from './tts_voice_config.mjs';
 import { createBridgeLogger, createTransientErrorReporter, isTransientNetworkError } from './bridge_logger.mjs';
 import { createBridgeState } from './bridge_state.mjs';
+import { createBridge } from './bridge_context.mjs';
 import { pickOccupiedUserVoiceChannel, shouldFollowUserVoiceChannel } from './voice_autojoin.mjs';
 import { sendDiscordText, splitDiscordMessage } from './discord_text.mjs';
 import { progressTtsCacheFileName } from './progress_cache.mjs';
@@ -183,8 +184,8 @@ function applyVoiceConfigToProcessEnv(config = ensureTtsVoiceConfig()) {
 function rebuildTtsRuntimeSettings(selection = null) {
   settings.tts = buildTtsSettings(process.env, ROOT);
   if (selection?.backend === 'edge' && selection.voice?.voice) settings.tts.edge.voice = selection.voice.voice;
-  try { ttsBackend?.close?.(); } catch (e) { warn('tts backend close failed', e?.message || e); }
-  ttsBackend = createTtsBackend(settings.tts, { execFileAsync, spawn, log, warn, onFallback: ttsFallbackNotice, voiceProvider: () => settings.tts.edge.voice });
+  try { bridge.ttsBackend?.close?.(); } catch (e) { warn('tts backend close failed', e?.message || e); }
+  bridge.ttsBackend = createTtsBackend(settings.tts, { execFileAsync, spawn, log, warn, onFallback: ttsFallbackNotice, voiceProvider: () => settings.tts.edge.voice });
   return settings.tts;
 }
 function reloadRuntimeLanguageFromEnv() {
@@ -249,21 +250,11 @@ function ttsFallbackNotice({ backend } = {}) {
   pendingFallbackNoticePromises.add(speakPromise);
   speakPromise.finally(() => pendingFallbackNoticePromises.delete(speakPromise));
 }
-let ttsBackend = createTtsBackend(settings.tts, { execFileAsync, spawn, log, warn, onFallback: ttsFallbackNotice, voiceProvider: () => settings.tts.edge.voice });
+const bridge = createBridge();
+bridge.ttsBackend = createTtsBackend(settings.tts, { execFileAsync, spawn, log, warn, onFallback: ttsFallbackNotice, voiceProvider: () => settings.tts.edge.voice });
 const voiceCloneCapture = createVoiceCloneCaptureState({ defaultTargetPath: settings.tts.openvoice.refAudio });
 
-let connection = null;
-let activeVoiceChannelId = '';
-let activeTranscriptChannelId = '';
-const recentDiscordTextByChannel = new Map();
-let player = createAudioPlayer();
-let speaking = false;
-let processing = false;
-let activeTurnId = 0;
-let currentAbortController = null;
-const interruptedTurns = new Set();
-const activeStreams = new Map();
-let bridgeState = null;
+bridge.player = createAudioPlayer();
 const MAX_DEFERRED_PROCESSING_UTTERANCES = Number(process.env.MAX_DEFERRED_PROCESSING_UTTERANCES || '0');
 const MIN_UTTERANCE_SECONDS = Number(process.env.MIN_UTTERANCE_SECONDS || '1.4');
 const MIN_UTTERANCE_BYTES = 48000 * 2 * 2 * MIN_UTTERANCE_SECONDS;
@@ -296,7 +287,7 @@ const bridgeLogger = createBridgeLogger({
 });
 function log(...args) { bridgeLogger.log(...args); }
 function warn(...args) { bridgeLogger.warn(...args); }
-bridgeState = createBridgeState({ log, cleanupFile: file => fs.rm(file, { force: true }, () => {}) });
+bridge.bridgeState = createBridgeState({ log, cleanupFile: file => fs.rm(file, { force: true }, () => {}) });
 const reportTransientProcessError = createTransientErrorReporter({ warn });
 function isBenignTransientNetworkError(error) {
   return isTransientNetworkError(error);
@@ -315,46 +306,33 @@ function newLatencyTurn(userId, startedAtMs) {
 }
 
 function discardVoiceInputQueues(reason = 'config-change') {
-  return bridgeState?.discardQueues(reason) || 0;
+  return bridge.bridgeState?.discardQueues(reason) || 0;
 }
-let verboseProgress = Boolean(settings.agent.verboseProgress);
-let activeProgressSignal = null;
-let verboseProgressSpeechQueue = Promise.resolve();
-let activeProgressAbortController = null;
-let speechPlaybackGeneration = 0;
-let progressSpeechBatch = [];
-let progressSpeechBatchTimer = null;
-let progressSpeechBatchSignal = null;
-let progressSpeechBatchStartedAt = 0;
+bridge.verboseProgress = Boolean(settings.agent.verboseProgress);
 
-const STREAMING_TTS_ENABLED = ['1', 'true', 'yes', 'on'].includes(String(process.env.STREAMING_TTS || '0').toLowerCase());
-let activeSentencer = null;
-let activeStreamingQueue = null;
-let streamingSpeechDelivered = false;
+const STREAMING_TTS_ENABLED = ['1', 'true', 'yes', 'on'].includes(String(process.env.STREAMING_TTS || '1').toLowerCase());
 
-let notifyUserOptIn = false;
-let notifierInstance = null;
 function ensureNotifier() {
-  if (notifierInstance) return notifierInstance;
-  notifierInstance = createNotifier({
+  if (bridge.notifierInstance) return bridge.notifierInstance;
+  bridge.notifierInstance = createNotifier({
     provider: (process.env.NOTIFY_PROVIDER || 'ntfy').toLowerCase(),
     topic: process.env.NTFY_TOPIC || '',
     pushoverUser: process.env.PUSHOVER_USER || '',
     pushoverToken: process.env.PUSHOVER_TOKEN || '',
   });
-  return notifierInstance;
+  return bridge.notifierInstance;
 }
 function notifyStatusText() {
   const provider = (process.env.NOTIFY_PROVIDER || 'ntfy').toLowerCase();
   const hasTopic = provider === 'ntfy' ? Boolean(process.env.NTFY_TOPIC) : (provider === 'pushover' ? Boolean(process.env.PUSHOVER_USER && process.env.PUSHOVER_TOKEN) : true);
-  const mode = notifyUserOptIn ? 'always' : 'empty-channel only';
+  const mode = bridge.notifyUserOptIn ? 'always' : 'empty-channel only';
   const config = hasTopic ? 'configured' : 'NOT configured';
   return `notify: ${mode} via ${provider} (${config}). Threshold: ${process.env.NOTIFY_MIN_TASK_MS || '60000'}ms.`;
 }
 async function getVoiceChannelHumanCount() {
-  if (!activeVoiceChannelId) return 0;
+  if (!bridge.activeVoiceChannelId) return 0;
   try {
-    const ch = await client.channels.fetch(activeVoiceChannelId).catch(() => null);
+    const ch = await client.channels.fetch(bridge.activeVoiceChannelId).catch(() => null);
     if (!ch || !ch.members) return 0;
     let count = 0;
     for (const [, m] of ch.members) if (!m.user?.bot) count += 1;
@@ -364,8 +342,6 @@ async function getVoiceChannelHumanCount() {
     return 0;
   }
 }
-let lastNotifyAt = 0;
-let lastNotifyBody = '';
 async function maybeNotifyTaskComplete({ answer, label, elapsedMs, guildId }) {
   const provider = (process.env.NOTIFY_PROVIDER || '').toLowerCase();
   if (!provider || provider === 'noop') return;
@@ -373,31 +349,30 @@ async function maybeNotifyTaskComplete({ answer, label, elapsedMs, guildId }) {
   const debounceMs = Number(process.env.NOTIFY_DEBOUNCE_MS || '30000');
   const humanCount = await getVoiceChannelHumanCount();
   const notifier = ensureNotifier();
-  if (!notifier.shouldNotify({ humanCount, taskMs: elapsedMs, minTaskMs, userOptIn: notifyUserOptIn })) return;
+  if (!notifier.shouldNotify({ humanCount, taskMs: elapsedMs, minTaskMs, userOptIn: bridge.notifyUserOptIn })) return;
   const text = String(answer || '').trim();
   const lastSentence = text.split(/(?<=[.!?。！？])\s+/).filter(Boolean).pop() || text;
   const body = lastSentence.slice(0, 200);
   const now = Date.now();
-  if (body && body === lastNotifyBody && now - lastNotifyAt < debounceMs) {
-    log('notify debounced', 'sinceLastMs', now - lastNotifyAt);
+  if (body && body === bridge.lastNotifyBody && now - bridge.lastNotifyAt < debounceMs) {
+    log('notify debounced', 'sinceLastMs', now - bridge.lastNotifyAt);
     return;
   }
   const title = label ? `${label} finished` : 'VerbalCoding finished';
-  const deepLink = buildDiscordDeepLink({ guildId, channelId: activeVoiceChannelId });
+  const deepLink = buildDiscordDeepLink({ guildId, channelId: bridge.activeVoiceChannelId });
   try {
     const result = await notifier.send({ title, body, deepLink });
-    lastNotifyAt = now;
-    lastNotifyBody = body;
+    bridge.lastNotifyAt = now;
+    bridge.lastNotifyBody = body;
     log('notify sent', 'provider', provider, 'status', result?.status || result?.ok, 'skipped', result?.skipped || false);
   } catch (e) {
     warn('notify send failed', e?.message || e);
   }
 }
 
-const planStates = new Map(); // channelId -> { steps, language }
 
 function planChannelKey() {
-  return activeVoiceChannelId || settings.transcriptChannelId || 'default';
+  return bridge.activeVoiceChannelId || settings.transcriptChannelId || 'default';
 }
 
 async function askNextDecision(state, signal) {
@@ -422,7 +397,7 @@ async function finalizePlanReady(state, signal) {
 async function dispatchPlanModeUtterance(prompt, signal) {
   const language = settings.voiceLanguage;
   const key = planChannelKey();
-  const existing = planStates.get(key);
+  const existing = bridge.planStates.get(key);
 
   if (existing && existing.pendingDecisionIndex < existing.decisions.length) {
     const controlCommand = parsePlanVoiceCommand(prompt, language);
@@ -431,7 +406,7 @@ async function dispatchPlanModeUtterance(prompt, signal) {
       if (existing.routingSnapshot) cancelState.activeRouting = { ...existing.routingSnapshot };
       cancelState.pendingFallbackPrompt = null;
       cancelState.lastResolvedDecisions = {};
-      planStates.delete(key);
+      bridge.planStates.delete(key);
       const msg = /^en/i.test(String(language || '')) ? 'Plan cancelled.' : '계획을 취소했어.';
       await sendText(`❎ ${msg}`);
       await speakText(msg, signal, null);
@@ -451,7 +426,7 @@ async function dispatchPlanModeUtterance(prompt, signal) {
       resolvedDecisions: { ...existing.resolvedDecisions, [decision.slot]: answer.choice },
       pendingDecisionIndex: existing.pendingDecisionIndex + 1,
     };
-    planStates.set(key, next);
+    bridge.planStates.set(key, next);
     if (isAgentRoutingDecision(decision) && answer.choice) {
       const candidate = adapterForBackend(answer.choice, resolveProjectSessionForChannel(key));
       if (candidate) {
@@ -476,7 +451,7 @@ async function dispatchPlanModeUtterance(prompt, signal) {
     const cmd = parsePlanVoiceCommand(prompt, language);
     if (cmd.type === 'skip' || cmd.type === 'insert') {
       const nextSteps = applyPlanCommand(existing.steps, cmd);
-      planStates.set(key, { ...existing, steps: nextSteps });
+      bridge.planStates.set(key, { ...existing, steps: nextSteps });
       await finalizePlanReady({ ...existing, steps: nextSteps }, signal);
       return { handled: true };
     }
@@ -485,7 +460,7 @@ async function dispatchPlanModeUtterance(prompt, signal) {
       if (existing.routingSnapshot) cancelState.activeRouting = { ...existing.routingSnapshot };
       cancelState.pendingFallbackPrompt = null;
       cancelState.lastResolvedDecisions = {};
-      planStates.delete(key);
+      bridge.planStates.delete(key);
       const msg = /^en/i.test(String(language || '')) ? 'Plan cancelled.' : '계획을 취소했어.';
       await sendText(`❎ ${msg}`);
       await speakText(msg, signal, null);
@@ -503,13 +478,13 @@ async function dispatchPlanModeUtterance(prompt, signal) {
         '',
         `Original user request: ${existing.originalPrompt}`,
       ].filter(Boolean).join('\n');
-      planStates.delete(key);
+      bridge.planStates.delete(key);
       const note = /^en/i.test(String(language || '')) ? 'Running the plan now.' : '계획대로 실행할게.';
       await sendText(`▶ ${note}`);
       await speakText(note, signal, null);
       return { handled: false, prompt: promptToRun };
     }
-    planStates.delete(key);
+    bridge.planStates.delete(key);
     return { handled: false, prompt };
   }
 
@@ -537,7 +512,7 @@ async function dispatchPlanModeUtterance(prompt, signal) {
       language,
       routingSnapshot,
     };
-    planStates.set(planKey, state);
+    bridge.planStates.set(planKey, state);
     const narration = planNarrationLines(steps, language);
     await sendText(`📝 ${narration}`);
     await speakText(narration, signal, null);
@@ -560,31 +535,27 @@ function planNarrationLines(steps, language) {
   return `${header}\n${body}`;
 }
 
-let smartProgressEnabled = Boolean(process.env.SMART_PROGRESS_API_KEY);
-let smartProgressSummarizer = null;
+bridge.smartProgressEnabled = Boolean(process.env.SMART_PROGRESS_API_KEY);
 function ensureSmartProgressSummarizer() {
-  if (smartProgressSummarizer) return smartProgressSummarizer;
-  smartProgressSummarizer = createSmartProgressSummarizer({
+  if (bridge.smartProgressSummarizer) return bridge.smartProgressSummarizer;
+  bridge.smartProgressSummarizer = createSmartProgressSummarizer({
     apiKey: process.env.SMART_PROGRESS_API_KEY || '',
     baseUrl: process.env.SMART_PROGRESS_BASE_URL || 'https://api.groq.com/openai/v1',
     model: process.env.SMART_PROGRESS_MODEL || 'llama-3.1-8b-instant',
     language: settings.voiceLanguage,
   });
-  smartProgressSummarizer.on('summary', summary => {
-    if (!summary || !activeProgressSignal) return;
-    queueVerboseProgressSpeech(summary, activeProgressSignal);
+  bridge.smartProgressSummarizer.on('summary', summary => {
+    if (!summary || !bridge.activeProgressSignal) return;
+    queueVerboseProgressSpeech(summary, bridge.activeProgressSignal);
   });
-  return smartProgressSummarizer;
+  return bridge.smartProgressSummarizer;
 }
 function smartProgressStatusText() {
   const hasKey = Boolean(process.env.SMART_PROGRESS_API_KEY);
-  const mode = smartProgressEnabled && hasKey ? 'on' : 'off';
+  const mode = bridge.smartProgressEnabled && hasKey ? 'on' : 'off';
   const reason = !hasKey ? ' (no SMART_PROGRESS_API_KEY set)' : '';
   return `smart-progress: ${mode}${reason}`;
 }
-let activeProgressLastEventAt = 0;
-let lastVerboseProgressText = '';
-let lastVerboseProgressTextAt = 0;
 const VOICE_CONNECT_TIMEOUT_MS = Number(process.env.VOICE_CONNECT_TIMEOUT_MS || '60000');
 const PROGRESS_IDLE_NOTICE_INITIAL_MS = Number(process.env.PROGRESS_IDLE_NOTICE_INITIAL_MS || process.env.PROGRESS_IDLE_NOTICE_MS || '10000');
 const PROGRESS_IDLE_NOTICE_MAX_MS = Number(process.env.PROGRESS_IDLE_NOTICE_MAX_MS || '30000');
@@ -592,7 +563,6 @@ const PROGRESS_IDLE_NOTICE_MULTIPLIER = Number(process.env.PROGRESS_IDLE_NOTICE_
 const PROGRESS_IDLE_CHECK_MS = Number(process.env.PROGRESS_IDLE_CHECK_MS || '5000');
 const PROGRESS_IDLE_NOTICE_LIMIT = Number(process.env.PROGRESS_IDLE_NOTICE_LIMIT || '20');
 const projectSessionsState = loadProjectSessions(settings.projectSessionsPath);
-const agentAdaptersBySession = new Map();
 function createBridgeAgentAdapter(agentSettings) {
   return createAgentAdapter(agentSettings, {
     execFileAsync,
@@ -600,19 +570,19 @@ function createBridgeAgentAdapter(agentSettings) {
     log,
     warn,
     onProgress: event => {
-      if (!verboseProgress) return;
-      activeProgressLastEventAt = Date.now();
-      sendVerboseProgressText(event, activeProgressSignal);
-      if (smartProgressEnabled && process.env.SMART_PROGRESS_API_KEY) {
+      if (!bridge.verboseProgress) return;
+      bridge.activeProgressLastEventAt = Date.now();
+      sendVerboseProgressText(event, bridge.activeProgressSignal);
+      if (bridge.smartProgressEnabled && process.env.SMART_PROGRESS_API_KEY) {
         try { ensureSmartProgressSummarizer().ingest(event); }
-        catch (e) { warn('smart progress ingest failed', e?.stack || e); queueVerboseProgressSpeech(event, activeProgressSignal); }
+        catch (e) { warn('smart progress ingest failed', e?.stack || e); queueVerboseProgressSpeech(event, bridge.activeProgressSignal); }
       } else {
-        queueVerboseProgressSpeech(event, activeProgressSignal);
+        queueVerboseProgressSpeech(event, bridge.activeProgressSignal);
       }
     },
     onStdoutChunk: chunk => {
-      if (activeSentencer) {
-        try { activeSentencer.push(chunk); } catch (e) { warn('streaming sentencer push failed', e?.stack || e); }
+      if (bridge.activeSentencer) {
+        try { bridge.activeSentencer.push(chunk); } catch (e) { warn('streaming sentencer push failed', e?.stack || e); }
       }
     },
   });
@@ -621,8 +591,8 @@ const agentAdapter = createBridgeAgentAdapter(settings.agent);
 function adapterForProjectSession(session) {
   if (!session) return agentAdapter;
   const key = session.slug || session.name;
-  if (!agentAdaptersBySession.has(key)) {
-    agentAdaptersBySession.set(key, createBridgeAgentAdapter({
+  if (!bridge.agentAdaptersBySession.has(key)) {
+    bridge.agentAdaptersBySession.set(key, createBridgeAgentAdapter({
       ...settings.agent,
       label: `${settings.agent.label} · ${session.name}`,
       sessionFile: session.sessionFile,
@@ -630,17 +600,15 @@ function adapterForProjectSession(session) {
       projectContext: projectSessionContextText(session),
     }));
   }
-  return agentAdaptersBySession.get(key);
+  return bridge.agentAdaptersBySession.get(key);
 }
 function resolveProjectSessionForChannel(channelId) {
   return projectSessionForChannel(projectSessionsState, channelId) || null;
 }
 
-const agentAdaptersByBackend = new Map();
-const routingStateByChannel = new Map();
 function routingStateFor(channelKey) {
   const key = String(channelKey || 'default');
-  let state = routingStateByChannel.get(key);
+  let state = bridge.routingStateByChannel.get(key);
   if (!state) {
     state = {
       activeRouting: { backend: settings.agent.backend, sticky: false },
@@ -649,7 +617,7 @@ function routingStateFor(channelKey) {
       pendingFallbackPrompt: null,
       recentUtterances: [],
     };
-    routingStateByChannel.set(key, state);
+    bridge.routingStateByChannel.set(key, state);
   }
   return state;
 }
@@ -660,14 +628,13 @@ function recordUtterance(channelKey, text) {
   while (state.recentUtterances.length > 4) state.recentUtterances.shift();
 }
 
-const ontologyByChannel = new Map();
 function ontologyStateFor(channelKey) {
   const key = String(channelKey || 'default');
-  let store = ontologyByChannel.get(key);
+  let store = bridge.ontologyByChannel.get(key);
   if (!store) {
     store = createSessionOntology({ channelKey: key });
     try { store.load(); } catch {}
-    ontologyByChannel.set(key, store);
+    bridge.ontologyByChannel.set(key, store);
   }
   return store;
 }
@@ -697,11 +664,10 @@ function clearTransientRouting(channelKey) {
 }
 function invalidateBackendAdaptersForSession(sessionSlug) {
   if (!sessionSlug) return;
-  for (const key of Array.from(agentAdaptersByBackend.keys())) {
-    if (key.endsWith(`::${sessionSlug}`)) agentAdaptersByBackend.delete(key);
+  for (const key of Array.from(bridge.agentAdaptersByBackend.keys())) {
+    if (key.endsWith(`::${sessionSlug}`)) bridge.agentAdaptersByBackend.delete(key);
   }
 }
-const installedBinaryCache = new Map();
 function commandIsInstalled(binary, { cwd = process.cwd() } = {}) {
   if (!binary) return false;
   const isWindows = process.platform === 'win32';
@@ -721,10 +687,10 @@ function commandIsInstalled(binary, { cwd = process.cwd() } = {}) {
   if (path.isAbsolute(binary)) return existsAnyExt(binary);
   const hasPathSep = binary.includes('/') || (isWindows && binary.includes('\\'));
   if (hasPathSep) return existsAnyExt(path.resolve(cwd, binary));
-  if (installedBinaryCache.has(binary)) return installedBinaryCache.get(binary);
+  if (bridge.installedBinaryCache.has(binary)) return bridge.installedBinaryCache.get(binary);
   const pathEntries = String(process.env.PATH || '').split(path.delimiter).filter(Boolean);
   const found = pathEntries.some(dir => existsAnyExt(path.join(dir, binary)));
-  installedBinaryCache.set(binary, found);
+  bridge.installedBinaryCache.set(binary, found);
   return found;
 }
 function adapterForBackend(backend, session = null) {
@@ -733,7 +699,7 @@ function adapterForBackend(backend, session = null) {
     return session ? adapterForProjectSession(session) : agentAdapter;
   }
   const key = `${normalized}::${session ? (session.slug || session.name) : '_default'}`;
-  if (agentAdaptersByBackend.has(key)) return agentAdaptersByBackend.get(key);
+  if (bridge.agentAdaptersByBackend.has(key)) return bridge.agentAdaptersByBackend.get(key);
   let routedSettings;
   try {
     const scrubbed = { ...process.env };
@@ -765,21 +731,21 @@ function adapterForBackend(backend, session = null) {
     return null;
   }
   const adapter = createBridgeAgentAdapter(routedSettings);
-  agentAdaptersByBackend.set(key, adapter);
+  bridge.agentAdaptersByBackend.set(key, adapter);
   return adapter;
 }
 function saveProjectSessionsState() {
   saveProjectSessions(settings.projectSessionsPath, projectSessionsState);
 }
-let sensitivityMode = SENSITIVITY_MODE_DEFAULT;
+bridge.sensitivityMode = SENSITIVITY_MODE_DEFAULT;
 let sensitivityModeExpiresAt = 0;
 function currentBargeInThresholds() {
   if (sensitivityModeExpiresAt && Date.now() > sensitivityModeExpiresAt) {
-    sensitivityMode = SENSITIVITY_MODE_DEFAULT;
+    bridge.sensitivityMode = SENSITIVITY_MODE_DEFAULT;
     sensitivityModeExpiresAt = 0;
-    log('barge-in sensitivity mode expired; restored', sensitivityMode);
+    log('barge-in sensitivity mode expired; restored', bridge.sensitivityMode);
   }
-  return bargeInThresholdsForMode(sensitivityMode, {
+  return bargeInThresholdsForMode(bridge.sensitivityMode, {
     minSeconds: BARGE_IN_MIN_SECONDS,
     minMeanDb: BARGE_IN_MIN_MEAN_VOLUME_DB,
     minMaxDb: BARGE_IN_MIN_MAX_VOLUME_DB,
@@ -799,12 +765,12 @@ function currentPlaybackBargeInThresholds() {
   };
 }
 function setSensitivityMode(mode, reason = 'manual') {
-  sensitivityMode = mode === 'conservative' ? 'conservative' : 'normal';
-  sensitivityModeExpiresAt = sensitivityMode === 'conservative' && SENSITIVITY_OUTDOOR_SECONDS > 0
+  bridge.sensitivityMode = mode === 'conservative' ? 'conservative' : 'normal';
+  sensitivityModeExpiresAt = bridge.sensitivityMode === 'conservative' && SENSITIVITY_OUTDOOR_SECONDS > 0
     ? Date.now() + SENSITIVITY_OUTDOOR_SECONDS * 1000
     : 0;
   const thresholds = currentBargeInThresholds();
-  log('barge-in sensitivity mode set', sensitivityMode, 'reason', reason, 'expiresAt', sensitivityModeExpiresAt || 'never', 'thresholds', thresholds);
+  log('barge-in sensitivity mode set', bridge.sensitivityMode, 'reason', reason, 'expiresAt', sensitivityModeExpiresAt || 'never', 'thresholds', thresholds);
   return thresholds;
 }
 function sensitivityStatusText() {
@@ -814,7 +780,7 @@ function sensitivityStatusText() {
 }
 
 function verboseStatusText() {
-  return verboseStatusTextForLanguage(verboseProgress, settings.voiceLanguage);
+  return verboseStatusTextForLanguage(bridge.verboseProgress, settings.voiceLanguage);
 }
 
 function progressEmoji(event) {
@@ -838,9 +804,9 @@ function formatProgressText(event) {
 }
 
 function setVerboseProgress(enabled, reason = 'manual') {
-  verboseProgress = Boolean(enabled);
-  log('verbose progress mode set', verboseProgress, 'reason', reason);
-  return verboseProgress;
+  bridge.verboseProgress = Boolean(enabled);
+  log('verbose progress mode set', bridge.verboseProgress, 'reason', reason);
+  return bridge.verboseProgress;
 }
 
 function persistEnvValues(values) {
@@ -1076,7 +1042,7 @@ function spokenResultOnly(userPrompt, answer, language = settings.voiceLanguage)
 async function sendText(text) {
   return sendDiscordText({
     client,
-    channelId: activeTranscriptChannelId || settings.transcriptChannelId,
+    channelId: bridge.activeTranscriptChannelId || settings.transcriptChannelId,
     text,
     log,
     warn,
@@ -1086,7 +1052,7 @@ async function sendText(text) {
 async function sendEmbed(embed, { content = '' } = {}) {
   if (!embed) return false;
   try {
-    const channelId = activeTranscriptChannelId || settings.transcriptChannelId;
+    const channelId = bridge.activeTranscriptChannelId || settings.transcriptChannelId;
     if (!channelId) return false;
     const channel = await client.channels.fetch(channelId).catch(() => null);
     if (!channel?.send) return false;
@@ -1106,14 +1072,14 @@ async function sendChannelText(channel, text) {
 }
 
 function sendVerboseProgressText(event, signal) {
-  if (!verboseProgress || !signal || signal.aborted || activeProgressSignal !== signal) return;
+  if (!bridge.verboseProgress || !signal || signal.aborted || bridge.activeProgressSignal !== signal) return;
   const formatted = formatProgressText(event).replace(/\s+/g, ' ').trim();
   if (!formatted) return;
   const message = formatted.slice(0, 1900);
   const now = Date.now();
-  if (message === lastVerboseProgressText && now - lastVerboseProgressTextAt < 2000) return;
-  lastVerboseProgressText = message;
-  lastVerboseProgressTextAt = now;
+  if (message === bridge.lastVerboseProgressText && now - bridge.lastVerboseProgressTextAt < 2000) return;
+  bridge.lastVerboseProgressText = message;
+  bridge.lastVerboseProgressTextAt = now;
   void sendText(message).catch(e => warn('verbose progress text delivery failed', e?.stack || e));
 }
 
@@ -1248,8 +1214,8 @@ async function refreshTtsRuntimeConfig() {
   if (previousBackend !== settings.tts.backend) {
     const rebuilt = buildTtsSettings(process.env, ROOT);
     Object.assign(settings.tts, rebuilt);
-    try { ttsBackend?.close?.(); } catch (e) { warn('tts backend close failed', e?.message || e); }
-    ttsBackend = createTtsBackend(settings.tts, { execFileAsync, spawn, log, warn, onFallback: ttsFallbackNotice, voiceProvider: () => settings.tts.edge.voice });
+    try { bridge.ttsBackend?.close?.(); } catch (e) { warn('tts backend close failed', e?.message || e); }
+    bridge.ttsBackend = createTtsBackend(settings.tts, { execFileAsync, spawn, log, warn, onFallback: ttsFallbackNotice, voiceProvider: () => settings.tts.edge.voice });
     log('tts backend reloaded from voice config', settings.tts.backend, 'voiceType', selection.voiceType);
   }
   return selection;
@@ -1260,9 +1226,9 @@ async function synthTTS(text, signal) {
   let lastError = null;
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
-      log('final tts synth start', 'backend', ttsBackend.name, 'attempt', attempt, 'chars', String(text || '').length);
-      const out = await ttsBackend.synthesize(text, { signal, kind: 'final' });
-      log('final tts synth done', 'backend', ttsBackend.name, 'attempt', attempt, out, fs.statSync(out).size);
+      log('final tts synth start', 'backend', bridge.ttsBackend.name, 'attempt', attempt, 'chars', String(text || '').length);
+      const out = await bridge.ttsBackend.synthesize(text, { signal, kind: 'final' });
+      log('final tts synth done', 'backend', bridge.ttsBackend.name, 'attempt', attempt, out, fs.statSync(out).size);
       return out;
     } catch (e) {
       lastError = e;
@@ -1276,9 +1242,9 @@ async function synthTTS(text, signal) {
 
 async function synthProgressTTS(text, signal) {
   await refreshTtsRuntimeConfig();
-  const ext = ttsBackend.outputExtension || 'mp3';
+  const ext = bridge.ttsBackend.outputExtension || 'mp3';
   const cachePath = path.join(settings.tts.progressCacheDir, progressTtsCacheFileName({
-    backendKeyParts: ttsBackend.cacheKeyParts(),
+    backendKeyParts: bridge.ttsBackend.cacheKeyParts(),
     text,
     ext,
   }));
@@ -1287,22 +1253,22 @@ async function synthProgressTTS(text, signal) {
     return cachePath;
   }
   log('progress tts cache miss', text);
-  const tmp = await ttsBackend.synthesize(text, { signal, kind: 'progress' });
+  const tmp = await bridge.ttsBackend.synthesize(text, { signal, kind: 'progress' });
   fs.renameSync(tmp, cachePath);
   return cachePath;
 }
 
 async function playAudio(file, { deleteAfter = true } = {}) {
-  if (!connection) return;
-  speaking = true;
+  if (!bridge.connection) return;
+  bridge.speaking = true;
   try {
     const resource = createAudioResource(file, { inputType: StreamType.Arbitrary, inlineVolume: true });
     resource.volume?.setVolume(settings.tts.volume);
-    player.play(resource);
-    connection.subscribe(player);
-    await waitEvent(player, AudioPlayerStatus.Idle, 120000).catch(() => {});
+    bridge.player.play(resource);
+    bridge.connection.subscribe(bridge.player);
+    await waitEvent(bridge.player, AudioPlayerStatus.Idle, 120000).catch(() => {});
   } finally {
-    speaking = false;
+    bridge.speaking = false;
     if (deleteAfter) fs.rm(file, { force: true }, () => {});
   }
 }
@@ -1313,9 +1279,9 @@ async function speakText(text, signal, metricsTurn = null, options = {}) {
   if (options.mirrorText !== false) {
     await sendText(`${options.mirrorPrefix || '🔊 음성으로 읽는 내용'}:\n${String(text || '')}`);
   }
-  log('TTS chunks', chunks.length, 'maxChars', settings.tts.maxChars, 'backend', ttsBackend.name);
-  const playbackGeneration = speechPlaybackGeneration;
-  const playbackStopped = () => playbackGeneration !== speechPlaybackGeneration;
+  log('TTS chunks', chunks.length, 'maxChars', settings.tts.maxChars, 'backend', bridge.ttsBackend.name);
+  const playbackGeneration = bridge.speechPlaybackGeneration;
+  const playbackStopped = () => playbackGeneration !== bridge.speechPlaybackGeneration;
   let synthMs = 0;
   let playMs = 0;
   const ttsStart = Date.now();
@@ -1345,8 +1311,8 @@ async function speakText(text, signal, metricsTurn = null, options = {}) {
 }
 
 function beginStreamingTurn(signal) {
-  if (!STREAMING_TTS_ENABLED || !connection) return false;
-  streamingSpeechDelivered = false;
+  if (!STREAMING_TTS_ENABLED || !bridge.connection) return false;
+  bridge.streamingSpeechDelivered = false;
   const sentencer = createSentencer({ minChars: 40, maxLatencyMs: 800 });
   let streamingDropAnnounced = false;
   const queue = createStreamingTTSQueue({
@@ -1369,21 +1335,21 @@ function beginStreamingTurn(signal) {
     if (signal?.aborted) return;
     queue.enqueue(text);
   });
-  activeSentencer = sentencer;
-  activeStreamingQueue = queue;
+  bridge.activeSentencer = sentencer;
+  bridge.activeStreamingQueue = queue;
   log('streaming turn begin');
   return true;
 }
 
 async function endStreamingTurn() {
-  const sentencer = activeSentencer;
-  const queue = activeStreamingQueue;
-  activeSentencer = null;
-  activeStreamingQueue = null;
+  const sentencer = bridge.activeSentencer;
+  const queue = bridge.activeStreamingQueue;
+  bridge.activeSentencer = null;
+  bridge.activeStreamingQueue = null;
   if (!sentencer || !queue) return;
   try { sentencer.flush(); } catch (e) { warn('streaming sentencer flush failed', e?.stack || e); }
   try { await queue.drain(); } catch (e) { warn('streaming queue drain failed', e?.stack || e); }
-  streamingSpeechDelivered = queue.size === 0;
+  bridge.streamingSpeechDelivered = queue.size === 0;
   log('streaming turn end');
 }
 
@@ -1412,121 +1378,121 @@ async function speakImmediateNotice(text, signal, reason = 'notice') {
 
 function queueProgressSpeechText(text, signal, reason = 'status') {
   const spoken = String(text || '').replace(/\s+/g, ' ').trim();
-  if (!spoken || !signal || signal.aborted || activeProgressSignal !== signal) return;
-  verboseProgressSpeechQueue = verboseProgressSpeechQueue
+  if (!spoken || !signal || signal.aborted || bridge.activeProgressSignal !== signal) return;
+  bridge.verboseProgressSpeechQueue = bridge.verboseProgressSpeechQueue
     .catch(() => {})
     .then(async () => {
-      if (signal.aborted || activeProgressSignal !== signal || !processing) return;
+      if (signal.aborted || bridge.activeProgressSignal !== signal || !bridge.processing) return;
       log('progress speech queued', reason, 'text', spoken);
       await speakProgress(spoken, signal);
     });
 }
 
 function flushProgressSpeechBatch(signal, reason = 'timer') {
-  if (!signal || signal.aborted || activeProgressSignal !== signal) return;
-  if (progressSpeechBatchTimer) {
-    clearTimeout(progressSpeechBatchTimer);
-    progressSpeechBatchTimer = null;
+  if (!signal || signal.aborted || bridge.activeProgressSignal !== signal) return;
+  if (bridge.progressSpeechBatchTimer) {
+    clearTimeout(bridge.progressSpeechBatchTimer);
+    bridge.progressSpeechBatchTimer = null;
   }
-  const events = progressSpeechBatch;
-  progressSpeechBatch = [];
-  progressSpeechBatchSignal = null;
-  progressSpeechBatchStartedAt = 0;
+  const events = bridge.progressSpeechBatch;
+  bridge.progressSpeechBatch = [];
+  bridge.progressSpeechBatchSignal = null;
+  bridge.progressSpeechBatchStartedAt = 0;
   const text = summarizeProgressEvents(events, { maxCategories: 3, language: settings.voiceLanguage });
   if (!text) return;
   queueProgressSpeechText(text, signal, `batch-${reason}-${events.length}`);
 }
 
 function queueVerboseProgressSpeech(event, signal) {
-  if (!verboseProgress || !signal || signal.aborted || activeProgressSignal !== signal) return;
+  if (!bridge.verboseProgress || !signal || signal.aborted || bridge.activeProgressSignal !== signal) return;
   const text = String(event || '').replace(/\s+/g, ' ').trim().slice(0, 120);
   if (!text) return;
-  if (progressSpeechBatchSignal && progressSpeechBatchSignal !== signal) {
-    progressSpeechBatch = [];
-    if (progressSpeechBatchTimer) clearTimeout(progressSpeechBatchTimer);
-    progressSpeechBatchTimer = null;
-    progressSpeechBatchStartedAt = 0;
+  if (bridge.progressSpeechBatchSignal && bridge.progressSpeechBatchSignal !== signal) {
+    bridge.progressSpeechBatch = [];
+    if (bridge.progressSpeechBatchTimer) clearTimeout(bridge.progressSpeechBatchTimer);
+    bridge.progressSpeechBatchTimer = null;
+    bridge.progressSpeechBatchStartedAt = 0;
   }
-  progressSpeechBatchSignal = signal;
-  if (!progressSpeechBatchStartedAt) progressSpeechBatchStartedAt = Date.now();
-  progressSpeechBatch.push(text);
-  const elapsedMs = Date.now() - progressSpeechBatchStartedAt;
-  const ratePerSecond = progressSpeechBatch.length / Math.max(0.2, elapsedMs / 1000);
+  bridge.progressSpeechBatchSignal = signal;
+  if (!bridge.progressSpeechBatchStartedAt) bridge.progressSpeechBatchStartedAt = Date.now();
+  bridge.progressSpeechBatch.push(text);
+  const elapsedMs = Date.now() - bridge.progressSpeechBatchStartedAt;
+  const ratePerSecond = bridge.progressSpeechBatch.length / Math.max(0.2, elapsedMs / 1000);
   const maxBatchEvents = ratePerSecond >= 6 ? 5 : ratePerSecond >= 3 ? 4 : 3;
   const batchDelayMs = ratePerSecond >= 6 ? 650 : ratePerSecond >= 3 ? 550 : 450;
-  if (progressSpeechBatch.length >= maxBatchEvents) {
+  if (bridge.progressSpeechBatch.length >= maxBatchEvents) {
     flushProgressSpeechBatch(signal, 'full');
     return;
   }
-  if (progressSpeechBatchTimer) clearTimeout(progressSpeechBatchTimer);
-  progressSpeechBatchTimer = setTimeout(() => flushProgressSpeechBatch(signal, 'timer'), batchDelayMs);
+  if (bridge.progressSpeechBatchTimer) clearTimeout(bridge.progressSpeechBatchTimer);
+  bridge.progressSpeechBatchTimer = setTimeout(() => flushProgressSpeechBatch(signal, 'timer'), batchDelayMs);
 }
 
-function clearProgressSpeechBatch(signal = activeProgressSignal) {
-  if (progressSpeechBatchTimer) {
-    clearTimeout(progressSpeechBatchTimer);
-    progressSpeechBatchTimer = null;
+function clearProgressSpeechBatch(signal = bridge.activeProgressSignal) {
+  if (bridge.progressSpeechBatchTimer) {
+    clearTimeout(bridge.progressSpeechBatchTimer);
+    bridge.progressSpeechBatchTimer = null;
   }
-  if (!signal || progressSpeechBatchSignal === signal) {
-    progressSpeechBatch = [];
-    progressSpeechBatchSignal = null;
-    progressSpeechBatchStartedAt = 0;
+  if (!signal || bridge.progressSpeechBatchSignal === signal) {
+    bridge.progressSpeechBatch = [];
+    bridge.progressSpeechBatchSignal = null;
+    bridge.progressSpeechBatchStartedAt = 0;
   }
 }
 
 function stopProgressSpeech(signal, reason = 'final-answer') {
-  if (activeProgressSignal !== signal) return;
+  if (bridge.activeProgressSignal !== signal) return;
   clearProgressSpeechBatch(signal);
-  activeProgressSignal = null;
-  if (activeProgressAbortController && !activeProgressAbortController.signal.aborted) {
-    try { activeProgressAbortController.abort(); } catch (e) { warn('abort progress speech failed', e?.stack || e); }
+  bridge.activeProgressSignal = null;
+  if (bridge.activeProgressAbortController && !bridge.activeProgressAbortController.signal.aborted) {
+    try { bridge.activeProgressAbortController.abort(); } catch (e) { warn('abort progress speech failed', e?.stack || e); }
   }
-  if (speaking) {
+  if (bridge.speaking) {
     log('stop progress speech before final answer', reason);
-    try { player.stop(true); } catch (e) { warn('stop progress speech failed', e?.stack || e); }
-    speaking = false;
+    try { bridge.player.stop(true); } catch (e) { warn('stop progress speech failed', e?.stack || e); }
+    bridge.speaking = false;
   }
 }
 
 async function handleTextAgentMessage(msg, text, { speakResponse = false } = {}) {
-  if (processing) {
+  if (bridge.processing) {
     await msg.reply('지금 이전 작업을 처리 중이야. 끝나면 다시 보내줘.');
     return;
   }
-  processing = true;
+  bridge.processing = true;
   const controller = new AbortController();
-  currentAbortController = controller;
+  bridge.currentAbortController = controller;
   const signal = controller.signal;
   const progressController = new AbortController();
-  activeProgressAbortController = progressController;
-  activeProgressSignal = progressController.signal;
-  activeProgressLastEventAt = Date.now();
-  const previousTranscriptChannelId = activeTranscriptChannelId;
+  bridge.activeProgressAbortController = progressController;
+  bridge.activeProgressSignal = progressController.signal;
+  bridge.activeProgressLastEventAt = Date.now();
+  const previousTranscriptChannelId = bridge.activeTranscriptChannelId;
   const session = resolveProjectSessionForChannel(msg.channelId);
-  activeTranscriptChannelId = session?.transcriptChannelId || msg.channelId;
+  bridge.activeTranscriptChannelId = session?.transcriptChannelId || msg.channelId;
   const selectedAgentAdapter = adapterForProjectSession(session);
   const projectContext = projectSessionContextText(session);
-  const recentDiscordContext = formatRecentDiscordContext(recentDiscordTextByChannel, {
-    channelId: activeTranscriptChannelId,
+  const recentDiscordContext = formatRecentDiscordContext(bridge.recentDiscordTextByChannel, {
+    channelId: bridge.activeTranscriptChannelId,
   });
   const plan = {
     task: true,
     label: selectedAgentAdapter.label,
-    verboseProgress,
+    verboseProgress: bridge.verboseProgress,
     language: settings.voiceLanguage,
     cwd: session?.workdir,
     projectContext,
     recentDiscordContext,
   };
   const sessionBefore = selectedAgentAdapter.readSessionId?.();
-  log('text agent request start', selectedAgentAdapter.label, sessionBefore ? 'resume-existing-session' : 'new-session', 'verbose', verboseProgress, session ? `project=${session.slug}` : 'project=default');
+  log('text agent request start', selectedAgentAdapter.label, sessionBefore ? 'resume-existing-session' : 'new-session', 'verbose', bridge.verboseProgress, session ? `project=${session.slug}` : 'project=default');
   try {
     const result = await selectedAgentAdapter.run(text, signal, plan);
     const answer = result.answer || emptyAgentAnswer(settings.voiceLanguage);
     const fullAnswerText = `${agentAnswerHeader(settings.voiceLanguage, selectedAgentAdapter.label)}\n${answer}`;
     await sendChannelText(msg.channel, fullAnswerText);
     stopProgressSpeech(progressController.signal, 'text-agent-answer-ready');
-    if (speakResponse && connection) {
+    if (speakResponse && bridge.connection) {
       const spokenAnswer = spokenResultOnly(text, answer, settings.voiceLanguage);
       await speakText(spokenAnswer, signal, null, { mirrorText: false });
     }
@@ -1535,15 +1501,15 @@ async function handleTextAgentMessage(msg, text, { speakResponse = false } = {})
     warn('text agent request failed', e?.stack || e);
     await sendChannelText(msg.channel, formatVoiceErrorMessage(settings.voiceLanguage, String(e?.message || e).slice(0, 800)));
   } finally {
-    if (activeProgressAbortController && activeProgressAbortController.signal === progressController.signal && !activeProgressAbortController.signal.aborted) {
-      try { activeProgressAbortController.abort(); } catch (e) { warn('abort text progress speech failed', e?.stack || e); }
+    if (bridge.activeProgressAbortController && bridge.activeProgressAbortController.signal === progressController.signal && !bridge.activeProgressAbortController.signal.aborted) {
+      try { bridge.activeProgressAbortController.abort(); } catch (e) { warn('abort text progress speech failed', e?.stack || e); }
     }
-    if (activeProgressSignal === progressController.signal) activeProgressSignal = null;
-    if (activeProgressAbortController?.signal === progressController.signal) activeProgressAbortController = null;
+    if (bridge.activeProgressSignal === progressController.signal) bridge.activeProgressSignal = null;
+    if (bridge.activeProgressAbortController?.signal === progressController.signal) bridge.activeProgressAbortController = null;
     clearProgressSpeechBatch(progressController.signal);
-    if (currentAbortController === controller) currentAbortController = null;
-    activeTranscriptChannelId = previousTranscriptChannelId;
-    processing = false;
+    if (bridge.currentAbortController === controller) bridge.currentAbortController = null;
+    bridge.activeTranscriptChannelId = previousTranscriptChannelId;
+    bridge.processing = false;
   }
 }
 
@@ -1592,25 +1558,25 @@ async function handleVoiceCloneCommand(userId, prompt, signal = null) {
 }
 
 function stopPlaybackForBargeIn(userId, reason = 'playback-barge-in') {
-  if (!speaking) return false;
-  log('stop playback for barge-in', 'byUser', userId, 'reason', reason, 'speaking', speaking, 'processing', processing, 'turn', activeTurnId);
-  speechPlaybackGeneration += 1;
-  try { player.stop(true); } catch (e) { warn('stop playback failed', e?.stack || e); }
-  speaking = false;
+  if (!bridge.speaking) return false;
+  log('stop playback for barge-in', 'byUser', userId, 'reason', reason, 'speaking', bridge.speaking, 'processing', bridge.processing, 'turn', bridge.activeTurnId);
+  bridge.speechPlaybackGeneration += 1;
+  try { bridge.player.stop(true); } catch (e) { warn('stop playback failed', e?.stack || e); }
+  bridge.speaking = false;
   return true;
 }
 
 function interruptCurrentResponse(userId, reason = 'barge-in') {
-  if (!speaking && !processing) return false;
-  const turnId = activeTurnId;
-  if (turnId) interruptedTurns.add(turnId);
-  log('interrupt current response', 'byUser', userId, 'reason', reason, 'speaking', speaking, 'processing', processing, 'turn', turnId);
-  if (currentAbortController && !currentAbortController.signal.aborted) {
-    try { currentAbortController.abort(); } catch (e) { warn('abort current response failed', e?.stack || e); }
+  if (!bridge.speaking && !bridge.processing) return false;
+  const turnId = bridge.activeTurnId;
+  if (turnId) bridge.interruptedTurns.add(turnId);
+  log('interrupt current response', 'byUser', userId, 'reason', reason, 'speaking', bridge.speaking, 'processing', bridge.processing, 'turn', turnId);
+  if (bridge.currentAbortController && !bridge.currentAbortController.signal.aborted) {
+    try { bridge.currentAbortController.abort(); } catch (e) { warn('abort current response failed', e?.stack || e); }
   }
-  try { player.stop(true); } catch (e) { warn('stop playback failed', e?.stack || e); }
-  speaking = false;
-  processing = false;
+  try { bridge.player.stop(true); } catch (e) { warn('stop playback failed', e?.stack || e); }
+  bridge.speaking = false;
+  bridge.processing = false;
   return true;
 }
 
@@ -1662,7 +1628,7 @@ async function concatWavs(files, output) {
 }
 
 function queueSegment(userId, file, pcmBytes, startedAtMs = Date.now(), endedAtMs = Date.now()) {
-  const pending = bridgeState.appendSegment(userId, {
+  const pending = bridge.bridgeState.appendSegment(userId, {
     file,
     pcmBytes,
     startedAtMs,
@@ -1679,7 +1645,7 @@ function isBargeInCandidate(pcmBytes, levels) {
 
 function enqueueDeferredProcessingUtterance({ userId, wavPath, pcmBytes, segments, startedAtMs = Date.now() }) {
   const item = { userId, wavPath, pcmBytes, segments, startedAtMs };
-  const result = bridgeState.enqueueDeferred(item, enqueueDeferredUtterance, MAX_DEFERRED_PROCESSING_UTTERANCES);
+  const result = bridge.bridgeState.enqueueDeferred(item, enqueueDeferredUtterance, MAX_DEFERRED_PROCESSING_UTTERANCES);
   if (!result.queued) {
     log('drop deferred utterance because queue disabled', userId, wavPath, 'max', MAX_DEFERRED_PROCESSING_UTTERANCES);
     return false;
@@ -1687,15 +1653,15 @@ function enqueueDeferredProcessingUtterance({ userId, wavPath, pcmBytes, segment
   if (result.dropped) {
     log('drop oldest deferred utterance because queue is full', result.dropped?.userId, result.dropped?.wavPath);
   }
-  log('queued deferred utterance while processing', userId, wavPath, 'queueSize', bridgeState.deferredSize(), 'epoch', bridgeState.currentEpoch());
+  log('queued deferred utterance while processing', userId, wavPath, 'queueSize', bridge.bridgeState.deferredSize(), 'epoch', bridge.bridgeState.currentEpoch());
   return true;
 }
 
 async function drainDeferredProcessingUtterances() {
-  if (processing || bridgeState.deferredSize() === 0) return;
-  const next = bridgeState.shiftDeferred();
+  if (bridge.processing || bridge.bridgeState.deferredSize() === 0) return;
+  const next = bridge.bridgeState.shiftDeferred();
   if (!next) return;
-  log('drain deferred utterance', next.userId, next.wavPath, 'remaining', bridgeState.deferredSize());
+  log('drain deferred utterance', next.userId, next.wavPath, 'remaining', bridge.bridgeState.deferredSize());
   const metricsTurn = newLatencyTurn(next.userId, next.startedAtMs || Date.now());
   metricsTurn.mark('voice_first_packet', next.startedAtMs || Date.now());
   metricsTurn.mark('utterance_flush');
@@ -1720,7 +1686,7 @@ async function validateProcessingBargeIn(userId, wavPath, pcmBytes, segments) {
 }
 
 async function flushUtterance(userId) {
-  const pending = bridgeState.deletePending(userId);
+  const pending = bridge.bridgeState.deletePending(userId);
   if (!pending) return;
   if (pending.timer) clearTimeout(pending.timer);
   const files = pending.files;
@@ -1730,8 +1696,8 @@ async function flushUtterance(userId) {
   metricsTurn.mark('voice_segment_end', pending.lastSegmentEndAt || Date.now());
   metricsTurn.mark('utterance_flush');
   metricsTurn.addMeta({ segments: files.length, pcmBytes, epoch: pending.epoch });
-  if (pending.epoch !== bridgeState.currentEpoch()) {
-    log('drop stale utterance after voice input queue reset', userId, 'utteranceEpoch', pending.epoch, 'currentEpoch', bridgeState.currentEpoch());
+  if (pending.epoch !== bridge.bridgeState.currentEpoch()) {
+    log('drop stale utterance after voice input queue reset', userId, 'utteranceEpoch', pending.epoch, 'currentEpoch', bridge.bridgeState.currentEpoch());
     for (const file of files) fs.rm(file, { force: true }, () => {});
     metricsTurn.finish({ status: 'stale_after_config_change' });
     return;
@@ -1751,17 +1717,17 @@ async function flushUtterance(userId) {
     return;
   }
   const candidate = isBargeInCandidate(pcmBytes, levels);
-  if (speaking || processing) {
+  if (bridge.speaking || bridge.processing) {
     const thresholds = currentBargeInThresholds();
     if (!candidate) {
       log('check weak barge-in for explicit stop transcript', userId, 'pcmBytes', pcmBytes, 'meanDb', levels.meanDb, 'maxDb', levels.maxDb, 'thresholdBytes', thresholds.minBytes, 'thresholds', thresholds.minMeanDb, thresholds.minMaxDb, 'mode', thresholds.mode);
     }
     const validation = await validateProcessingBargeIn(userId, merged, pcmBytes, files.length);
     if (validation?.action === 'interrupt') {
-      metricsTurn.finish({ status: processing ? 'barge_in_processing_interrupt' : 'barge_in_playback_interrupt' });
+      metricsTurn.finish({ status: bridge.processing ? 'barge_in_processing_interrupt' : 'barge_in_playback_interrupt' });
       return;
     }
-    if (processing && validation?.action === 'defer') {
+    if (bridge.processing && validation?.action === 'defer') {
       const queued = enqueueDeferredProcessingUtterance({
         userId,
         wavPath: merged,
@@ -1772,7 +1738,7 @@ async function flushUtterance(userId) {
       metricsTurn.finish({ status: queued ? 'deferred_during_processing' : 'drop_deferred_during_processing' });
       return;
     }
-    metricsTurn.finish({ status: speaking ? 'barge_in_playback_ignored' : 'barge_in_processing_ignored' });
+    metricsTurn.finish({ status: bridge.speaking ? 'barge_in_playback_ignored' : 'barge_in_processing_ignored' });
     return;
   }
   // Drop only when BOTH overall energy and peak are low. Real Discord speech from this
@@ -1789,16 +1755,16 @@ async function flushUtterance(userId) {
 }
 
 async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsTurn = null) {
-  if (processing) { log('drop while processing', userId); metricsTurn?.finish({ status: 'drop_processing' }); return; }
+  if (bridge.processing) { log('drop while processing', userId); metricsTurn?.finish({ status: 'drop_processing' }); return; }
   if (!isAllowed(userId)) { warn('ignore unauthorized', userId); metricsTurn?.finish({ status: 'unauthorized' }); return; }
-  processing = true;
-  const turnId = ++activeTurnId;
+  bridge.processing = true;
+  const turnId = ++bridge.activeTurnId;
   const controller = new AbortController();
-  currentAbortController = controller;
+  bridge.currentAbortController = controller;
   const signal = controller.signal;
-  const sessionForVoice = resolveProjectSessionForChannel(activeVoiceChannelId || settings.transcriptChannelId);
-  const previousTranscriptChannelId = activeTranscriptChannelId;
-  activeTranscriptChannelId = sessionForVoice?.transcriptChannelId || settings.transcriptChannelId;
+  const sessionForVoice = resolveProjectSessionForChannel(bridge.activeVoiceChannelId || settings.transcriptChannelId);
+  const previousTranscriptChannelId = bridge.activeTranscriptChannelId;
+  bridge.activeTranscriptChannelId = sessionForVoice?.transcriptChannelId || settings.transcriptChannelId;
   try {
     const runtimeLanguage = reloadRuntimeLanguageFromEnv();
     if (runtimeLanguage.changed) {
@@ -1807,9 +1773,9 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
       metricsTurn?.finish({ status: 'drop_stale_language_change' });
       return;
     }
-    const session = resolveProjectSessionForChannel(activeVoiceChannelId || settings.transcriptChannelId);
-    activeTranscriptChannelId = session?.transcriptChannelId || settings.transcriptChannelId;
-    log('voice turn text target', session ? `project=${session.slug}` : 'project=default', 'channel', activeTranscriptChannelId ? 'project-or-default' : 'none');
+    const session = resolveProjectSessionForChannel(bridge.activeVoiceChannelId || settings.transcriptChannelId);
+    bridge.activeTranscriptChannelId = session?.transcriptChannelId || settings.transcriptChannelId;
+    log('voice turn text target', session ? `project=${session.slug}` : 'project=default', 'channel', bridge.activeTranscriptChannelId ? 'project-or-default' : 'none');
     log('transcribing', userId, wavPath, 'pcmBytes', pcmBytes, 'segments', segments, 'turn', turnId);
     const sttNotice = formatSttStartMessage(settings.voiceLanguage);
     await sendText(sttNotice);
@@ -1820,7 +1786,7 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     const text = await transcribe(wavPath);
     await sttNoticeSpeech;
     metricsTurn?.stage('stt', Date.now() - sttStart, { transcriptChars: String(text || '').length });
-    if (interruptedTurns.has(turnId) || signal.aborted) { metricsTurn?.finish({ status: 'aborted_after_stt' }); return; }
+    if (bridge.interruptedTurns.has(turnId) || signal.aborted) { metricsTurn?.finish({ status: 'aborted_after_stt' }); return; }
     if (!text) { log('empty transcript', userId, wavPath); metricsTurn?.finish({ status: 'empty_transcript' }); return; }
     log(`user ${userId} said: ${text}`);
     await sendText(formatSttResultMessage(settings.voiceLanguage, userId, text));
@@ -2030,13 +1996,13 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     routingState.lastUsedBackend = routedBackend;
     if (!routingState.activeRouting.sticky) routingState.activeRouting = { backend: settings.agent.backend, sticky: false };
     const projectContext = projectSessionContextText(session);
-    const recentDiscordContext = formatRecentDiscordContext(recentDiscordTextByChannel, {
-      channelId: activeTranscriptChannelId,
+    const recentDiscordContext = formatRecentDiscordContext(bridge.recentDiscordTextByChannel, {
+      channelId: bridge.activeTranscriptChannelId,
     });
     const plan = {
       task: true,
       label: selectedAgentAdapter.label,
-      verboseProgress,
+      verboseProgress: bridge.verboseProgress,
       language: settings.voiceLanguage,
       cwd: session?.workdir,
       projectContext,
@@ -2045,12 +2011,12 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     log('Agent plan', plan.label, 'backend', selectedAgentAdapter.backend, 'task', plan.task, 'language', plan.language, session ? `project=${session.slug}` : 'project=default');
     const agentStart = Date.now();
     const progressController = new AbortController();
-    activeProgressAbortController = progressController;
-    activeProgressSignal = progressController.signal;
-    activeProgressLastEventAt = Date.now();
+    bridge.activeProgressAbortController = progressController;
+    bridge.activeProgressSignal = progressController.signal;
+    bridge.activeProgressLastEventAt = Date.now();
     const streamingTurnActive = beginStreamingTurn(signal);
-    if (streamingTurnActive && ttsPrefix && activeStreamingQueue) {
-      activeStreamingQueue.enqueue(ttsPrefix.replace(/[:\s]+$/u, '.'));
+    if (streamingTurnActive && ttsPrefix && bridge.activeStreamingQueue) {
+      bridge.activeStreamingQueue.enqueue(ttsPrefix.replace(/[:\s]+$/u, '.'));
     }
     const agentPromise = selectedAgentAdapter.ask(promptForAgent, signal, plan);
     let done = false;
@@ -2058,9 +2024,9 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     // talk over each other. In verbose mode, skip the generic initial prompt;
     // the detailed tool/file/test events are the initial progress voice.
     const progressLoop = (async () => {
-      if (!verboseProgress) {
+      if (!bridge.verboseProgress) {
         await sleep(2500);
-        if (!done && !signal.aborted && !interruptedTurns.has(turnId)) {
+        if (!done && !signal.aborted && !bridge.interruptedTurns.has(turnId)) {
           const initial = /^en/i.test(String(settings.voiceLanguage || ''))
             ? 'calling the agent.'
             : '에이전트 호출했어. 응답 기다리는 중.';
@@ -2069,20 +2035,20 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
       }
       let idleNotices = 0;
       let nextIdleNoticeMs = PROGRESS_IDLE_NOTICE_INITIAL_MS;
-      let lastObservedProgressAt = activeProgressLastEventAt;
-      while (!done && !signal.aborted && !interruptedTurns.has(turnId) && idleNotices < PROGRESS_IDLE_NOTICE_LIMIT) {
+      let lastObservedProgressAt = bridge.activeProgressLastEventAt;
+      while (!done && !signal.aborted && !bridge.interruptedTurns.has(turnId) && idleNotices < PROGRESS_IDLE_NOTICE_LIMIT) {
         await sleep(Math.min(PROGRESS_IDLE_CHECK_MS, nextIdleNoticeMs));
-        if (done || signal.aborted || interruptedTurns.has(turnId)) break;
-        if (activeProgressLastEventAt !== lastObservedProgressAt) {
-          lastObservedProgressAt = activeProgressLastEventAt;
+        if (done || signal.aborted || bridge.interruptedTurns.has(turnId)) break;
+        if (bridge.activeProgressLastEventAt !== lastObservedProgressAt) {
+          lastObservedProgressAt = bridge.activeProgressLastEventAt;
           nextIdleNoticeMs = PROGRESS_IDLE_NOTICE_INITIAL_MS;
           continue;
         }
-        const idleMs = Date.now() - activeProgressLastEventAt;
+        const idleMs = Date.now() - bridge.activeProgressLastEventAt;
         if (idleMs < nextIdleNoticeMs) continue;
         idleNotices += 1;
-        activeProgressLastEventAt = Date.now();
-        lastObservedProgressAt = activeProgressLastEventAt;
+        bridge.activeProgressLastEventAt = Date.now();
+        lastObservedProgressAt = bridge.activeProgressLastEventAt;
         const idle = /^en/i.test(String(settings.voiceLanguage || ''))
           ? 'still working on that.'
           : '아직 작업 중이야.';
@@ -2099,7 +2065,7 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     if (streamingTurnActive) await endStreamingTurn();
     metricsTurn?.stage('agent', Date.now() - agentStart, { answerChars: String(answer || '').length, backend: selectedAgentAdapter.backend });
     void progressLoop;
-    if (interruptedTurns.has(turnId) || signal.aborted) { metricsTurn?.finish({ status: 'aborted_after_agent' }); return; }
+    if (bridge.interruptedTurns.has(turnId) || signal.aborted) { metricsTurn?.finish({ status: 'aborted_after_agent' }); return; }
 
     log('Agent answer', selectedAgentAdapter.label, answer.slice(0, 200));
     captureOntologyFromTurn(routingKey, { prompt, answer, backend: routedBackend });
@@ -2113,13 +2079,13 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     }
     log('spoken answer', spokenAnswer.slice(0, 200));
     stopProgressSpeech(progressController.signal, 'agent-answer-ready');
-    if (streamingTurnActive && streamingSpeechDelivered) {
+    if (streamingTurnActive && bridge.streamingSpeechDelivered) {
       log('skipping post-run speakText; streaming already delivered audio');
     } else {
       await speakText(spokenAnswer, signal, metricsTurn, { mirrorText: !answerTextDelivered });
     }
     try {
-      const guildId = client.channels.cache.get(activeVoiceChannelId)?.guild?.id || '';
+      const guildId = client.channels.cache.get(bridge.activeVoiceChannelId)?.guild?.id || '';
       await maybeNotifyTaskComplete({
         answer: spokenAnswer || answer,
         label: selectedAgentAdapter.label,
@@ -2129,7 +2095,7 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     } catch (e) { warn('maybeNotifyTaskComplete failed', e?.message || e); }
     metricsTurn?.finish({ status: 'ok' });
   } catch (e) {
-    if (isAbortError(e) || interruptedTurns.has(turnId)) {
+    if (isAbortError(e) || bridge.interruptedTurns.has(turnId)) {
       log('turn aborted', userId, 'turn', turnId);
       clearTransientRouting(planChannelKey());
       metricsTurn?.finish({ status: 'aborted' });
@@ -2140,17 +2106,17 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
     metricsTurn?.finish({ status: 'error', error: shortMsg });
     await sendText(formatVoiceErrorMessage(settings.voiceLanguage, shortMsg));
   } finally {
-    if (activeProgressAbortController && !activeProgressAbortController.signal.aborted) {
-      try { activeProgressAbortController.abort(); } catch (e) { warn('abort progress speech in cleanup failed', e?.stack || e); }
+    if (bridge.activeProgressAbortController && !bridge.activeProgressAbortController.signal.aborted) {
+      try { bridge.activeProgressAbortController.abort(); } catch (e) { warn('abort progress speech in cleanup failed', e?.stack || e); }
     }
-    if (activeProgressSignal === activeProgressAbortController?.signal) activeProgressSignal = null;
-    activeProgressAbortController = null;
-    if (currentAbortController === controller) currentAbortController = null;
-    activeTranscriptChannelId = previousTranscriptChannelId;
-    interruptedTurns.delete(turnId);
-    if (activeTurnId === turnId) activeTurnId = 0;
-    processing = false;
-    if (bridgeState.deferredSize() > 0) {
+    if (bridge.activeProgressSignal === bridge.activeProgressAbortController?.signal) bridge.activeProgressSignal = null;
+    bridge.activeProgressAbortController = null;
+    if (bridge.currentAbortController === controller) bridge.currentAbortController = null;
+    bridge.activeTranscriptChannelId = previousTranscriptChannelId;
+    bridge.interruptedTurns.delete(turnId);
+    if (bridge.activeTurnId === turnId) bridge.activeTurnId = 0;
+    bridge.processing = false;
+    if (bridge.bridgeState.deferredSize() > 0) {
       setImmediate(() => drainDeferredProcessingUtterances().catch(e => warn('drain deferred utterance failed', e?.stack || e)));
     }
   }
@@ -2159,18 +2125,18 @@ async function handleRecording(userId, wavPath, pcmBytes, segments = 1, metricsT
 function subscribeUser(receiver, userId) {
   if (!isAllowed(userId)) return;
   if (String(userId) === client.user?.id) return;
-  const wasSpeaking = speaking;
-  const wasProcessing = processing;
-  if ((wasSpeaking || wasProcessing) && !activeStreams.has(userId)) {
+  const wasSpeaking = bridge.speaking;
+  const wasProcessing = bridge.processing;
+  if ((wasSpeaking || wasProcessing) && !bridge.activeStreams.has(userId)) {
     // Speaking-start alone is too noisy in Discord voice. Record and validate a
     // real segment first; only confirmed playback barge-in stops the current
     // audio chunk, and only explicit stop transcripts abort active agent work.
     log('possible barge-in start; waiting for segment validation', userId, 'speaking', wasSpeaking, 'processing', wasProcessing);
   }
-  if (activeStreams.has(userId)) return;
-  const pending = bridgeState.getPending(userId);
+  if (bridge.activeStreams.has(userId)) return;
+  const pending = bridge.bridgeState.getPending(userId);
   if (pending?.timer) {
-    bridgeState.clearPendingTimer(userId);
+    bridge.bridgeState.clearPendingTimer(userId);
     log('extend pending utterance because new segment started', userId, 'segments', pending.files.length, 'totalPcmBytes', pending.pcmBytes);
   }
 
@@ -2179,7 +2145,7 @@ function subscribeUser(receiver, userId) {
   const opusStream = receiver.subscribe(userId, { end: { behavior: EndBehaviorType.AfterSilence, duration: SUBSCRIBE_AFTER_SILENCE_MS } });
   const decoder = new prism.opus.Decoder({ rate: 48000, channels: 2, frameSize: 960 });
   const writer = new wav.FileWriter(file, { sampleRate: 48000, channels: 2, bitDepth: 16 });
-  activeStreams.set(userId, { opusStream, decoder, writer, file, startedAtMs: Date.now() });
+  bridge.activeStreams.set(userId, { opusStream, decoder, writer, file, startedAtMs: Date.now() });
   let pcmBytes = 0;
   const liveThresholds = wasSpeaking && !wasProcessing ? currentPlaybackBargeInThresholds() : currentBargeInThresholds();
   const liveBargeIn = shouldUseLivePlaybackBargeIn({ speaking: wasSpeaking, processing: wasProcessing }) ? createLiveBargeInMonitor({
@@ -2202,8 +2168,8 @@ function subscribeUser(receiver, userId) {
   writer.on('error', e => warn('wav writer error', userId, e?.stack || e));
   opusStream.on('end', () => log('opus end', userId, 'pcmBytes', pcmBytes));
   writer.on('finish', () => {
-    const streamState = activeStreams.get(userId);
-    activeStreams.delete(userId);
+    const streamState = bridge.activeStreams.get(userId);
+    bridge.activeStreams.delete(userId);
     const endedAtMs = Date.now();
     log('saved segment', userId, 'pcmBytes', pcmBytes, file);
     queueSegment(userId, file, pcmBytes, streamState?.startedAtMs || endedAtMs, endedAtMs);
@@ -2212,23 +2178,23 @@ function subscribeUser(receiver, userId) {
 }
 
 async function connectTo(channel) {
-  if (connection) {
-    try { connection.destroy(); } catch {}
+  if (bridge.connection) {
+    try { bridge.connection.destroy(); } catch {}
   }
-  activeVoiceChannelId = channel.id;
-  connection = joinVoiceChannel({
+  bridge.activeVoiceChannelId = channel.id;
+  bridge.connection = joinVoiceChannel({
     channelId: channel.id,
     guildId: channel.guild.id,
     adapterCreator: channel.guild.voiceAdapterCreator,
     selfDeaf: false,
     selfMute: false,
   });
-  const voiceConnection = connection;
-  voiceConnection.subscribe(player);
+  const voiceConnection = bridge.connection;
+  voiceConnection.subscribe(bridge.player);
   voiceConnection.on('error', e => warn('voice connection error', e?.stack || e));
   voiceConnection.on('stateChange', async (oldState, newState) => {
     log('voice connection state', oldState.status, '->', newState.status);
-    if (connection !== voiceConnection) {
+    if (bridge.connection !== voiceConnection) {
       log('ignore stale voice connection state', oldState.status, '->', newState.status);
       return;
     }
@@ -2239,10 +2205,10 @@ async function connectTo(channel) {
           entersState(voiceConnection, VoiceConnectionStatus.Connecting, 5000),
         ]);
       } catch (e) {
-        if (connection !== voiceConnection) return;
+        if (bridge.connection !== voiceConnection) return;
         warn('voice connection disconnected; reconnecting to channel', channel.guild.name, channel.name, e?.message || e);
         try { voiceConnection.destroy(); } catch {}
-        connection = null;
+        bridge.connection = null;
         setTimeout(() => connectTo(channel).catch(err => warn('voice reconnect failed', err?.stack || err)), 1500);
       }
     }
@@ -2257,9 +2223,9 @@ async function autoJoin() {
   for (const guild of client.guilds.cache.values()) {
     await guild.channels.fetch().catch(e => warn('auto-join channel fetch failed', guild.name, e?.message || e));
   }
-  const activeGuildId = activeVoiceChannelId ? client.channels.cache.get(activeVoiceChannelId)?.guild?.id || '' : '';
+  const activeGuildId = bridge.activeVoiceChannelId ? client.channels.cache.get(bridge.activeVoiceChannelId)?.guild?.id || '' : '';
   const occupied = pickOccupiedUserVoiceChannel(client.guilds.cache.values(), settings.allowedUsers, {
-    activeVoiceChannelId,
+    activeVoiceChannelId: bridge.activeVoiceChannelId,
     activeGuildId,
   });
   if (occupied) {
@@ -2270,9 +2236,9 @@ async function autoJoin() {
       return;
     } catch (e) {
       warn('auto-join occupied user voice channel failed; trying configured channels', occupied.guild.name, occupied.name, e?.stack || e);
-      try { connection?.destroy(); } catch {}
-      connection = null;
-      activeVoiceChannelId = '';
+      try { bridge.connection?.destroy(); } catch {}
+      bridge.connection = null;
+      bridge.activeVoiceChannelId = '';
     }
   }
   for (const preferredName of settings.autoJoinVoiceChannels) {
@@ -2286,9 +2252,9 @@ async function autoJoin() {
           return;
         } catch (e) {
           warn('auto-join failed; trying next configured voice channel', guild.name, ch.name, e?.stack || e);
-          try { connection?.destroy(); } catch {}
-          connection = null;
-          activeVoiceChannelId = '';
+          try { bridge.connection?.destroy(); } catch {}
+          bridge.connection = null;
+          bridge.activeVoiceChannelId = '';
         }
       }
     }
@@ -2344,9 +2310,9 @@ async function voiceChannelLabel(guild, channelId) {
 async function resolveVoiceChannelForAttach(msg, selector = '') {
   if (selector) return findVoiceChannelBySelector(msg.guild, selector);
   if (msg.member?.voice?.channel) return msg.member.voice.channel;
-  if (activeVoiceChannelId && msg.guild) {
+  if (bridge.activeVoiceChannelId && msg.guild) {
     try {
-      const ch = await msg.guild.channels.fetch(activeVoiceChannelId);
+      const ch = await msg.guild.channels.fetch(bridge.activeVoiceChannelId);
       if (ch?.isVoiceBased?.()) return ch;
     } catch {}
   }
@@ -2380,14 +2346,14 @@ async function attachVoiceChannelToTextSession(msg, command) {
   projectSessionsState.channelSessions[msg.channelId] = session.slug;
   projectSessionsState.channelSessions[voiceChannel.id] = session.slug;
   saveProjectSessionsState();
-  agentAdaptersBySession.delete(session.slug);
+  bridge.agentAdaptersBySession.delete(session.slug);
   invalidateBackendAdaptersForSession(session.slug);
-  if (activeVoiceChannelId !== voiceChannel.id) await connectTo(voiceChannel);
+  if (bridge.activeVoiceChannelId !== voiceChannel.id) await connectTo(voiceChannel);
   return msg.reply(`${session.name} 세션을 이 텍스트 채널과 음성 채널 ${voiceChannel.name}에 붙였어. 이제 그 음성채널 발화의 STT/답변 텍스트는 이 채널로 가.`);
 }
 
 async function handleProjectSessionCommand(msg, command) {
-  const activeSession = resolveProjectSessionForChannel(msg.channelId) || resolveProjectSessionForChannel(activeVoiceChannelId);
+  const activeSession = resolveProjectSessionForChannel(msg.channelId) || resolveProjectSessionForChannel(bridge.activeVoiceChannelId);
   if (command.action === 'attach-voice') return void await attachVoiceChannelToTextSession(msg, command);
   if (command.action === 'status') {
     if (!activeSession) return void msg.reply(`${agentAdapter.label} 기본 세션: ${agentAdapter.readSessionId?.() || '아직 없음'}`);
@@ -2445,7 +2411,7 @@ async function handleProjectSessionCommand(msg, command) {
       mcpContext: command.mcpContext,
     });
     saveProjectSessionsState();
-    agentAdaptersBySession.delete(session.slug);
+    bridge.agentAdaptersBySession.delete(session.slug);
   invalidateBackendAdaptersForSession(session.slug);
     return void msg.reply(`${session.name} 프로젝트 세션 만들었어. 작업실은 ${session.workdir}이고, 이 텍스트 채널${voiceChannel ? `과 음성 채널 ${voiceChannel.name}` : ''} 입력은 별도 Hermes 세션 파일로 이어져.`);
   }
@@ -2461,7 +2427,7 @@ client.on('messageCreate', async msg => {
   const content = msg.content.trim();
   if (msg.author.bot && !content.startsWith('!say ')) return;
   if (!msg.author.bot && !isAllowed(msg.author.id)) return;
-  appendRecentDiscordText(recentDiscordTextByChannel, {
+  appendRecentDiscordText(bridge.recentDiscordTextByChannel, {
     channelId: msg.channelId,
     authorLabel: msg.member?.displayName || msg.author?.username || 'user',
     content,
@@ -2489,20 +2455,20 @@ client.on('messageCreate', async msg => {
   }
   if (content === '!notify') return void msg.reply(notifyStatusText());
   if (['!notify on', '!notify always', '!notify 1'].includes(content.toLowerCase())) {
-    notifyUserOptIn = true;
+    bridge.notifyUserOptIn = true;
     return void msg.reply(notifyStatusText());
   }
   if (['!notify off', '!notify auto', '!notify 0'].includes(content.toLowerCase())) {
-    notifyUserOptIn = false;
+    bridge.notifyUserOptIn = false;
     return void msg.reply(notifyStatusText());
   }
   if (content === '!smart-progress' || content === '!smart_progress') return void msg.reply(smartProgressStatusText());
   if (['!smart-progress on', '!smart-progress true', '!smart-progress 1', '!smart_progress on'].includes(content.toLowerCase())) {
-    smartProgressEnabled = true;
+    bridge.smartProgressEnabled = true;
     return void msg.reply(smartProgressStatusText());
   }
   if (['!smart-progress off', '!smart-progress false', '!smart-progress 0', '!smart_progress off'].includes(content.toLowerCase())) {
-    smartProgressEnabled = false;
+    bridge.smartProgressEnabled = false;
     return void msg.reply(smartProgressStatusText());
   }
   if (content === '!sensitivity') return void msg.reply(sensitivityStatusText());
@@ -2527,9 +2493,9 @@ client.on('messageCreate', async msg => {
     return void msg.reply('들어왔어. Node receiver로 듣는 중.');
   }
   if (content === '!leave') {
-    try { connection?.destroy(); } catch {}
-    connection = null;
-    activeVoiceChannelId = '';
+    try { bridge.connection?.destroy(); } catch {}
+    bridge.connection = null;
+    bridge.activeVoiceChannelId = '';
     return void msg.reply('나갈게.');
   }
   if (content.startsWith('!say ')) {
@@ -2543,9 +2509,9 @@ client.on('messageCreate', async msg => {
     if (!text) return void msg.reply('테스트할 문장을 붙여줘.');
     const started = Date.now();
     try {
-      await msg.reply(`TTS 백엔드 ${ttsBackend.name}로 음성 테스트할게.`);
+      await msg.reply(`TTS 백엔드 ${bridge.ttsBackend.name}로 음성 테스트할게.`);
       await speakText(text);
-      await msg.channel.send(`음성 테스트 완료: ${ttsBackend.name}, ${Date.now() - started}ms`);
+      await msg.channel.send(`음성 테스트 완료: ${bridge.ttsBackend.name}, ${Date.now() - started}ms`);
     } catch (e) {
       warn('voice-test failed', e?.stack || e);
       await msg.channel.send(`음성 테스트 실패: ${String(e?.message || e).slice(0, 700)}`);
@@ -2615,14 +2581,14 @@ let shutdownStarted = false;
 async function gracefulShutdown(signalName) {
   if (shutdownStarted) return;
   shutdownStarted = true;
-  log('graceful shutdown requested', signalName, 'connection', Boolean(connection));
+  log('graceful shutdown requested', signalName, 'connection', Boolean(bridge.connection));
   try {
-    if (currentAbortController && !currentAbortController.signal.aborted) currentAbortController.abort();
+    if (bridge.currentAbortController && !bridge.currentAbortController.signal.aborted) bridge.currentAbortController.abort();
   } catch (e) {
     warn('abort before shutdown failed', e?.stack || e);
   }
   try {
-    if (connection) {
+    if (bridge.connection) {
       let detail = '';
       const noticePath = path.join(ROOT, '.cache', 'restart-notice.txt');
       try {
@@ -2633,7 +2599,7 @@ async function gracefulShutdown(signalName) {
         warn('read restart notice failed', e?.stack || e);
       }
       await speakText(formatRestartShutdownNotice(detail, settings.tts.edge.voice));
-      await waitEvent(player, AudioPlayerStatus.Idle, 30000).catch(() => {});
+      await waitEvent(bridge.player, AudioPlayerStatus.Idle, 30000).catch(() => {});
     }
   } catch (e) {
     warn('shutdown voice notice failed', e?.stack || e);
@@ -2646,8 +2612,8 @@ async function gracefulShutdown(signalName) {
       ]);
     } catch {}
   }
-  try { ttsBackend?.close?.(); } catch (e) { warn('tts backend close failed', e?.message || e); }
-  try { connection?.destroy(); } catch {}
+  try { bridge.ttsBackend?.close?.(); } catch (e) { warn('tts backend close failed', e?.message || e); }
+  try { bridge.connection?.destroy(); } catch {}
   try { client.destroy(); } catch {}
   process.exit(0);
 }

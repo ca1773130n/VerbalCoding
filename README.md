@@ -44,7 +44,7 @@ VerbalCoding turns a Discord voice channel into a hands-free cockpit for **any**
 | Agent choice, first-class | Hermes Agent, Claude Code, Codex, Gemini CLI, OpenCode, OpenClaw, Aider, Cursor CLI, or any custom command. `vc setup` auto-detects what's installed. |
 | Cross-agent voice routing | Say "ask Codex …" (single turn), "switch to Aider" (sticky), or "back to default". Missing binaries are detected and the bridge offers to fall back to the default agent. Handoff prompts carry recent utterances + last plan decisions to the new agent. |
 | Real barge-in | VAD thresholds tuned for indoor and noisy rooms; cut in mid-utterance and resume the conversation. |
-| Streaming end-to-end | `STREAMING_TTS=1` plays sentences as the agent produces them; first audio in well under a second on a warm cache. |
+| Streaming end-to-end | Sentence-by-sentence playback while the agent is still writing; first audio in well under a second on a warm cache. On by default — set `STREAMING_TTS=0` to fall back to whole-reply playback. |
 | Smart progress | Optional LLM summarizer collapses raw events into one human sentence; falls back to the existing regex labels when no key is set. |
 | Plan-mode by voice | Narrated, editable, voice-driven plans without touching the keyboard. |
 | Phone-down handoff | Long task + empty VC = push notification (`ntfy`/`pushover`) with a redacted one-line summary and tap-to-rejoin link. |
