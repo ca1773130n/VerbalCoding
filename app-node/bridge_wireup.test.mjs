@@ -22,6 +22,7 @@ import { createVoiceIO } from './voice_io.mjs';
 import { createDiscordVoiceSetup } from './discord_voice_setup.mjs';
 import { createUtteranceRouter } from './utterance_router.mjs';
 import { createVoiceTurnRunner } from './voice_turn_runner.mjs';
+import { createPlanDispatcher } from './plan_dispatcher.mjs';
 import { createAgentTurnLifecycle } from './agent_turn.mjs';
 
 const noop = () => {};
@@ -168,26 +169,12 @@ function buildSystem(overrides = {}) {
   });
   utteranceRouter = createUtteranceRouter({
     bridge,
-    agentTurnLifecycle,
     log: sharedHelpers.log, warn: sharedHelpers.warn,
     path: { join: (...a) => a.join('/') },
-    fs: { rm: (_p, _o, cb) => cb && cb() },
     ROOT: '/tmp/vc',
     TTS_VOICE_CONFIG_PATH: '/tmp/voices.json',
     agentAdapter, settings,
-    isPlanEntryUtterance: () => false,
-    parsePlanOutput: () => ({ steps: [], decisions: [] }),
-    parsePlanVoiceCommand: () => ({ type: 'unknown' }),
-    applyPlanCommand: s => s,
-    renderFinalPlan: () => '',
-    planModePreamble: () => '',
-    planExecutionPreamble: () => '',
-    parseDecisionAnswer: () => ({ type: 'unknown' }),
-    renderDecisionPrompt: () => '',
-    renderResolvedDecisions: () => '',
-    isAgentRoutingDecision: () => false,
     projectSessionContextText: () => '',
-    resolveProjectSessionForChannel: () => null,
     createBridgeAgentAdapter: () => ({ label: 'fake', backend: 'fake', ask: async () => '' }),
     buildAgentSettings: () => ({ backend: 'hermes', label: 'hermes' }),
     commandIsInstalled: ttsRuntime.commandIsInstalled,
@@ -210,7 +197,28 @@ function buildSystem(overrides = {}) {
     applyRuntimeLanguage: noop,
     persistEnvValues: noop,
     discardVoiceInputQueues: () => 0,
-    ...overrides,
+  });
+
+  const planDispatcher = createPlanDispatcher({
+    bridge,
+    settings,
+    sendText: sharedHelpers.sendText,
+    speakText: ttsPlayer.speakText,
+    routingStateFor: utteranceRouter.routingStateFor,
+    adapterForBackend: utteranceRouter.adapterForBackend,
+    adapterForProjectSession: utteranceRouter.adapterForProjectSession,
+    resolveProjectSessionForChannel: () => null,
+    isAgentRoutingDecision: () => false,
+    parseDecisionAnswer: () => ({ type: 'unknown' }),
+    parsePlanVoiceCommand: () => ({ type: 'unknown' }),
+    applyPlanCommand: s => s,
+    parsePlanOutput: () => ({ steps: [], decisions: [] }),
+    renderDecisionPrompt: () => '',
+    renderResolvedDecisions: () => '',
+    renderFinalPlan: () => '',
+    planModePreamble: () => '',
+    planExecutionPreamble: () => '',
+    isPlanEntryUtterance: () => false,
   });
 
   voiceTurnRunner = createVoiceTurnRunner({
@@ -227,10 +235,10 @@ function buildSystem(overrides = {}) {
     handleLanguageCommand: utteranceRouter.handleLanguageCommand,
     handleTtsVoiceCommand: utteranceRouter.handleTtsVoiceCommand,
     handleVoiceCloneCommand: utteranceRouter.handleVoiceCloneCommand,
-    dispatchPlanModeUtterance: utteranceRouter.dispatchPlanModeUtterance,
+    dispatchPlanModeUtterance: planDispatcher.dispatchPlanModeUtterance,
     adapterForBackend: utteranceRouter.adapterForBackend,
     adapterForProjectSession: utteranceRouter.adapterForProjectSession,
-    planChannelKey: utteranceRouter.planChannelKey,
+    planChannelKey: planDispatcher.planChannelKey,
     routingStateFor: utteranceRouter.routingStateFor,
     recordUtterance: utteranceRouter.recordUtterance,
     clearTransientRouting: utteranceRouter.clearTransientRouting,
@@ -347,11 +355,11 @@ test('voice_io.transcribe is reachable from voice_turn_runner via deps', async (
 });
 
 test('utteranceRouter destructured exports include dispatch handlers + adapter selection', () => {
+  // Plan-mode dispatch moved to plan_dispatcher in Phase 7b.
   // handleRecording moved to voice_turn_runner in Phase 7a.
   const { utteranceRouter, voiceTurnRunner } = buildSystem();
   for (const name of [
-    'planChannelKey', 'askNextDecision', 'finalizePlanReady', 'dispatchPlanModeUtterance',
-    'planNarrationLines', 'adapterForProjectSession', 'routingStateFor', 'recordUtterance',
+    'adapterForProjectSession', 'routingStateFor', 'recordUtterance',
     'clearTransientRouting', 'adapterForBackend', 'handleTtsVoiceCommand', 'handleLanguageCommand',
     'handleVoiceCloneCommand', 'interruptCurrentResponse',
   ]) {

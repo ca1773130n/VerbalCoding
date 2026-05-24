@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createVoiceTurnRunner } from './voice_turn_runner.mjs';
 import { createUtteranceRouter } from './utterance_router.mjs';
+import { createPlanDispatcher } from './plan_dispatcher.mjs';
 import { createBridge } from './bridge_context.mjs';
 import { createAgentTurnLifecycle } from './agent_turn.mjs';
 
@@ -27,28 +28,14 @@ function makeDeps(overrides = {}) {
     ask: async () => 'mock agent answer',
   };
 
-  // Construct the router with the same stubs Phase 6a tests used; runner
-  // consumes the router's dispatch handlers + adapter selection.
+  // Construct the router (post-Phase 7b: dispatch + adapter selection only).
   const router = createUtteranceRouter({
     bridge,
-    agentTurnLifecycle,
-    log: noop, warn: noop, path: { join: (...a) => a.join('/') }, fs: { rm: (_p, _o, cb) => cb && cb() },
+    log: noop, warn: noop, path: { join: (...a) => a.join('/') },
     ROOT: '/tmp/vc', TTS_VOICE_CONFIG_PATH: '/tmp/voices.json',
     agentAdapter,
     settings: { voiceLanguage: 'ko', transcriptChannelId: 'tx-ch', agent: { backend: 'hermes', label: 'hermes' }, tts: {} },
-    isPlanEntryUtterance: () => false,
-    parsePlanOutput: () => ({ steps: [], decisions: [] }),
-    parsePlanVoiceCommand: () => ({ type: 'unknown' }),
-    applyPlanCommand: s => s,
-    renderFinalPlan: () => '',
-    planModePreamble: () => '',
-    planExecutionPreamble: () => '',
-    parseDecisionAnswer: () => ({ type: 'unknown' }),
-    renderDecisionPrompt: () => '',
-    renderResolvedDecisions: () => '',
-    isAgentRoutingDecision: () => false,
     projectSessionContextText: () => '',
-    resolveProjectSessionForChannel: () => null,
     createBridgeAgentAdapter: s => ({ label: s?.label || 'fake', backend: s?.backend || 'hermes', ask: async () => '' }),
     buildAgentSettings: () => ({ backend: 'hermes', label: 'hermes' }),
     commandIsInstalled: async () => true,
@@ -70,6 +57,29 @@ function makeDeps(overrides = {}) {
     applyRuntimeLanguage: noop,
     persistEnvValues: noop,
     discardVoiceInputQueues: () => 0,
+  });
+
+  // Construct the plan dispatcher (Phase 7b) consuming router outputs.
+  const planDispatcher = createPlanDispatcher({
+    bridge,
+    settings: { voiceLanguage: 'ko', transcriptChannelId: 'tx-ch', agent: { backend: 'hermes', label: 'hermes' } },
+    sendText: noopAsync,
+    speakText: noopAsync,
+    routingStateFor: router.routingStateFor,
+    adapterForBackend: router.adapterForBackend,
+    adapterForProjectSession: router.adapterForProjectSession,
+    resolveProjectSessionForChannel: () => null,
+    isAgentRoutingDecision: () => false,
+    parseDecisionAnswer: () => ({ type: 'unknown' }),
+    parsePlanVoiceCommand: () => ({ type: 'unknown' }),
+    applyPlanCommand: s => s,
+    parsePlanOutput: () => ({ steps: [], decisions: [] }),
+    renderDecisionPrompt: d => d?.text || '',
+    renderResolvedDecisions: () => '',
+    renderFinalPlan: () => '',
+    planModePreamble: () => '',
+    planExecutionPreamble: () => '',
+    isPlanEntryUtterance: () => false,
   });
 
   const settings = { voiceLanguage: 'ko', transcriptChannelId: 'tx-ch', agent: { backend: 'hermes', label: 'hermes' }, tts: {} };
@@ -96,10 +106,10 @@ function makeDeps(overrides = {}) {
     handleLanguageCommand: router.handleLanguageCommand,
     handleTtsVoiceCommand: router.handleTtsVoiceCommand,
     handleVoiceCloneCommand: router.handleVoiceCloneCommand,
-    dispatchPlanModeUtterance: router.dispatchPlanModeUtterance,
+    dispatchPlanModeUtterance: planDispatcher.dispatchPlanModeUtterance,
     adapterForBackend: router.adapterForBackend,
     adapterForProjectSession: router.adapterForProjectSession,
-    planChannelKey: router.planChannelKey,
+    planChannelKey: planDispatcher.planChannelKey,
     routingStateFor: router.routingStateFor,
     recordUtterance: router.recordUtterance,
     clearTransientRouting: router.clearTransientRouting,

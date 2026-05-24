@@ -62,6 +62,7 @@ import { createDiscordVoiceSetup } from './discord_voice_setup.mjs';
 import { createAgentTurnLifecycle } from './agent_turn.mjs';
 import { createDiscordCommandRouter } from './discord_command_router.mjs';
 import { createVoiceTurnRunner } from './voice_turn_runner.mjs';
+import { createPlanDispatcher } from './plan_dispatcher.mjs';
 import { sendDiscordText, splitDiscordMessage } from './discord_text.mjs';
 import { shouldPassWhisperLanguage, voiceLanguageCommandFromTranscript, languagePreset } from './language_config.mjs';
 import { whisperFailureMessage, whisperTimeoutMs } from './stt_whisper.mjs';
@@ -812,11 +813,6 @@ utteranceRouter = createUtteranceRouter({
   STT_START_VOICE_NOTICE,
 });
 const {
-  planChannelKey,
-  askNextDecision,
-  finalizePlanReady,
-  dispatchPlanModeUtterance,
-  planNarrationLines,
   adapterForProjectSession,
   routingStateFor,
   recordUtterance,
@@ -827,6 +823,26 @@ const {
   handleVoiceCloneCommand,
   interruptCurrentResponse,
 } = utteranceRouter;
+
+const planDispatcher = createPlanDispatcher({
+  bridge, settings,
+  sendText, speakText,
+  routingStateFor, adapterForBackend, adapterForProjectSession,
+  resolveProjectSessionForChannel,
+  isAgentRoutingDecision,
+  parseDecisionAnswer, parsePlanVoiceCommand: parsePlanVoiceCommand,
+  applyPlanCommand: applyPlanCommand,
+  parsePlanOutput,
+  renderDecisionPrompt, renderResolvedDecisions, renderFinalPlan,
+  planModePreamble, planExecutionPreamble, isPlanEntryUtterance,
+});
+const {
+  planChannelKey,
+  askNextDecision,
+  finalizePlanReady,
+  dispatchPlanModeUtterance,
+  planNarrationLines,
+} = planDispatcher;
 
 voiceTurnRunner = createVoiceTurnRunner({
   bridge,

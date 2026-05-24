@@ -123,10 +123,11 @@ function makeDeps(overrides = {}) {
 test('createUtteranceRouter exposes the expected functions', () => {
   // handleRecording moved to voice_turn_runner in Phase 7a — see
   // voice_turn_runner.test.mjs for its behaviour tests.
+  // Plan-mode dispatch moved to plan_dispatcher in Phase 7b — see
+  // plan_dispatcher.test.mjs.
   const router = createUtteranceRouter(makeDeps());
   for (const name of [
-    'planChannelKey', 'askNextDecision', 'finalizePlanReady', 'dispatchPlanModeUtterance',
-    'planNarrationLines', 'adapterForProjectSession', 'routingStateFor', 'recordUtterance',
+    'adapterForProjectSession', 'routingStateFor', 'recordUtterance',
     'clearTransientRouting', 'adapterForBackend', 'handleTtsVoiceCommand', 'handleLanguageCommand',
     'handleVoiceCloneCommand', 'interruptCurrentResponse',
   ]) {
@@ -134,16 +135,7 @@ test('createUtteranceRouter exposes the expected functions', () => {
   }
 });
 
-test('planChannelKey prefers active voice channel, then transcript, then default', () => {
-  const deps = makeDeps();
-  const { planChannelKey } = createUtteranceRouter(deps);
-  assert.equal(planChannelKey(), 'tx-ch'); // settings.transcriptChannelId fallback
-  deps.bridge.activeVoiceChannelId = 'vc-1';
-  assert.equal(planChannelKey(), 'vc-1');
-  deps.bridge.activeVoiceChannelId = '';
-  deps.settings.transcriptChannelId = '';
-  assert.equal(planChannelKey(), 'default');
-});
+// planChannelKey moved to plan_dispatcher in Phase 7b — see plan_dispatcher.test.mjs.
 
 test('routingStateFor lazily creates per-channel state with sensible defaults', () => {
   const deps = makeDeps();
