@@ -21,7 +21,6 @@ import {
   readJsonlRecords,
   summarizeLatencyRecords,
 } from './latency_metrics.mjs';
-import { createSmartProgressSummarizer } from './smart_progress.mjs';
 import {
   isPlanEntryUtterance,
   parsePlanOutput,
@@ -45,7 +44,6 @@ import {
 import { createSessionOntology } from './session_ontology.mjs';
 import { parseResearchCommand, runResearchTurn } from './research_mode.mjs';
 import { createNotifier, buildDiscordDeepLink } from './notify.mjs';
-import { progressCategory, summarizeProgressEvents, formatProgressMessage } from './progress_speech.mjs';
 import { buildTtsSettings } from './tts_settings.mjs';
 import { createTtsBackend } from './tts_backends.mjs';
 import {
@@ -64,9 +62,9 @@ import { createBridge } from './bridge_context.mjs';
 import { createVoiceIO } from './voice_io.mjs';
 import { createTtsPlayer } from './tts_player.mjs';
 import { createUtteranceRouter } from './utterance_router.mjs';
+import { createProgressHandler } from './progress_handler.mjs';
 import { pickOccupiedUserVoiceChannel, shouldFollowUserVoiceChannel } from './voice_autojoin.mjs';
 import { sendDiscordText, splitDiscordMessage } from './discord_text.mjs';
-import { progressTtsCacheFileName } from './progress_cache.mjs';
 import { shouldPassWhisperLanguage, voiceLanguageCommandFromTranscript, languagePreset } from './language_config.mjs';
 import { whisperFailureMessage, whisperTimeoutMs } from './stt_whisper.mjs';
 import { formatRestartCompleteNotice, formatRestartShutdownNotice } from './restart_notice.mjs';
@@ -365,26 +363,6 @@ async function maybeNotifyTaskComplete({ answer, label, elapsedMs, guildId }) {
 }
 
 bridge.smartProgressEnabled = Boolean(process.env.SMART_PROGRESS_API_KEY);
-function ensureSmartProgressSummarizer() {
-  if (bridge.smartProgressSummarizer) return bridge.smartProgressSummarizer;
-  bridge.smartProgressSummarizer = createSmartProgressSummarizer({
-    apiKey: process.env.SMART_PROGRESS_API_KEY || '',
-    baseUrl: process.env.SMART_PROGRESS_BASE_URL || 'https://api.groq.com/openai/v1',
-    model: process.env.SMART_PROGRESS_MODEL || 'llama-3.1-8b-instant',
-    language: settings.voiceLanguage,
-  });
-  bridge.smartProgressSummarizer.on('summary', summary => {
-    if (!summary || !bridge.activeProgressSignal) return;
-    queueVerboseProgressSpeech(summary, bridge.activeProgressSignal);
-  });
-  return bridge.smartProgressSummarizer;
-}
-function smartProgressStatusText() {
-  const hasKey = Boolean(process.env.SMART_PROGRESS_API_KEY);
-  const mode = bridge.smartProgressEnabled && hasKey ? 'on' : 'off';
-  const reason = !hasKey ? ' (no SMART_PROGRESS_API_KEY set)' : '';
-  return `smart-progress: ${mode}${reason}`;
-}
 const VOICE_CONNECT_TIMEOUT_MS = Number(process.env.VOICE_CONNECT_TIMEOUT_MS || '60000');
 const PROGRESS_IDLE_NOTICE_INITIAL_MS = Number(process.env.PROGRESS_IDLE_NOTICE_INITIAL_MS || process.env.PROGRESS_IDLE_NOTICE_MS || '10000');
 const PROGRESS_IDLE_NOTICE_MAX_MS = Number(process.env.PROGRESS_IDLE_NOTICE_MAX_MS || '30000');
@@ -392,6 +370,46 @@ const PROGRESS_IDLE_NOTICE_MULTIPLIER = Number(process.env.PROGRESS_IDLE_NOTICE_
 const PROGRESS_IDLE_CHECK_MS = Number(process.env.PROGRESS_IDLE_CHECK_MS || '5000');
 const PROGRESS_IDLE_NOTICE_LIMIT = Number(process.env.PROGRESS_IDLE_NOTICE_LIMIT || '20');
 const projectSessionsState = loadProjectSessions(settings.projectSessionsPath);
+const ttsPlayer = createTtsPlayer({
+  bridge,
+  settings,
+  log,
+  warn,
+  sleep,
+  sendText,
+  refreshTtsRuntimeConfig,
+  waitEvent,
+  isAbortError,
+  STREAMING_TTS_ENABLED,
+});
+const { synthTTS, playAudio, speakText, beginStreamingTurn, endStreamingTurn, stopPlaybackForBargeIn } = ttsPlayer;
+
+const progressHandler = createProgressHandler({
+  bridge,
+  settings,
+  log,
+  warn,
+  isAbortError,
+  playAudio,
+  sendText,
+  refreshTtsRuntimeConfig,
+});
+const {
+  ensureSmartProgressSummarizer,
+  smartProgressStatusText,
+  progressEmoji,
+  formatProgressText,
+  sendVerboseProgressText,
+  synthProgressTTS,
+  speakProgress,
+  speakImmediateNotice,
+  queueProgressSpeechText,
+  flushProgressSpeechBatch,
+  queueVerboseProgressSpeech,
+  clearProgressSpeechBatch,
+  stopProgressSpeech,
+} = progressHandler;
+
 function createBridgeAgentAdapter(agentSettings) {
   return createAgentAdapter(agentSettings, {
     execFileAsync,
@@ -525,26 +543,6 @@ function sensitivityStatusText() {
 
 function verboseStatusText() {
   return verboseStatusTextForLanguage(bridge.verboseProgress, settings.voiceLanguage);
-}
-
-function progressEmoji(event) {
-  const category = progressCategory(event, { language: settings.voiceLanguage })?.key;
-  return {
-    test: '🧪',
-    edit: '✏️',
-    read: '📖',
-    search: '🔎',
-    terminal: '⌨️',
-    skill: '🧰',
-    browser: '🌐',
-    tool: '🛠️',
-    agent: '🤖',
-    work: '⚙️',
-  }[category] || '⚙️';
-}
-
-function formatProgressText(event) {
-  return formatProgressMessage(event, { language: settings.voiceLanguage });
 }
 
 function setVerboseProgress(enabled, reason = 'manual') {
@@ -781,18 +779,6 @@ async function sendChannelText(channel, text) {
   return true;
 }
 
-function sendVerboseProgressText(event, signal) {
-  if (!bridge.verboseProgress || !signal || signal.aborted || bridge.activeProgressSignal !== signal) return;
-  const formatted = formatProgressText(event).replace(/\s+/g, ' ').trim();
-  if (!formatted) return;
-  const message = formatted.slice(0, 1900);
-  const now = Date.now();
-  if (message === bridge.lastVerboseProgressText && now - bridge.lastVerboseProgressTextAt < 2000) return;
-  bridge.lastVerboseProgressText = message;
-  bridge.lastVerboseProgressTextAt = now;
-  void sendText(message).catch(e => warn('verbose progress text delivery failed', e?.stack || e));
-}
-
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -807,20 +793,6 @@ function waitEvent(emitter, event, timeoutMs = 60000) {
     emitter.once('error', onErr);
   });
 }
-
-const ttsPlayer = createTtsPlayer({
-  bridge,
-  settings,
-  log,
-  warn,
-  sleep,
-  sendText,
-  refreshTtsRuntimeConfig,
-  waitEvent,
-  isAbortError,
-  STREAMING_TTS_ENABLED,
-});
-const { synthTTS, playAudio, speakText, beginStreamingTurn, endStreamingTurn, stopPlaybackForBargeIn } = ttsPlayer;
 
 // handleRecording lives inside utteranceRouter (extracted in Phase 4b) but
 // voiceIO.flushUtterance needs to call it. Use a forward-declared `let` plus
@@ -1014,125 +986,6 @@ async function refreshTtsRuntimeConfig() {
     log('tts backend reloaded from voice config', settings.tts.backend, 'voiceType', selection.voiceType);
   }
   return selection;
-}
-
-async function synthProgressTTS(text, signal) {
-  await refreshTtsRuntimeConfig();
-  const ext = bridge.ttsBackend.outputExtension || 'mp3';
-  const cachePath = path.join(settings.tts.progressCacheDir, progressTtsCacheFileName({
-    backendKeyParts: bridge.ttsBackend.cacheKeyParts(),
-    text,
-    ext,
-  }));
-  if (fs.existsSync(cachePath) && fs.statSync(cachePath).size > 0) {
-    log('progress tts cache hit', text, cachePath);
-    return cachePath;
-  }
-  log('progress tts cache miss', text);
-  const tmp = await bridge.ttsBackend.synthesize(text, { signal, kind: 'progress' });
-  fs.renameSync(tmp, cachePath);
-  return cachePath;
-}
-
-async function speakProgress(text, signal) {
-  if (signal?.aborted) return;
-  try {
-    const mp3 = await synthProgressTTS(text, signal);
-    if (signal?.aborted) return;
-    await playAudio(mp3, { deleteAfter: false });
-  } catch (e) {
-    if (!isAbortError(e)) warn('progress tts failed', e?.stack || e);
-  }
-}
-
-async function speakImmediateNotice(text, signal, reason = 'notice') {
-  if (signal?.aborted) return;
-  try {
-    log('immediate notice speech', reason, 'text', String(text || '').slice(0, 80));
-    const mp3 = await synthProgressTTS(text, signal);
-    if (signal?.aborted) return;
-    await playAudio(mp3, { deleteAfter: false });
-  } catch (e) {
-    if (!isAbortError(e)) warn('immediate notice speech failed', reason, e?.stack || e);
-  }
-}
-
-function queueProgressSpeechText(text, signal, reason = 'status') {
-  const spoken = String(text || '').replace(/\s+/g, ' ').trim();
-  if (!spoken || !signal || signal.aborted || bridge.activeProgressSignal !== signal) return;
-  bridge.verboseProgressSpeechQueue = bridge.verboseProgressSpeechQueue
-    .catch(() => {})
-    .then(async () => {
-      if (signal.aborted || bridge.activeProgressSignal !== signal || !bridge.processing) return;
-      log('progress speech queued', reason, 'text', spoken);
-      await speakProgress(spoken, signal);
-    });
-}
-
-function flushProgressSpeechBatch(signal, reason = 'timer') {
-  if (!signal || signal.aborted || bridge.activeProgressSignal !== signal) return;
-  if (bridge.progressSpeechBatchTimer) {
-    clearTimeout(bridge.progressSpeechBatchTimer);
-    bridge.progressSpeechBatchTimer = null;
-  }
-  const events = bridge.progressSpeechBatch;
-  bridge.progressSpeechBatch = [];
-  bridge.progressSpeechBatchSignal = null;
-  bridge.progressSpeechBatchStartedAt = 0;
-  const text = summarizeProgressEvents(events, { maxCategories: 3, language: settings.voiceLanguage });
-  if (!text) return;
-  queueProgressSpeechText(text, signal, `batch-${reason}-${events.length}`);
-}
-
-function queueVerboseProgressSpeech(event, signal) {
-  if (!bridge.verboseProgress || !signal || signal.aborted || bridge.activeProgressSignal !== signal) return;
-  const text = String(event || '').replace(/\s+/g, ' ').trim().slice(0, 120);
-  if (!text) return;
-  if (bridge.progressSpeechBatchSignal && bridge.progressSpeechBatchSignal !== signal) {
-    bridge.progressSpeechBatch = [];
-    if (bridge.progressSpeechBatchTimer) clearTimeout(bridge.progressSpeechBatchTimer);
-    bridge.progressSpeechBatchTimer = null;
-    bridge.progressSpeechBatchStartedAt = 0;
-  }
-  bridge.progressSpeechBatchSignal = signal;
-  if (!bridge.progressSpeechBatchStartedAt) bridge.progressSpeechBatchStartedAt = Date.now();
-  bridge.progressSpeechBatch.push(text);
-  const elapsedMs = Date.now() - bridge.progressSpeechBatchStartedAt;
-  const ratePerSecond = bridge.progressSpeechBatch.length / Math.max(0.2, elapsedMs / 1000);
-  const maxBatchEvents = ratePerSecond >= 6 ? 5 : ratePerSecond >= 3 ? 4 : 3;
-  const batchDelayMs = ratePerSecond >= 6 ? 650 : ratePerSecond >= 3 ? 550 : 450;
-  if (bridge.progressSpeechBatch.length >= maxBatchEvents) {
-    flushProgressSpeechBatch(signal, 'full');
-    return;
-  }
-  if (bridge.progressSpeechBatchTimer) clearTimeout(bridge.progressSpeechBatchTimer);
-  bridge.progressSpeechBatchTimer = setTimeout(() => flushProgressSpeechBatch(signal, 'timer'), batchDelayMs);
-}
-
-function clearProgressSpeechBatch(signal = bridge.activeProgressSignal) {
-  if (bridge.progressSpeechBatchTimer) {
-    clearTimeout(bridge.progressSpeechBatchTimer);
-    bridge.progressSpeechBatchTimer = null;
-  }
-  if (!signal || bridge.progressSpeechBatchSignal === signal) {
-    bridge.progressSpeechBatch = [];
-    bridge.progressSpeechBatchSignal = null;
-    bridge.progressSpeechBatchStartedAt = 0;
-  }
-}
-
-function stopProgressSpeech(signal, reason = 'final-answer') {
-  if (bridge.activeProgressSignal !== signal) return;
-  clearProgressSpeechBatch(signal);
-  bridge.activeProgressSignal = null;
-  if (bridge.activeProgressAbortController && !bridge.activeProgressAbortController.signal.aborted) {
-    try { bridge.activeProgressAbortController.abort(); } catch (e) { warn('abort progress speech failed', e?.stack || e); }
-  }
-  if (bridge.speaking) {
-    log('stop progress speech before final answer', reason);
-    try { bridge.player.stop(true); } catch (e) { warn('stop progress speech failed', e?.stack || e); }
-    bridge.speaking = false;
-  }
 }
 
 async function handleTextAgentMessage(msg, text, { speakResponse = false } = {}) {
