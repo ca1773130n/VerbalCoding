@@ -20,12 +20,25 @@ function readEnvFile(file) {
   }
 }
 
+function dropUnexpandedRefs(env) {
+  // parseKeyValueEnv does no shell expansion, so values like
+  //   PATH="$JAVA_HOME/bin:$PATH"
+  // would otherwise clobber process.env.PATH with a literal "$VAR" string,
+  // breaking every JS-level PATH lookup (e.g. agent_detect.defaultWhich).
+  const out = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (typeof value === 'string' && /\$[A-Za-z_][A-Za-z0-9_]*|\$\{[^}]+\}/.test(value)) continue;
+    out[key] = value;
+  }
+  return out;
+}
+
 function mergeEnv() {
   // Project .env intentionally wins over ~/.zshrc so local setup is reproducible.
   return {
     ...process.env,
-    ...readEnvFile(path.join(process.env.HOME || '', '.zshrc')),
-    ...readEnvFile(path.join(ROOT, '.env')),
+    ...dropUnexpandedRefs(readEnvFile(path.join(process.env.HOME || '', '.zshrc'))),
+    ...dropUnexpandedRefs(readEnvFile(path.join(ROOT, '.env'))),
   };
 }
 

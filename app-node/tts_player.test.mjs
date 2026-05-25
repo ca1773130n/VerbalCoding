@@ -119,8 +119,14 @@ import fsReal from 'node:fs';
 import osReal from 'node:os';
 import pathReal from 'node:path';
 
+const __tempRoots = [];
+test.after(() => {
+  for (const root of __tempRoots) try { fsReal.rmSync(root, { recursive: true, force: true }); } catch {}
+});
+
 function makeFakeWav() {
   const dir = fsReal.mkdtempSync(pathReal.join(osReal.tmpdir(), 'vc-tts-test-'));
+  __tempRoots.push(dir);
   const file = pathReal.join(dir, 'fake.wav');
   fsReal.writeFileSync(file, Buffer.from('RIFF....fake-wav-bytes'));
   return file;

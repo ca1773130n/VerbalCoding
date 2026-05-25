@@ -22,6 +22,7 @@ vc-mcp-lang-*/
 vc-onto-*/
 vc-sessions-*/
 vc-soul-*/
+vc-tts-test-*/
 voice-config-test-*/
 .venv-openvoice/
 .venv-omnivoice/
